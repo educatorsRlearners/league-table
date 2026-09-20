@@ -103,11 +103,12 @@ class TestSeededEdgeCases:
     def test_a_zero_week_scores_zero_rather_than_missing(self, toy_teacher):
         gideon = by_student(ranking(toy_teacher, "w6"))["s33"]
         assert gideon["score"] == pytest.approx(0)
-        assert gideon["missing"] == []
+        # Only the project, which nobody has in week 6, is missing; his zeros are real scores.
+        assert gideon["missing"] == ["project"]
 
     def test_a_missing_entry_is_flagged_and_not_scored_as_zero(self, toy_teacher):
         rosa = by_student(ranking(toy_teacher, "w7"))["s18"]
-        assert rosa["missing"] == ["participation"]
+        assert rosa["missing"] == ["participation", "project"]  # no project is recorded in week 7
         assert rosa["score"] > 0
         explanation = toy_teacher.get(
             f"{CLASS}/students/s18/explanation", params={"week": "w7"}
