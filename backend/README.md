@@ -11,6 +11,12 @@ uv run uvicorn app.main:create_app --factory --reload   # http://localhost:8000/
 uv run pytest
 ```
 
+The server also serves `../frontend`, so open http://localhost:8000 for the app. The page
+talks to the API through `frontend/services/httpApi.js` on the same origin (so the session
+cookie works) and signs in as the demo teacher automatically; sessions are in memory, so
+the page signs in again after a restart. `frontend/services/api.js` and `mockSource.js`
+remain as the in-browser mock used by the frontend test suite.
+
 Demo sign-ins: `GET /api/demo/accounts` lists them (for example `teacher@demo.test` /
 `demo-teacher-1`). Google sign-in is mocked: send the token `demo-google:<email>`.
 

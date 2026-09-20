@@ -19,13 +19,8 @@ import { scoreStudent, rankRows, gapToNext, gapToBelow, nearestAbove, displayNam
 const CACHE_TTL_MS = 60000;
 const REFRESH_COOLDOWN_MS = 10000;
 
-export class ApiError extends Error {
-  constructor(message, status) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-  }
-}
+import { ApiError } from './apiError.js';
+export { ApiError };
 
 const iso = (ms) => new Date(ms).toISOString();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

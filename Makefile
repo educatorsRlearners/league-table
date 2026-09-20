@@ -6,7 +6,7 @@ help: ## List the available commands
 install: ## Install backend dependencies
 	cd backend && uv sync
 
-run: ## Run the API with auto-reload (docs at http://localhost:8000/api/docs)
+run: ## Serve the app at http://localhost:8000 (API docs at /api/docs), auto-reloading
 	cd backend && uv run uvicorn app.main:create_app --factory --reload
 
 test: ## Run the backend tests

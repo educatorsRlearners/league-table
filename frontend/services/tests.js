@@ -4,6 +4,7 @@
 
 import { normalise, scoreStudent, rankRows, gapToNext, nearestAbove, normaliseWeights, displayName } from './scoring.js';
 import { createApi, ApiError } from './api.js';
+import { createHttpApi, signInAsDemoTeacher } from './httpApi.js';
 import { createToySource } from './mockSource.js';
 
 const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
@@ -398,7 +399,196 @@ apiSuite.it('ranks 35 students over 10 cumulative weeks well inside the budget',
   assert(ms < 500, `took ${ms.toFixed(0)}ms`);
 });
 
-export const SUITES = [scoringSuite, contractSuite, apiSuite];
+/* ------------------------------------------------------------ HTTP client */
+
+const httpSuite = suite('HTTP client');
+
+const json = (body, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+/** A fetch stub that records requests and answers from a queue (or a function). */
+function fakeFetch(...answers) {
+  const calls = [];
+  const fn = async (url, init = {}) => {
+    calls.push({ url: new URL(url, 'http://app.test'), init });
+    const next = answers.length > 1 ? answers.shift() : answers[0];
+    const res = typeof next === 'function' ? next(calls[calls.length - 1]) : next;
+    if (res instanceof Error) throw res;
+    return res.clone ? res.clone() : res;
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+httpSuite.it('asks for a ranking with snake_case query parameters', async () => {
+  const f = fakeFetch(json({ rows: [] }));
+  await createHttpApi({ fetch: f }).getRanking({
+    weekId: 'w5', windowMode: 'cumulative', criteriaKeys: ['homework', 'attendance'],
+    weights: { homework: 60, attendance: 40 }, nameMode: 'initials',
+  });
+  const { url, init } = f.calls[0];
+  assert(url.pathname === '/api/classes/c1/ranking', `path was ${url.pathname}`);
+  assert((init.method || 'GET') === 'GET', 'a ranking is a GET');
+  assert(url.searchParams.get('week') === 'w5', 'week');
+  assert(url.searchParams.get('window') === 'cumulative', 'window');
+  assert(url.searchParams.get('criteria') === 'homework,attendance', 'criteria is comma-separated');
+  assert(JSON.stringify(JSON.parse(url.searchParams.get('weights'))) === '{"homework":60,"attendance":40}', 'weights are JSON');
+  assert(url.searchParams.get('name_mode') === 'initials', 'name_mode');
+});
+
+httpSuite.it('leaves out options it was not given', async () => {
+  const f = fakeFetch(json({ rows: [] }));
+  await createHttpApi({ fetch: f }).getRanking({ weekId: 'w1', criteriaKeys: [] });
+  const params = [...f.calls[0].url.searchParams.keys()].sort().join();
+  assert(params === 'name_mode,week,window', `sent ${params}`);
+});
+
+httpSuite.it('asks for an explanation on the student path and never sends a caller role', async () => {
+  const f = fakeFetch(json({ parts: [] }));
+  await createHttpApi({ fetch: f }).getExplanation({
+    studentId: 's07', weekId: 'w3', caller: { role: 'teacher' },
+  });
+  const { url, init } = f.calls[0];
+  assert(url.pathname === '/api/classes/c1/students/s07/explanation', `path was ${url.pathname}`);
+  assert(url.searchParams.get('week') === 'w3', 'week');
+  assert(!url.search.includes('caller') && !url.search.includes('teacher'), 'the server decides the role');
+  assert(!init.body, 'no body');
+});
+
+httpSuite.it('saves weights with a JSON PUT', async () => {
+  const f = fakeFetch(json({ class_id: 'c1', weights: { homework: 100 } }));
+  const res = await createHttpApi({ fetch: f }).saveWeights('c1', { homework: 100 });
+  const { url, init } = f.calls[0];
+  assert(init.method === 'PUT' && url.pathname === '/api/classes/c1/weights', 'PUT /classes/c1/weights');
+  assert(JSON.parse(init.body).weights.homework === 100, 'weights in the body');
+  assert(new Headers(init.headers).get('content-type') === 'application/json', 'JSON content type');
+  assert(res.weights.homework === 100, 'returns the stored weights');
+});
+
+httpSuite.it('refreshes with a POST and reads the status with a GET', async () => {
+  const f = fakeFetch(json({ last_updated: 'x', issues: [], stale: false }));
+  const api = createHttpApi({ fetch: f });
+  await api.refresh();
+  await api.getStatus();
+  assert(f.calls[0].init.method === 'POST' && f.calls[0].url.pathname === '/api/classes/c1/refresh', 'refresh');
+  assert(f.calls[1].url.pathname === '/api/classes/c1/status', 'status');
+});
+
+httpSuite.it('sends the session cookie', async () => {
+  const f = fakeFetch(json({}));
+  await createHttpApi({ fetch: f }).getBootstrap();
+  assert(f.calls[0].init.credentials === 'same-origin', 'credentials: same-origin');
+});
+
+httpSuite.it('uses a base URL when one is given', async () => {
+  const f = fakeFetch(json({}));
+  await createHttpApi({ baseUrl: '/v2/api', fetch: f }).getBootstrap('c9');
+  assert(f.calls[0].url.pathname === '/v2/api/classes/c9', `path was ${f.calls[0].url.pathname}`);
+});
+
+httpSuite.it('turns an error response into an ApiError with the server message and status', async () => {
+  const f = fakeFetch(json({ detail: 'Please wait 7s before refreshing again.' }, 429));
+  try {
+    await createHttpApi({ fetch: f }).refresh();
+    assert(false, 'should have thrown');
+  } catch (err) {
+    assert(err instanceof ApiError, 'an ApiError');
+    assert(err.status === 429, `status ${err.status}`);
+    assert(err.message === 'Please wait 7s before refreshing again.', err.message);
+  }
+});
+
+httpSuite.it('reads a 422 validation list into one readable message', async () => {
+  const f = fakeFetch(json({ detail: [{ loc: ['query', 'week'], msg: 'Field required', type: 'missing' }] }, 422));
+  try {
+    await createHttpApi({ fetch: f }).getRanking({});
+    assert(false, 'should have thrown');
+  } catch (err) {
+    assert(err.status === 422, `status ${err.status}`);
+    assert(err.message === 'week: Field required', err.message);
+  }
+});
+
+httpSuite.it('reports an unreachable server as an ApiError', async () => {
+  const f = fakeFetch(new TypeError('Failed to fetch'));
+  try {
+    await createHttpApi({ fetch: f }).getBootstrap();
+    assert(false, 'should have thrown');
+  } catch (err) {
+    assert(err instanceof ApiError && err.status === 0, 'status 0');
+    assert(/reach the server/i.test(err.message), err.message);
+  }
+});
+
+httpSuite.it('re-authenticates once on a 401 and retries the request', async () => {
+  let signedIn = false;
+  const f = fakeFetch((c) => (signedIn ? json({ ok: true }) : json({ detail: 'Please sign in.' }, 401)));
+  const api = createHttpApi({ fetch: f, onUnauthorized: async () => { signedIn = true; } });
+  const res = await api.getBootstrap();
+  assert(res.ok === true, 'the retry succeeded');
+  assert(f.calls.length === 2, `made ${f.calls.length} requests`);
+});
+
+httpSuite.it('does not retry a 401 forever', async () => {
+  const f = fakeFetch(json({ detail: 'Please sign in.' }, 401));
+  let attempts = 0;
+  const api = createHttpApi({ fetch: f, onUnauthorized: async () => { attempts++; } });
+  try {
+    await api.getBootstrap();
+    assert(false, 'should have thrown');
+  } catch (err) {
+    assert(err.status === 401, `status ${err.status}`);
+  }
+  assert(attempts === 1 && f.calls.length === 2, `re-authenticated ${attempts}x, ${f.calls.length} requests`);
+});
+
+httpSuite.it('a failed login is a 401, not a re-authentication loop', async () => {
+  const f = fakeFetch(json({ detail: 'Incorrect email or password.' }, 401));
+  let called = false;
+  const api = createHttpApi({ fetch: f, onUnauthorized: async () => { called = true; } });
+  try {
+    await api.login({ email: 'a@b.test', password: 'x' });
+    assert(false, 'should have thrown');
+  } catch (err) {
+    assert(err.status === 401 && err.message === 'Incorrect email or password.', err.message);
+  }
+  assert(!called && f.calls.length === 1, 'no retry on the auth endpoints');
+});
+
+httpSuite.it('signs in as the demo teacher only when there is no session', async () => {
+  const teacher = { email: 't@demo.test', password: 'pw', role: 'teacher', id: 'a1', student_id: null, external_id: 'x' };
+  const student = { ...teacher, email: 's@demo.test', role: 'student', id: 'a2' };
+  const routes = {
+    'GET /api/auth/me': () => json({ detail: 'Please sign in.' }, 401),
+    'GET /api/demo/accounts': () => json([student, teacher]),
+    'POST /api/auth/login': () => json({ id: 'a1', role: 'teacher' }),
+  };
+  const f = fakeFetch((c) => routes[`${c.init.method || 'GET'} ${c.url.pathname}`]());
+  const account = await signInAsDemoTeacher(createHttpApi({ fetch: f }));
+  const login = f.calls.find((c) => c.url.pathname === '/api/auth/login');
+  assert(JSON.parse(login.init.body).email === 't@demo.test', 'signed in with the teacher, not the student');
+  assert(account.role === 'teacher', 'returns the account');
+
+  const signedIn = fakeFetch(json({ id: 'a1', role: 'teacher' }));
+  await signInAsDemoTeacher(createHttpApi({ fetch: signedIn }));
+  assert(signedIn.calls.length === 1, 'an existing session is reused');
+});
+
+httpSuite.it('explains itself when demo sign-in is not available', async () => {
+  const routes = {
+    'GET /api/auth/me': () => json({ detail: 'Please sign in.' }, 401),
+    'GET /api/demo/accounts': () => json({ detail: 'Demo accounts are only available with demo data.' }, 404),
+  };
+  const f = fakeFetch((c) => routes[`${c.init.method || 'GET'} ${c.url.pathname}`]());
+  try {
+    await signInAsDemoTeacher(createHttpApi({ fetch: f }));
+    assert(false, 'should have thrown');
+  } catch (err) {
+    assert(/sign in/i.test(err.message), err.message);
+  }
+});
+
+export const SUITES = [scoringSuite, contractSuite, apiSuite, httpSuite];
 
 export async function runAll() {
   const results = [];

@@ -287,11 +287,13 @@ class Component extends DCLogic {
     document.addEventListener('keydown', this.onKey);
     try {
       const base = document.baseURI;
-      const [{ createApi }, { createToySource }] = await Promise.all([
-        import(new URL('services/api.js', base).href),
-        import(new URL('services/mockSource.js', base).href),
-      ]);
-      this.api = createApi({ source: createToySource(), latency: 'realistic' });
+      const { createHttpApi, signInAsDemoTeacher } = await import(new URL('services/httpApi.js', base).href);
+      // The backend serves this page, so the API is on the same origin. There is no
+      // sign-in screen yet: with demo data the page signs in as the demo teacher, and
+      // does so again if the server restarts and forgets the session.
+      const api = createHttpApi({ baseUrl: '/api', onUnauthorized: () => signInAsDemoTeacher(api) });
+      this.api = api;
+      await signInAsDemoTeacher(api);
       const boot = await this.api.getBootstrap('c1');
       this.setState(
         {
@@ -365,7 +367,6 @@ class Component extends DCLogic {
         criteriaKeys,
         weights,
         nameMode,
-        caller: { role: 'teacher' },
       });
       this.setState({ drawer: ex });
     } catch (err) {
@@ -559,8 +560,12 @@ class Component extends DCLogic {
         this.setState({ draftWeights: defaults });
       },
       onApplyWeights: async () => {
-        const saved = await this.api.saveWeights('c1', s.draftWeights);
-        this.setState({ weights: saved.weights, draftWeights: saved.weights, weightsOpen: false }, this.loadRanking);
+        try {
+          const saved = await this.api.saveWeights('c1', s.draftWeights);
+          this.setState({ weights: saved.weights, draftWeights: saved.weights, weightsOpen: false, errorMsg: null }, this.loadRanking);
+        } catch (err) {
+          this.setState({ errorMsg: err.message });
+        }
       },
       onRefresh: async () => {
         try {
