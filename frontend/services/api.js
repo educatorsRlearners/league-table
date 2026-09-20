@@ -14,7 +14,7 @@
 //
 // Swapping `source` for a SheetsAdapter changes nothing above this line.
 
-import { scoreStudent, rankRows, gapToNext, gapToBelow, displayName, normaliseWeights } from './scoring.js';
+import { scoreStudent, rankRows, gapToNext, gapToBelow, nearestAbove, displayName, normaliseWeights } from './scoring.js';
 
 const CACHE_TTL_MS = 60000;
 const REFRESH_COOLDOWN_MS = 10000;
@@ -225,7 +225,7 @@ export function createApi({ source, latency = 'realistic', failRate = 0, now = (
         parts: row.parts,
         gap_to_next: gapToNext(rows, i),
         gap_to_below: gapToBelow(rows, i),
-        above: i > 0 ? rows.find((r, j) => j < i && r.rank < row.rank)?.display_name ?? null : null,
+        above: nearestAbove(rows, i)?.display_name ?? null,
         week_id: weekId,
         window_mode: windowMode,
       };

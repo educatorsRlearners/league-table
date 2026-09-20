@@ -2,7 +2,7 @@
 // The contract suite is written against the DataSource / Api interfaces only —
 // any adapter (toy today, Sheets later) must pass it unchanged.
 
-import { normalise, scoreStudent, rankRows, gapToNext, normaliseWeights, displayName } from './scoring.js';
+import { normalise, scoreStudent, rankRows, gapToNext, nearestAbove, normaliseWeights, displayName } from './scoring.js';
 import { createApi, ApiError } from './api.js';
 import { createToySource } from './mockSource.js';
 
@@ -110,6 +110,18 @@ scoringSuite.it('reports the gap to the place above', () => {
   ]);
   assert(gapToNext(ranked, 1) === 5.5, 'expected 5.5');
   assert(gapToNext(ranked, 0) === null, 'the leader has no gap above');
+});
+
+scoringSuite.it('finds the nearest student ranked above, skipping a tie partner', () => {
+  const ranked = rankRows([
+    { student_id: 'a', display_name: 'A', score: 90 },
+    { student_id: 'b', display_name: 'B', score: 80 },
+    { student_id: 'c', display_name: 'C', score: 70 },
+    { student_id: 'd', display_name: 'D', score: 70 },
+  ]);
+  assert(nearestAbove(ranked, 0) === null, 'the leader has nobody above');
+  assert(nearestAbove(ranked, 2).student_id === 'b', 'C is beaten by B, not the leader');
+  assert(nearestAbove(ranked, 3).student_id === 'b', 'D looks past its tie partner C');
 });
 
 scoringSuite.it('rescales weights to total 100 while keeping proportions', () => {
@@ -363,6 +375,18 @@ apiSuite.it('runs a data check and reports issues instead of failing', async () 
   const boot = await api.getBootstrap();
   assert(Array.isArray(boot.issues), 'issues must always be a list');
   assert(boot.issues.length === 0, 'the seeded data should be clean');
+});
+
+apiSuite.it('names the nearest student above in an explanation, not the leader', async () => {
+  const api = makeApi();
+  const boot = await api.getBootstrap();
+  const res = await api.getRanking({ weekId: 'w5', weights: boot.weights });
+  const third = res.rows.find((r) => r.rank === 3);
+  const second = res.rows.filter((r) => r.rank === 2).pop();
+  const ex = await api.getExplanation({ studentId: third.student_id, weekId: 'w5', weights: boot.weights });
+  assert(ex.above === second.display_name, `expected ${second.display_name}, got ${ex.above}`);
+  const top = await api.getExplanation({ studentId: res.rows[0].student_id, weekId: 'w5', weights: boot.weights });
+  assert(top.above === null, 'the leader has nobody above');
 });
 
 apiSuite.it('ranks 35 students over 10 cumulative weeks well inside the budget', async () => {

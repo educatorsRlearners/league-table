@@ -98,12 +98,18 @@ export function rankRows(rows, tieBreakers = []) {
   return keyed;
 }
 
-/** Points a student needs to add to reach the rank above them. */
-export function gapToNext(rows, index) {
+/** The closest row with a better rank, skipping a tie partner; null at the top. */
+export function nearestAbove(rows, index) {
   for (let i = index - 1; i >= 0; i--) {
-    if (rows[i].rank < rows[index].rank) return Math.max(0, rows[i].score - rows[index].score);
+    if (rows[i].rank < rows[index].rank) return rows[i];
   }
   return null;
+}
+
+/** Points a student needs to add to reach the rank above them. */
+export function gapToNext(rows, index) {
+  const above = nearestAbove(rows, index);
+  return above ? Math.max(0, above.score - rows[index].score) : null;
 }
 
 export function gapToBelow(rows, index) {
