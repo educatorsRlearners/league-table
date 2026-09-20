@@ -3,6 +3,8 @@
 FastAPI service implementing `../openapi.yaml`, running on a seeded in-memory mock
 database until a real data source replaces it.
 
+From the repo root, `make install`, `make run` and `make test` do the following (`make help` lists them):
+
 ```sh
 uv sync
 uv run uvicorn app.main:create_app --factory --reload   # http://localhost:8000/api/docs
