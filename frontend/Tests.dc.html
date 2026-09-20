@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/classical-fca25eeb-f46c-4de5-a074-d7ad978d244f/styles.css">
+<script src="_ds/classical-fca25eeb-f46c-4de5-a074-d7ad978d244f/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); }
+  a { color: var(--color-accent-700); text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: var(--color-accent-600); }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; padding: var(--space-8) var(--space-6); max-width: 920px; margin: 0 auto;">
+  <div style="display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-3);">
+    <h1 style="margin: 0; margin-right: auto; font-weight: 400;">Scoring &amp; services tests</h1>
+    <span style="font-size: 12px; font-variant-numeric: tabular-nums; color: {{ summaryColor }};">{{ summary }}</span>
+    <button class="btn btn-primary" onClick="{{ onRun }}" style="min-height: 44px;">Run again</button>
+  </div>
+
+  <p style="font-size: 14px; opacity: 0.8; margin-top: var(--space-4); text-align: justify; max-width: 62ch;">
+    Three suites run in the browser against the same modules the app uses: the pure scoring logic, the
+    DataSource contract that every adapter must satisfy, and the services layer that stands in for the
+    FastAPI endpoints. A Sheets adapter would have to pass the contract suite unchanged.
+  </p>
+
+  <sc-for list="{{ suites }}" as="suite" hint-placeholder-count="3">
+    <section style="margin-top: var(--space-8);">
+      <div style="display: flex; align-items: baseline; gap: var(--space-3); border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-2);">
+        <h2 style="margin: 0; font-size: 25px; margin-right: auto;">{{ suite.name }}</h2>
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: {{ suite.color }};">{{ suite.tally }}</span>
+      </div>
+      <sc-for list="{{ suite.cases }}" as="c" hint-placeholder-count="6">
+        <div style="display: grid; grid-template-columns: 78px minmax(0, 1fr) 72px; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-divider);">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: {{ c.color }};">{{ c.status }}</span>
+          <span style="font-size: 14px;">{{ c.title }}
+            <span style="display: block; font-size: 12px; color: var(--color-accent-700);">{{ c.error }}</span>
+          </span>
+          <span style="font-size: 12px; text-align: right; opacity: 0.55; font-variant-numeric: tabular-nums;">{{ c.ms }}</span>
+        </div>
+      </sc-for>
+    </section>
+  </sc-for>
+
+  <p style="margin-top: var(--space-8); font-size: 12px; opacity: 0.7;"><a href="League Table.dc.html">← Back to the league table</a></p>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:960,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { results: [], running: true };
+
+  componentDidMount() {
+    this.run();
+  }
+
+  run = async () => {
+    this.setState({ running: true });
+    try {
+      const mod = await import(new URL('services/tests.js', document.baseURI).href);
+      const results = await mod.runAll();
+      this.setState({ results, running: false });
+    } catch (err) {
+      this.setState({ results: [{ name: 'Harness', cases: [{ title: 'Loading the test modules', pass: false, ms: 0, error: err.message }] }], running: false });
+    }
+  };
+
+  renderVals() {
+    const { results, running } = this.state;
+    const all = results.flatMap((s) => s.cases);
+    const failed = all.filter((c) => !c.pass).length;
+    return {
+      onRun: this.run,
+      summary: running ? 'Running…' : `${all.length - failed} of ${all.length} passing`,
+      summaryColor: running ? 'var(--color-text)' : failed ? 'var(--color-accent-700)' : 'var(--color-text)',
+      suites: results.map((s) => {
+        const bad = s.cases.filter((c) => !c.pass).length;
+        return {
+          name: s.name,
+          tally: bad ? `${bad} failing` : `${s.cases.length} passing`,
+          color: bad ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 55%, transparent)',
+          cases: s.cases.map((c) => ({
+            title: c.title,
+            status: c.pass ? 'Pass' : 'Fail',
+            color: c.pass ? 'var(--color-accent)' : 'var(--color-accent-700)',
+            error: c.error || '',
+            ms: `${c.ms.toFixed(1)} ms`,
+          })),
+        };
+      }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

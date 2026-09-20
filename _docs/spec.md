@@ -1,7 +1,5 @@
 # Classroom League Table: Spec Sheet
 
-2026-09-20 · @Someone
-
 ## Overview and goals
 
 The league table is a display for a single high-school class that shows which students are leading each week, ranked on criteria the teacher chooses: homework, attendance, participation, project scores and more. The teacher projects it in class and students open the same table on their own devices, so it must be readable from the back of the room, simple to run mid-lesson, and able to explain every rank.

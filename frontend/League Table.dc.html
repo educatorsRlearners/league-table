@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/classical-fca25eeb-f46c-4de5-a074-d7ad978d244f/styles.css">
+<script src="_ds/classical-fca25eeb-f46c-4de5-a074-d7ad978d244f/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); }
+  a { color: var(--color-accent-700); text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: var(--color-accent-600); }
+  [data-theme="dark"] {
+    --color-bg: #171615;
+    --color-surface: #211f1e;
+    --color-text: #f2eee8;
+    --color-divider: color-mix(in srgb, #f2eee8 20%, transparent);
+    --color-accent: #e1ad66;
+    --color-accent-700: #f5cd96;
+    --color-accent-100: #2b2521;
+    --color-neutral-700: #bab6b6;
+  }
+  @keyframes lt-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="min-height: 100vh; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding-bottom: 64px;">
+
+  <header style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-divider);">
+    <div style="margin-right: auto; display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;">
+      <span style="font-family: var(--font-heading); font-size: clamp(22px, 2vw, 30px); letter-spacing: -0.015em;">{{ klassName }}</span>
+      <span style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">League table</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+      <sc-if value="{{ demo }}" hint-placeholder-val="{{ true }}">
+        <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">Demo data</span>
+      </sc-if>
+      <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
+      <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
+      <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" style="min-height: 44px;">{{ themeLabel }}</button>
+      <button class="btn btn-secondary" onClick="{{ onTogglePresent }}" style="min-height: 44px;">{{ presentLabel }}</button>
+    </div>
+  </header>
+
+  <sc-if value="{{ errorMsg }}" hint-placeholder-val="{{ false }}">
+    <div style="margin: var(--space-8) auto; max-width: 620px; padding: var(--space-6); border: 1px solid var(--color-divider); border-radius: var(--radius-md); text-align: center;">
+      <h3 style="margin-bottom: var(--space-2);">The table could not load</h3>
+      <p style="font-size: 14px; opacity: 0.8;">{{ errorMsg }}</p>
+      <button class="btn btn-primary" onClick="{{ onRefresh }}" style="min-height: 44px;">Try again</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ loading }}" hint-placeholder-val="{{ true }}">
+    <div style="padding: var(--space-8) var(--space-6); display: grid; gap: var(--space-3);">
+      <div style="height: 180px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.5;"></div>
+      <div style="height: 64px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.4;"></div>
+      <div style="height: 64px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.3;"></div>
+      <div style="height: 64px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.2;"></div>
+      <p style="font-size: 13px; opacity: 0.7;">Reading the class data…</p>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showControls }}" hint-placeholder-val="{{ true }}">
+    <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
+
+      <div style="display: flex; align-items: center; gap: var(--space-2);">
+        <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
+        <div style="min-width: 190px; text-align: center;">
+          <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
+          <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+        </div>
+        <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
+      </div>
+
+      <div class="seg" style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
+        <button onClick="{{ onWeekWindow }}" style="min-height: 44px; padding: 0 var(--space-4); font-family: var(--font-heading); font-size: 14px; cursor: pointer; border: 0; background: {{ weekWindowBg }}; color: var(--color-text);">Week</button>
+        <button onClick="{{ onCumulativeWindow }}" style="min-height: 44px; padding: 0 var(--space-4); font-family: var(--font-heading); font-size: 14px; cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); background: {{ cumulativeWindowBg }}; color: var(--color-text);">Cumulative</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+        <sc-for list="{{ criteriaChips }}" as="chip" hint-placeholder-count="5">
+          <button onClick="{{ chip.onClick }}" aria-pressed="{{ chip.active }}" title="{{ chip.hint }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ chip.bg }}; border: 1px solid {{ chip.border }}; color: {{ chip.color }};">{{ chip.label }}</button>
+        </sc-for>
+        <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Names</span>
+        <sc-for list="{{ nameModes }}" as="nm" hint-placeholder-count="3">
+          <button onClick="{{ nm.onClick }}" aria-pressed="{{ nm.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ nm.bg }}; border: 1px solid {{ nm.border }}; color: var(--color-text);">{{ nm.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasIssues }}" hint-placeholder-val="{{ false }}">
+    <div style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">
+      <span class="tag tag-outline">Data check</span>
+      <span style="margin-left: var(--space-2);">{{ issuesText }}</span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ stale }}" hint-placeholder-val="{{ false }}">
+    <div style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">Showing the last good snapshot — the source did not respond.</div>
+  </sc-if>
+
+  <main style="padding: var(--space-6); max-width: 1680px; margin: 0 auto;">
+
+    <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: end; margin-bottom: var(--space-8);">
+        <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
+          <button onClick="{{ p.onClick }}" style="text-align: center; cursor: pointer; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
+            <div style="font-family: var(--font-heading); font-size: clamp(30px, 3.4vw, 56px); line-height: 1; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ p.rank }}</div>
+            <div style="margin: var(--space-3) auto var(--space-2); width: {{ p.avatarSize }}; height: {{ p.avatarSize }}; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: {{ p.monogramSize }}; color: var(--color-text);">{{ p.monogram }}</div>
+            <div style="font-family: var(--font-heading); font-size: clamp(20px, 1.9vw, 34px); line-height: 1.15; color: var(--color-text);">{{ p.name }}</div>
+            <div style="font-family: var(--font-heading); font-size: clamp(24px, 2.2vw, 40px); font-variant-numeric: lining-nums tabular-nums; color: var(--color-text);">{{ p.score }}</div>
+            <div style="font-size: 12px; color: var(--color-text); opacity: 0.75; font-variant-numeric: lining-nums tabular-nums;">{{ p.deltaText }}</div>
+          </button>
+        </sc-for>
+      </div>
+
+      <div role="table" aria-label="Class ranking" style="border-top: 1px solid var(--color-divider);">
+        <div role="row" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 34%) 120px 130px; gap: var(--space-3); padding: var(--space-2) var(--space-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 60%, transparent); border-bottom: 1px solid var(--color-divider);">
+          <div role="columnheader">Rank</div>
+          <div role="columnheader">Student</div>
+          <div role="columnheader">Score</div>
+          <div role="columnheader" style="text-align: right;">Points</div>
+          <div role="columnheader" style="text-align: right;">Movement</div>
+        </div>
+
+        <sc-for list="{{ visibleRows }}" as="row" hint-placeholder-count="10">
+          <div role="row" onClick="{{ row.onClick }}" tabIndex="0" onKeyDown="{{ row.onKeyDown }}" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 34%) 120px 130px; gap: var(--space-3); align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: pointer; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
+            <div role="cell" style="font-family: var(--font-heading); font-size: clamp(26px, 2.4vw, 48px); line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: {{ row.rankColor }};">{{ row.rank }}</div>
+            <div role="cell" style="display: flex; align-items: center; gap: var(--space-3); min-width: 0;">
+              <span style="flex: none; width: 40px; height: 40px; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 15px;">{{ row.monogram }}</span>
+              <span style="font-family: var(--font-heading); font-size: clamp(18px, 1.6vw, 32px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ row.name }}</span>
+              <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-accent); white-space: nowrap;">{{ row.flag }}</span>
+            </div>
+            <div role="cell" style="height: 14px; border: 1px solid var(--color-divider); border-radius: 2px; overflow: hidden;">
+              <div style="height: 100%; width: {{ row.barWidth }}; background: {{ row.barFill }}; transition: width 520ms cubic-bezier(.2,.7,.3,1);"></div>
+            </div>
+            <div role="cell" style="text-align: right; font-family: var(--font-heading); font-size: clamp(20px, 1.7vw, 32px); font-variant-numeric: lining-nums tabular-nums;">{{ row.score }}</div>
+            <div role="cell" style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">
+              <div style="font-size: 15px; color: {{ row.deltaColor }};">{{ row.deltaText }}</div>
+              <div style="font-size: 11px; opacity: 0.6;">{{ row.gapText }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; justify-content: center; padding: var(--space-4);">
+        <button class="btn btn-secondary" onClick="{{ onToggleShowAll }}" style="min-height: 44px;">{{ showAllLabel }}</button>
+      </div>
+
+      <p style="text-align: center; font-size: 12px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ footnote }}</p>
+    </sc-if>
+
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding: var(--space-8); text-align: center; border: 1px solid var(--color-divider); border-radius: var(--radius-md);">
+        <h3>No scores for this week yet</h3>
+        <p style="font-size: 14px; opacity: 0.75;">Pick another week, or turn a criterion back on.</p>
+      </div>
+    </sc-if>
+  </main>
+
+  <sc-if value="{{ drawer }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; z-index: 40;">
+      <div onClick="{{ onCloseDrawer }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
+      <aside role="dialog" aria-label="Score breakdown" style="position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 100%); overflow-y: auto; background: var(--color-bg); border-left: 1px solid var(--color-divider); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+        <div style="display: flex; align-items: baseline; gap: var(--space-3);">
+          <div style="margin-right: auto;">
+            <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Rank {{ drawer.rank }} · {{ drawer.windowLabel }}</div>
+            <h2 style="margin: 0;">{{ drawer.name }}</h2>
+          </div>
+          <button class="btn btn-ghost" onClick="{{ onCloseDrawer }}" aria-label="Close" style="min-height: 44px;">Close</button>
+        </div>
+
+        <p style="font-size: 13px; opacity: 0.8; margin-top: var(--space-3); text-align: justify;">{{ drawer.intro }}</p>
+
+        <table class="table" style="margin-top: var(--space-3);">
+          <thead>
+            <tr>
+              <th>Criterion</th>
+              <th style="text-align: right;">Earned</th>
+              <th style="text-align: right;">%</th>
+              <th style="text-align: right;">Weight</th>
+              <th style="text-align: right;">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ drawer.parts }}" as="part" hint-placeholder-count="5">
+              <tr>
+                <td style="font-variant-numeric: lining-nums tabular-nums;">{{ part.label }}</td>
+                <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.earnedText }}</td>
+                <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.pctText }}</td>
+                <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.weightText }}</td>
+                <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.pointsText }}</td>
+              </tr>
+            </sc-for>
+            <tr>
+              <td style="font-family: var(--font-heading);">Total</td>
+              <td></td>
+              <td></td>
+              <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.weightTotal }}</td>
+              <td style="text-align: right; font-family: var(--font-heading); font-size: 18px; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.total }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider); display: grid; gap: var(--space-2); font-size: 14px;">
+          <div>{{ drawer.gapUp }}</div>
+          <div>{{ drawer.gapDown }}</div>
+          <div style="font-size: 12px; opacity: 0.65;">{{ drawer.missingNote }}</div>
+        </div>
+      </aside>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ weightsOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;">
+      <div onClick="{{ onCloseWeights }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
+      <div role="dialog" aria-label="Criterion weights" style="position: relative; width: min(560px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+        <h2 style="margin-bottom: var(--space-1);">Criterion weights</h2>
+        <p style="font-size: 13px; opacity: 0.8;">Weights are rescaled to total 100 when applied. A criterion with no entry for a student is excluded and the rest are rescaled for that student only.</p>
+        <div style="display: grid; gap: var(--space-3); margin-top: var(--space-4);">
+          <sc-for list="{{ weightRows }}" as="wr" hint-placeholder-count="5">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 14px; font-variant-numeric: lining-nums tabular-nums;">
+                <span>{{ wr.label }}</span>
+                <span>{{ wr.valueText }}</span>
+              </div>
+              <input type="range" min="0" max="50" step="1" value="{{ wr.value }}" onChange="{{ wr.onChange }}" style="width: 100%; accent-color: var(--color-accent); min-height: 44px;">
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider);">
+          <span style="font-size: 13px; font-variant-numeric: lining-nums tabular-nums; margin-right: auto;">{{ weightTotalText }}</span>
+          <button class="btn btn-ghost" onClick="{{ onResetWeights }}" style="min-height: 44px;">Reset</button>
+          <button class="btn btn-primary" onClick="{{ onApplyWeights }}" style="min-height: 44px;">Apply</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <footer style="padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-divider); display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; opacity: 0.7;">
+    <span>{{ shortcutHint }}</span>
+    <span style="margin-left: auto;"><a href="Tests.dc.html">Service &amp; scoring tests</a></span>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:35,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
+class Component extends DCLogic {
+  state = {
+    loading: true,
+    errorMsg: null,
+    boot: null,
+    rows: [],
+    weekIdx: 0,
+    windowMode: 'week',
+    criteriaKeys: [],
+    nameMode: this.props.nameMode || 'full',
+    theme: this.props.startTheme || 'light',
+    presenting: false,
+    showAll: false,
+    drawer: null,
+    weightsOpen: false,
+    draftWeights: {},
+    weights: {},
+    lastUpdated: null,
+    stale: false,
+    issues: [],
+  };
+
+  async componentDidMount() {
+    document.addEventListener('keydown', this.onKey);
+    try {
+      const base = document.baseURI;
+      const [{ createApi }, { createToySource }] = await Promise.all([
+        import(new URL('services/api.js', base).href),
+        import(new URL('services/mockSource.js', base).href),
+      ]);
+      this.api = createApi({ source: createToySource(), latency: 'realistic' });
+      const boot = await this.api.getBootstrap('c1');
+      this.setState(
+        {
+          boot,
+          weekIdx: boot.weeks.length - 1,
+          criteriaKeys: boot.criteria.map((c) => c.key),
+          weights: boot.weights,
+          draftWeights: boot.weights,
+          lastUpdated: boot.lastUpdated,
+          issues: boot.issues,
+        },
+        this.loadRanking,
+      );
+    } catch (err) {
+      this.setState({ loading: false, errorMsg: err.message });
+    }
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('keydown', this.onKey);
+  }
+
+  onKey = (e) => {
+    if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    const { boot } = this.state;
+    if (!boot) return;
+    if (e.key === 'ArrowLeft') this.stepWeek(-1);
+    else if (e.key === 'ArrowRight') this.stepWeek(1);
+    else if (e.key.toLowerCase() === 'p') this.setState((s) => ({ presenting: !s.presenting }));
+    else if (e.key === 'Escape') this.setState({ drawer: null, weightsOpen: false });
+    else if (/^[1-9]$/.test(e.key)) {
+      const c = boot.criteria[Number(e.key) - 1];
+      if (c) this.setState({ criteriaKeys: [c.key] }, this.loadRanking);
+    } else if (e.key === '0') {
+      this.setState({ criteriaKeys: boot.criteria.map((c) => c.key) }, this.loadRanking);
+    }
+  };
+
+  stepWeek(d) {
+    const { boot, weekIdx } = this.state;
+    const next = Math.min(boot.weeks.length - 1, Math.max(0, weekIdx + d));
+    if (next !== weekIdx) this.setState({ weekIdx: next, drawer: null }, this.loadRanking);
+  }
+
+  loadRanking = async () => {
+    const { boot, weekIdx, windowMode, criteriaKeys, weights, nameMode } = this.state;
+    if (!boot) return;
+    try {
+      const res = await this.api.getRanking({
+        classId: 'c1',
+        weekId: boot.weeks[weekIdx].id,
+        windowMode,
+        criteriaKeys,
+        weights,
+        nameMode,
+      });
+      this.setState({ loading: false, errorMsg: null, rows: res.rows, lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues });
+    } catch (err) {
+      this.setState({ loading: false, errorMsg: err.message });
+    }
+  };
+
+  openDrawer = async (studentId) => {
+    const { boot, weekIdx, windowMode, criteriaKeys, weights, nameMode } = this.state;
+    try {
+      const ex = await this.api.getExplanation({
+        classId: 'c1',
+        studentId,
+        weekId: boot.weeks[weekIdx].id,
+        windowMode,
+        criteriaKeys,
+        weights,
+        nameMode,
+        caller: { role: 'teacher' },
+      });
+      this.setState({ drawer: ex });
+    } catch (err) {
+      this.setState({ errorMsg: err.message });
+    }
+  };
+
+  monogram(name) {
+    const bits = String(name).replace(/[^\w\s.]/g, '').split(/\s+/).filter(Boolean);
+    return ((bits[0] || '?')[0] + (bits.length > 1 ? bits[bits.length - 1][0] : '')).toUpperCase();
+  }
+
+  fmt(n, d = 1) {
+    return n == null ? '—' : Number(n).toFixed(d);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const boot = s.boot;
+    const week = boot ? boot.weeks[s.weekIdx] : null;
+    const rows = s.rows;
+    const best = rows.length ? Math.max(...rows.map((r) => r.score)) : 100;
+
+    const deltaText = (d) => {
+      if (d == null) return 'New';
+      if (d === 0) return '— held';
+      return d > 0 ? `▲ ${d} up` : `▼ ${Math.abs(d)} down`;
+    };
+
+    const podium = rows
+      .slice(0, 3)
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => [1, 0, 2][a.i] - [1, 0, 2][b.i])
+      .map(({ r, i }) => ({
+        rank: r.rank,
+        name: r.display_name,
+        monogram: this.monogram(r.display_name),
+        score: this.fmt(r.score),
+        deltaText: deltaText(r.rank_delta),
+        border: i === 0 ? 'var(--color-accent)' : 'var(--color-divider)',
+        topRule: i === 0 ? '3px' : '1px',
+        lift: i === 0 ? '-14px' : '0px',
+        avatarSize: i === 0 ? '84px' : '64px',
+        monogramSize: i === 0 ? '30px' : '22px',
+        delay: `${i * 90}ms`,
+        onClick: () => this.openDrawer(r.student_id),
+      }));
+
+    const topN = this.props.topN ?? 10;
+    const visible = s.showAll ? rows : rows.slice(0, topN);
+    const visibleRows = visible.map((r, i) => ({
+      rank: r.rank,
+      name: r.display_name,
+      monogram: this.monogram(r.display_name),
+      score: this.fmt(r.score),
+      barWidth: `${Math.max(2, (r.score / (best || 100)) * 100)}%`,
+      barFill: r.rank <= 3 ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-accent) 45%, transparent)',
+      rankColor: r.rank <= 3 ? 'var(--color-accent)' : 'var(--color-text)',
+      bg: r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
+      deltaText: deltaText(r.rank_delta),
+      deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
+      gapText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to ${r.rank - 1 > 0 ? 'the place above' : 'first'}`,
+      flag: [r.tied ? 'tied' : null, r.missing && r.missing.length ? 'no entry' : null].filter(Boolean).join(' · '),
+      delay: `${Math.min(i, 12) * 35}ms`,
+      onClick: () => this.openDrawer(r.student_id),
+      onKeyDown: (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.openDrawer(r.student_id);
+        }
+      },
+    }));
+
+    const criteriaChips = (boot ? boot.criteria : []).map((c, i) => {
+      const active = s.criteriaKeys.includes(c.key);
+      return {
+        key: c.key,
+        label: c.label,
+        active,
+        hint: `Key ${i + 1} · weight ${Math.round(s.weights[c.key] || 0)}`,
+        bg: active ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+        border: active ? 'var(--color-accent)' : 'var(--color-divider)',
+        color: active ? 'var(--color-accent-700)' : 'var(--color-text)',
+        onClick: () => {
+          const has = s.criteriaKeys.includes(c.key);
+          const next = has ? s.criteriaKeys.filter((k) => k !== c.key) : [...s.criteriaKeys, c.key];
+          if (!next.length) return;
+          this.setState({ criteriaKeys: next, drawer: null }, this.loadRanking);
+        },
+      };
+    });
+
+    const nameModes = [
+      { key: 'full', label: 'Full' },
+      { key: 'initials', label: 'Initial' },
+      { key: 'nickname', label: 'Nickname' },
+    ].map((m) => ({
+      label: m.label,
+      active: s.nameMode === m.key,
+      bg: s.nameMode === m.key ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+      border: s.nameMode === m.key ? 'var(--color-accent)' : 'var(--color-divider)',
+      onClick: () => this.setState({ nameMode: m.key }, this.loadRanking),
+    }));
+
+    const weightRows = (boot ? boot.criteria : []).map((c) => ({
+      label: c.label,
+      value: Math.round(s.draftWeights[c.key] ?? 0),
+      valueText: `${Math.round(s.draftWeights[c.key] ?? 0)}`,
+      onChange: (e) => {
+        const v = Number(e.target.value);
+        this.setState((st) => ({ draftWeights: { ...st.draftWeights, [c.key]: v } }));
+      },
+    }));
+    const draftTotal = Object.values(s.draftWeights).reduce((a, b) => a + b, 0);
+
+    const drawer = s.drawer
+      ? {
+          name: s.drawer.display_name,
+          rank: s.drawer.rank,
+          windowLabel: s.windowMode === 'cumulative' ? `Weeks 1–${s.weekIdx + 1} cumulative` : `Week ${week ? week.week_number : ''}`,
+          intro: `Every criterion is converted to a percentage, weighted, and added. Weights shown here are rescaled across the criteria that have an entry, so a missing entry is never counted as zero.`,
+          parts: s.drawer.parts.map((p) => ({
+            label: p.label,
+            earnedText: p.missing ? '—' : `${p.earned} / ${p.possible}`,
+            pctText: p.missing ? '—' : `${this.fmt(p.normalised)}`,
+            weightText: p.missing ? '—' : `${this.fmt(p.effectiveWeight, 0)}`,
+            pointsText: p.missing ? '—' : this.fmt(p.points),
+          })),
+          weightTotal: '100',
+          total: this.fmt(s.drawer.score),
+          gapUp:
+            s.drawer.gap_to_next == null
+              ? 'Top of the table — nobody above.'
+              : `${this.fmt(s.drawer.gap_to_next)} points would reach the place above.`,
+          gapDown:
+            s.drawer.gap_to_below == null
+              ? 'Nobody below on this table.'
+              : `${this.fmt(s.drawer.gap_to_below)} points clear of the place below.`,
+          missingNote: s.drawer.parts.some((p) => p.missing)
+            ? 'Criteria marked — have no entry this window and were excluded from the weighting.'
+            : 'Every criterion has an entry this window.',
+        }
+      : null;
+
+    const issues = s.issues || [];
+
+    return {
+      theme: s.theme,
+      themeLabel: s.theme === 'light' ? 'Dark' : 'Light',
+      loading: s.loading && !s.errorMsg,
+      errorMsg: s.errorMsg,
+      klassName: boot ? boot.klass.name : 'Loading…',
+      demo: boot ? boot.source.demo : false,
+      lastUpdatedText: s.lastUpdated ? `Updated ${new Date(s.lastUpdated).toLocaleTimeString()}` : '',
+      stale: s.stale,
+      hasIssues: issues.length > 0,
+      issuesText: issues.length ? `${issues.length} cell${issues.length === 1 ? '' : 's'} need checking in the source` : '',
+      showControls: !!boot && !s.presenting && !s.loading,
+      presentLabel: s.presenting ? 'Exit present' : 'Present',
+      weekLabel: week ? `Week ${week.week_number}` : '',
+      weekRange: week ? `${week.start_date} – ${week.end_date}` : '',
+      weekWindowBg: s.windowMode === 'week' ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent',
+      cumulativeWindowBg: s.windowMode === 'cumulative' ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent',
+      criteriaChips,
+      nameModes,
+      podium,
+      visibleRows,
+      hasRows: rows.length > 0 && !s.loading,
+      isEmpty: !!boot && !s.loading && rows.length === 0 && !s.errorMsg,
+      showAllLabel: s.showAll ? `Show top ${topN}` : `Show all ${rows.length}`,
+      footnote: boot
+        ? `${rows.length} students · ${s.criteriaKeys.length} of ${boot.criteria.length} criteria · ties broken for display by ${boot.tieBreakers.join(', then ')}`
+        : '',
+      shortcutHint: '← → week · 1–5 single criterion · 0 all criteria · P present · Esc close',
+      drawer,
+      weightsOpen: s.weightsOpen,
+      weightRows,
+      weightTotalText: `Draft total ${Math.round(draftTotal)} — rescaled to 100 on apply`,
+      onToggleTheme: () => this.setState((st) => ({ theme: st.theme === 'light' ? 'dark' : 'light' })),
+      onTogglePresent: () => this.setState((st) => ({ presenting: !st.presenting })),
+      onPrevWeek: () => this.stepWeek(-1),
+      onNextWeek: () => this.stepWeek(1),
+      onWeekWindow: () => this.setState({ windowMode: 'week', drawer: null }, this.loadRanking),
+      onCumulativeWindow: () => this.setState({ windowMode: 'cumulative', drawer: null }, this.loadRanking),
+      onToggleShowAll: () => this.setState((st) => ({ showAll: !st.showAll })),
+      onCloseDrawer: () => this.setState({ drawer: null }),
+      onToggleWeights: () => this.setState((st) => ({ weightsOpen: !st.weightsOpen, draftWeights: st.weights })),
+      onCloseWeights: () => this.setState({ weightsOpen: false }),
+      onResetWeights: () => {
+        const defaults = Object.fromEntries(boot.criteria.map((c) => [c.key, c.default_weight]));
+        this.setState({ draftWeights: defaults });
+      },
+      onApplyWeights: async () => {
+        const saved = await this.api.saveWeights('c1', s.draftWeights);
+        this.setState({ weights: saved.weights, draftWeights: saved.weights, weightsOpen: false }, this.loadRanking);
+      },
+      onRefresh: async () => {
+        try {
+          const r = await this.api.refresh();
+          this.setState({ lastUpdated: r.lastUpdated, stale: r.stale, issues: r.issues, errorMsg: null }, this.loadRanking);
+        } catch (err) {
+          this.setState({ errorMsg: err.message });
+        }
+      },
+    };
+  }
+}
+
+</script>
+</body>
+</html>
