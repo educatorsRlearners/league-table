@@ -4,11 +4,13 @@
 // createApi({ source, latency, failRate }) returns an object shaped like the
 // FastAPI service in the spec:
 //
-//   getBootstrap(classId)                     GET /classes/{id}/weeks + /criteria
+//   getBootstrap(classId)                     GET /classes/{id}
 //   getRanking({...})                         GET /classes/{id}/ranking
 //   getExplanation({...})                     GET /classes/{id}/students/{sid}/explanation
 //   saveWeights(classId, weights)             PUT /classes/{id}/weights
 //   refresh() / getStatus()                   cache controls + "last updated"
+//   login({email, password})                  POST /auth/login
+//   listDemoAccounts()                        GET /demo/accounts (demo data only)
 //
 // Swapping `source` for a SheetsAdapter changes nothing above this line.
 
@@ -25,6 +27,7 @@ export class ApiError extends Error {
   }
 }
 
+const iso = (ms) => new Date(ms).toISOString();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function createApi({ source, latency = 'realistic', failRate = 0, now = () => Date.now() } = {}) {
@@ -127,16 +130,32 @@ export function createApi({ source, latency = 'realistic', failRate = 0, now = (
       const criteria = snap.criteria;
       const weights = savedWeights || Object.fromEntries(criteria.map((c) => [c.key, c.default_weight]));
       return {
-        klass: snap.classes.find((c) => c.id === classId) || snap.classes[0],
+        class: snap.classes.find((c) => c.id === classId) || snap.classes[0],
         weeks: snap.weeks,
         criteria,
         weights,
-        accounts: source.listAccounts ? await source.listAccounts() : [],
-        tieBreakers: ['Attendance', 'Homework'],
+        tie_breakers: ['Attendance', 'Homework'],
         source: this.describeSource(),
-        lastUpdated: snap.at,
+        last_updated: iso(snap.at),
         issues: snap.issues || [],
       };
+    },
+
+    /** POST /auth/login — the mock checks the demo accounts' dummy credentials. */
+    async login({ email, password }) {
+      await delay(120, 260);
+      const accounts = source.listAccounts ? await source.listAccounts() : [];
+      const match = accounts.find((a) => a.email === email && a.password === password);
+      if (!match) throw new ApiError('Incorrect email or password.', 401);
+      const { id, role, student_id, external_id } = match;
+      return { id, role, student_id, external_id };
+    },
+
+    /** GET /demo/accounts — exists only while the demo (toy) source is active. */
+    async listDemoAccounts() {
+      if (!source.listAccounts) throw new ApiError('Demo accounts are only available with demo data.', 404);
+      await delay(60, 140);
+      return source.listAccounts();
     },
 
     /** GET /classes/{id}/ranking?week=&criteria=&window= */
@@ -170,13 +189,13 @@ export function createApi({ source, latency = 'realistic', failRate = 0, now = (
       }));
 
       return {
-        classId,
-        weekId,
-        windowMode,
-        criteriaKeys: keys,
+        class_id: classId,
+        week_id: weekId,
+        window_mode: windowMode,
+        criteria_keys: keys,
         weights: w,
         rows: decorated,
-        lastUpdated: snap.at,
+        last_updated: iso(snap.at),
         stale: !!snap.stale,
         issues: snap.issues || [],
       };
@@ -207,8 +226,8 @@ export function createApi({ source, latency = 'realistic', failRate = 0, now = (
         gap_to_next: gapToNext(rows, i),
         gap_to_below: gapToBelow(rows, i),
         above: i > 0 ? rows.find((r, j) => j < i && r.rank < row.rank)?.display_name ?? null : null,
-        weekId,
-        windowMode,
+        week_id: weekId,
+        window_mode: windowMode,
       };
     },
 
@@ -216,7 +235,7 @@ export function createApi({ source, latency = 'realistic', failRate = 0, now = (
     async saveWeights(classId, weights) {
       await delay(150, 300);
       savedWeights = normaliseWeights(weights);
-      return { classId, weights: savedWeights };
+      return { class_id: classId, weights: savedWeights };
     },
 
     async refresh() {
@@ -227,11 +246,11 @@ export function createApi({ source, latency = 'realistic', failRate = 0, now = (
       lastRefreshAt = now();
       await delay(300, 700);
       const snap = await load(true);
-      return { lastUpdated: snap.at, issues: snap.issues || [], stale: !!snap.stale };
+      return { last_updated: iso(snap.at), issues: snap.issues || [], stale: !!snap.stale };
     },
 
     getStatus() {
-      return { lastUpdated: cache?.at ?? null, stale: !!cache?.stale, issues: cache?.issues || [], source: this.describeSource() };
+      return { last_updated: cache ? iso(cache.at) : null, stale: !!cache?.stale, issues: cache?.issues || [], source: this.describeSource() };
     },
 
     // Test / demo hooks — not part of the HTTP surface.

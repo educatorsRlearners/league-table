@@ -1,0 +1,945 @@
+openapi: 3.1.0
+info:
+  title: League Table API
+  version: 0.1.0
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    The backend the League Table frontend (`frontend/services/api.js`) expects.
+
+    The frontend's services layer is the only code that talks to a data source, and
+    it is shaped like this API: `getBootstrap`, `getRanking`, `getExplanation`,
+    `saveWeights`, `refresh` and `getStatus` map one-to-one onto the operations
+    below. Scoring, ranking and tie-breaking run on the server; the browser only
+    renders the result.
+
+    **Conventions**
+    - Every field, query parameter and path parameter is `snake_case`, matching the
+      data model in `_docs/spec.md` and FastAPI's defaults. The frontend's services
+      layer translates its own JS option names (`weekId`, `windowMode`, ...) at the
+      HTTP boundary.
+    - Timestamps (`last_updated`) are ISO 8601 UTC strings, or `null` before any
+      successful read.
+    - Errors carry a human-readable `detail` message and an HTTP status; the client
+      shows the message to the user.
+
+    **Authentication**
+    Every endpoint except the sign-in operations under `/auth` needs a session
+    cookie. Roles are enforced by the server, never the browser: a `student` may
+    read the full ranking but only their own explanation, and may not change
+    settings.
+servers:
+  - url: /api
+    description: Same origin as the frontend
+
+tags:
+  - name: Auth
+    description: Sign-in and session.
+  - name: Class
+    description: Class metadata and the controls' data (weeks, criteria, weights).
+  - name: Ranking
+    description: The ranked table and per-student explanations.
+  - name: Data
+    description: Cache status and refresh of the read-only data source.
+
+security:
+  - sessionCookie: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in with a teacher-created account
+      description: |
+        With demo data, the dummy credentials from `GET /demo/accounts` work here.
+        Wrong credentials return 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Signed in. The session cookie is set on the response.
+          headers:
+            Set-Cookie:
+              description: HttpOnly session cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/google:
+    post:
+      tags: [Auth]
+      operationId: loginWithGoogle
+      summary: Sign in with Google
+      description: |
+        Exchanges a Google ID token for a session. The token's email is matched to
+        the roster's email column; an email that is not on the roster is rejected.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+      responses:
+        '200':
+          description: Signed in. The session cookie is set on the response.
+          headers:
+            Set-Cookie:
+              description: HttpOnly session cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAccount
+      summary: The signed-in account
+      description: Lets the frontend learn the caller's role and, for students, their `student_id`.
+      responses:
+        '200':
+          description: The current account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: End the session
+      responses:
+        '204':
+          description: Session ended and cookie cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /demo/accounts:
+    get:
+      tags: [Auth]
+      operationId: listDemoAccounts
+      summary: Demo accounts (demo data only)
+      description: |
+        Lists the seeded demo teacher and students so sign-in and role rules can be
+        tried without real people, and includes their dummy credentials for
+        `POST /auth/login`. Exists only while the toy adapter is the active data
+        source; any other source returns 404. It is never part of the class
+        bootstrap.
+      security: []
+      responses:
+        '200':
+          description: Demo accounts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DemoAccount'
+        '404':
+          description: The active data source is not demo data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /classes/{class_id}:
+    get:
+      tags: [Class]
+      operationId: getClass
+      summary: Everything the page needs to start
+      description: |
+        The frontend's `getBootstrap`. Returns the class, its weeks and criteria, the
+        saved weights (or each criterion's `default_weight` if none are saved), and
+        the data-source status, in one call.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Class bootstrap.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassBootstrap'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/SourceUnavailable'
+
+  /classes/{class_id}/weeks:
+    get:
+      tags: [Class]
+      operationId: listWeeks
+      summary: Weeks of the term, in order
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Weeks, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Week'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/SourceUnavailable'
+
+  /classes/{class_id}/criteria:
+    get:
+      tags: [Class]
+      operationId: listCriteria
+      summary: Ranking criteria, in display order
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Criteria ordered by `sort_order`.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Criterion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/SourceUnavailable'
+
+  /classes/{class_id}/weights:
+    get:
+      tags: [Class]
+      operationId: getWeights
+      summary: Saved criterion weights
+      description: Falls back to each criterion's `default_weight` when nothing has been saved.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Weights totalling 100.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Class]
+      operationId: saveWeights
+      summary: Save criterion weights (teacher only)
+      description: |
+        Stores the weights in app settings, separate from the read-only data source.
+        The server rescales them so they total 100, preserving proportions, and
+        returns the stored values.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveWeightsRequest'
+      responses:
+        '200':
+          description: The stored, normalised weights.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /classes/{class_id}/ranking:
+    get:
+      tags: [Ranking]
+      operationId: getRanking
+      summary: The ranked table for a week or cumulative window
+      description: |
+        Scores every student with entries in the window and ranks them with
+        competition ranking (1, 1, 3). Ties share a rank number; the tie-breakers
+        (attendance, then homework) only decide display order. A criterion a student
+        has no data for is left out and the remaining weights are rescaled, so
+        missing data is never scored as zero.
+
+        `rank_delta` compares against the previous week's table with the same
+        criteria, weights and window mode, and is `null` for the first week or when
+        the student was not ranked then.
+
+        Any signed-in role may call this. `weights` lets a teacher preview weights
+        before saving them; when omitted, the saved weights are used.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - $ref: '#/components/parameters/Week'
+        - $ref: '#/components/parameters/Window'
+        - $ref: '#/components/parameters/Criteria'
+        - $ref: '#/components/parameters/Weights'
+        - $ref: '#/components/parameters/NameMode'
+      responses:
+        '200':
+          description: The ranking, best first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ranking'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/SourceUnavailable'
+
+  /classes/{class_id}/students/{student_id}/explanation:
+    get:
+      tags: [Ranking]
+      operationId: getExplanation
+      summary: Per-criterion breakdown of one student's rank
+      description: |
+        A teacher may open any student. A student may open only their own; asking
+        for another student's breakdown returns 403 regardless of what the client
+        sends. Accepts the same window, criteria, weights and name mode as the
+        ranking so the breakdown always matches the table being viewed.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: s01
+        - $ref: '#/components/parameters/Week'
+        - $ref: '#/components/parameters/Window'
+        - $ref: '#/components/parameters/Criteria'
+        - $ref: '#/components/parameters/Weights'
+        - $ref: '#/components/parameters/NameMode'
+      responses:
+        '200':
+          description: The breakdown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Explanation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Unknown class or student, or the student has no entries in this window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/SourceUnavailable'
+
+  /classes/{class_id}/status:
+    get:
+      tags: [Data]
+      operationId: getStatus
+      summary: Data freshness and validation issues
+      description: |
+        Read from the server's cache; never triggers a fetch from the data source.
+        `last_updated` is `null` before the first successful read.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /classes/{class_id}/refresh:
+    post:
+      tags: [Data]
+      operationId: refresh
+      summary: Re-read the data source now (teacher only)
+      description: |
+        Bypasses the server's cache (60 s TTL). Rate limited to one call per 10
+        seconds; a call inside the cooldown returns 429 with a message such as
+        "Please wait 7s before refreshing again." If the source fails but a previous
+        snapshot exists, the call succeeds with `stale: true`.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Refreshed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: Refreshed too recently.
+          headers:
+            Retry-After:
+              description: Seconds until the next refresh is allowed.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/SourceUnavailable'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: HttpOnly session cookie set by `/auth/login` or `/auth/google`.
+
+  parameters:
+    ClassId:
+      name: class_id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: c1
+    Week:
+      name: week
+      in: query
+      required: true
+      description: ID of the week to rank. With `window=cumulative`, this is the last week included.
+      schema:
+        type: string
+      example: w5
+    Window:
+      name: window
+      in: query
+      description: '`week` scores only that week; `cumulative` scores week 1 through `week`.'
+      schema:
+        type: string
+        enum: [week, cumulative]
+        default: week
+    Criteria:
+      name: criteria
+      in: query
+      description: Criterion keys to include, comma-separated. Omitted or empty means all criteria.
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          type: string
+      example: [homework, attendance]
+    Weights:
+      name: weights
+      in: query
+      description: |
+        JSON-encoded object mapping criterion key to weight, for previewing unsaved
+        weights. Criteria not listed get weight 0. The server rescales the weights
+        of the selected criteria to total 100. Omitted means use the saved weights.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Weights'
+          example: { homework: 40, attendance: 30, participation: 30 }
+    NameMode:
+      name: name_mode
+      in: query
+      description: |
+        How names are shown in `display_name`. `nickname` falls back to the full
+        name when a student has none; `initials` shows "First L.".
+      schema:
+        type: string
+        enum: [full, nickname, initials]
+        default: full
+
+  responses:
+    Unauthorized:
+      description: No valid session.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The caller's role does not allow this.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: A student may only open their own breakdown.
+    NotFound:
+      description: Unknown class.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: |
+        A parameter or body field is missing or malformed. Uses FastAPI's default 422
+        body, where `detail` is a list of per-field problems.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    SourceUnavailable:
+      description: |
+        The data source did not respond and there is no earlier snapshot to serve.
+        When a snapshot exists the server serves it with `stale: true` instead.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: The data source did not respond.
+
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Message safe to show to the user.
+
+    ValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            required: [loc, msg, type]
+            properties:
+              loc:
+                type: array
+                description: Where the problem is, e.g. `["query", "week"]`.
+                items:
+                  type: [string, integer]
+              msg:
+                type: string
+              type:
+                type: string
+
+    Role:
+      type: string
+      enum: [teacher, student]
+
+    Account:
+      type: object
+      required: [id, role, student_id, external_id]
+      properties:
+        id:
+          type: string
+          example: a2
+        role:
+          $ref: '#/components/schemas/Role'
+        student_id:
+          type: [string, 'null']
+          description: The student this account belongs to; `null` for teachers.
+          example: s01
+        external_id:
+          type: string
+          description: ID from an outside identity system, so sign-in can be matched later.
+          example: demo:amara
+
+    DemoAccount:
+      description: |
+        A seeded demo account with dummy credentials. These passwords are public by
+        design and must never be accepted by a deployment using real student data.
+      allOf:
+        - $ref: '#/components/schemas/Account'
+        - type: object
+          required: [email, password]
+          properties:
+            email:
+              type: string
+              format: email
+              example: teacher@demo.test
+            password:
+              type: string
+              example: demo-teacher-1
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    GoogleLoginRequest:
+      type: object
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+          description: Google-issued ID token from the browser sign-in flow.
+
+    Class:
+      type: object
+      required: [id, external_id, name, term_id]
+      properties:
+        id:
+          type: string
+          example: c1
+        external_id:
+          type: string
+          example: clever:sec-4821
+        name:
+          type: string
+          example: Year 10 Physics · Set B
+        term_id:
+          type: string
+          example: t1
+
+    Week:
+      type: object
+      required: [id, term_id, week_number, start_date, end_date]
+      properties:
+        id:
+          type: string
+          example: w1
+        term_id:
+          type: string
+          example: t1
+        week_number:
+          type: integer
+          example: 1
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+
+    Criterion:
+      type: object
+      required: [id, class_id, key, label, unit, default_weight, sort_order]
+      properties:
+        id:
+          type: string
+        class_id:
+          type: string
+        key:
+          type: string
+          description: Stable identifier used in `criteria`, `weights` and score parts.
+          example: homework
+        label:
+          type: string
+          example: Homework
+        unit:
+          type: string
+          example: tasks on time
+        default_weight:
+          type: number
+          minimum: 0
+          example: 25
+        sort_order:
+          type: integer
+
+    Weights:
+      type: object
+      description: Criterion key to weight. Values are non-negative.
+      additionalProperties:
+        type: number
+        minimum: 0
+      example: { homework: 25, attendance: 20, participation: 20, project: 25, quizzes: 10 }
+
+    WeightsResponse:
+      type: object
+      required: [class_id, weights]
+      properties:
+        class_id:
+          type: string
+        weights:
+          $ref: '#/components/schemas/Weights'
+
+    SaveWeightsRequest:
+      type: object
+      required: [weights]
+      properties:
+        weights:
+          $ref: '#/components/schemas/Weights'
+
+    SourceInfo:
+      type: object
+      required: [kind, label, demo]
+      properties:
+        kind:
+          type: string
+          description: Which data-source adapter is active (`toy` for seeded demo data).
+          example: toy
+        label:
+          type: string
+          example: Demo data
+        demo:
+          type: boolean
+          description: True when the data is seeded demo data, so the UI can say so.
+
+    Issue:
+      type: object
+      description: A problem found while validating the source data. The table is still served.
+      required: [level, where, message]
+      properties:
+        level:
+          type: string
+          enum: [error, warning]
+        where:
+          type: string
+          description: ID of the offending entry.
+          example: e12
+        message:
+          type: string
+          example: Unknown student ID "s99"
+
+    ClassBootstrap:
+      type: object
+      required: [class, weeks, criteria, weights, tie_breakers, source, last_updated, issues]
+      properties:
+        class:
+          $ref: '#/components/schemas/Class'
+        weeks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Week'
+        criteria:
+          type: array
+          items:
+            $ref: '#/components/schemas/Criterion'
+        weights:
+          $ref: '#/components/schemas/Weights'
+        tie_breakers:
+          type: array
+          description: Labels of the criteria that order tied students, in priority order.
+          items:
+            type: string
+          example: [Attendance, Homework]
+        source:
+          $ref: '#/components/schemas/SourceInfo'
+        last_updated:
+          type: string
+          format: date-time
+          description: When the source was last read successfully (ISO 8601, UTC).
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+
+    RankingRow:
+      type: object
+      required: [student_id, display_name, score, rank, tied, rank_delta, missing, gap_to_next, gap_to_below]
+      properties:
+        student_id:
+          type: string
+        display_name:
+          type: string
+          description: Name in the requested `name_mode`.
+        score:
+          type: number
+          description: Weighted score, 0 to 100.
+        rank:
+          type: integer
+          minimum: 1
+          description: Competition rank; tied students share it.
+        tied:
+          type: boolean
+          description: True for every student in a tie group, including the first.
+        rank_delta:
+          type: [integer, 'null']
+          description: Places moved since the previous week (positive is up); `null` if there is no previous rank.
+        missing:
+          type: array
+          description: Keys of weighted criteria the student has no data for in this window.
+          items:
+            type: string
+        gap_to_next:
+          type: [number, 'null']
+          description: Points needed to reach the next rank up; `null` at the top.
+        gap_to_below:
+          type: [number, 'null']
+          description: Lead over the next rank down; `null` at the bottom.
+
+    Ranking:
+      type: object
+      required: [class_id, week_id, window_mode, criteria_keys, weights, rows, last_updated, stale, issues]
+      properties:
+        class_id:
+          type: string
+        week_id:
+          type: string
+        window_mode:
+          type: string
+          enum: [week, cumulative]
+        criteria_keys:
+          type: array
+          description: The criteria actually used (all criteria when none were requested).
+          items:
+            type: string
+        weights:
+          $ref: '#/components/schemas/Weights'
+        rows:
+          type: array
+          description: Best first. Only students with entries in the window appear.
+          items:
+            $ref: '#/components/schemas/RankingRow'
+        last_updated:
+          type: string
+          format: date-time
+          description: When the source was last read successfully (ISO 8601, UTC).
+        stale:
+          type: boolean
+          description: True when the source failed and the last good snapshot was served instead.
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+
+    ScorePart:
+      type: object
+      description: One criterion's contribution to a student's score.
+      required: [key, label, earned, possible, normalised, weight, effective_weight, points, missing]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        earned:
+          type: [number, 'null']
+          description: Sum of points earned in the window; `null` when missing.
+        possible:
+          type: [number, 'null']
+          description: Sum of points available in the window; `null` when missing.
+        normalised:
+          type: [number, 'null']
+          description: '`earned / possible` as 0 to 100; `null` when missing.'
+        weight:
+          type: number
+          description: Weight as requested.
+        effective_weight:
+          type: number
+          description: Weight after dropping missing criteria and rescaling to 100; 0 when missing.
+        points:
+          type: number
+          description: '`normalised × effective_weight / 100`; 0 when missing. Parts sum to `score`.'
+        missing:
+          type: boolean
+          description: No data for this criterion in the window; it is excluded, not scored as zero.
+
+    Explanation:
+      type: object
+      required: [student_id, display_name, rank, tied, score, parts, gap_to_next, gap_to_below, above, week_id, window_mode]
+      properties:
+        student_id:
+          type: string
+        display_name:
+          type: string
+        rank:
+          type: integer
+          minimum: 1
+        tied:
+          type: boolean
+        score:
+          type: number
+        parts:
+          type: array
+          description: One per selected criterion, in criterion order.
+          items:
+            $ref: '#/components/schemas/ScorePart'
+        gap_to_next:
+          type: [number, 'null']
+        gap_to_below:
+          type: [number, 'null']
+        above:
+          type: [string, 'null']
+          description: Display name of the nearest student ranked above; `null` at the top.
+        week_id:
+          type: string
+        window_mode:
+          type: string
+          enum: [week, cumulative]
+
+    Status:
+      type: object
+      required: [last_updated, stale, issues, source]
+      properties:
+        last_updated:
+          type: [string, 'null']
+          format: date-time
+          description: ISO 8601 UTC time of the last successful read, or `null` before the first.
+        stale:
+          type: boolean
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        source:
+          $ref: '#/components/schemas/SourceInfo'
+
+    RefreshResult:
+      type: object
+      required: [last_updated, issues, stale]
+      properties:
+        last_updated:
+          type: string
+          format: date-time
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        stale:
+          type: boolean

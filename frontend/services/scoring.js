@@ -46,7 +46,7 @@ export function scoreStudent({ entries, criteria, weights }) {
       possible: missing ? null : a.possible,
       normalised,
       weight,
-      effectiveWeight,
+      effective_weight: effectiveWeight,
       points: missing ? 0 : (normalised * effectiveWeight) / 100,
       missing,
     };

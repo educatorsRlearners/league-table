@@ -153,12 +153,12 @@ export function createToySource() {
           (!criterionKeys || criterionKeys.includes(e.criterion_key)),
       );
     },
-    /** Demo accounts, so role rules can be exercised without real people. */
+    /** Demo accounts with dummy credentials, so role rules can be exercised without real people. */
     async listAccounts() {
       return [
-        { id: 'a1', role: 'teacher', student_id: null, external_id: 'demo:teacher' },
-        { id: 'a2', role: 'student', student_id: 's01', external_id: 'demo:amara' },
-        { id: 'a3', role: 'student', student_id: 's18', external_id: 'demo:rosa' },
+        { id: 'a1', role: 'teacher', student_id: null, external_id: 'demo:teacher', email: 'teacher@demo.test', password: 'demo-teacher-1' },
+        { id: 'a2', role: 'student', student_id: 's01', external_id: 'demo:amara', email: 'amara@demo.test', password: 'demo-student-1' },
+        { id: 'a3', role: 'student', student_id: 's18', external_id: 'demo:rosa', email: 'rosa@demo.test', password: 'demo-student-2' },
       ];
     },
   };

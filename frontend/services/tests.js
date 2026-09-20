@@ -78,7 +78,7 @@ scoringSuite.it('breakdown parts add up exactly to the score shown', () => {
   });
   const sum = r.parts.reduce((a, p) => a + p.points, 0);
   assert(approx(sum, r.score, 1e-9), `${sum} !== ${r.score}`);
-  assert(approx(r.parts.reduce((a, p) => a + p.effectiveWeight, 0), 100, 1e-9), 'effective weights total 100');
+  assert(approx(r.parts.reduce((a, p) => a + p.effective_weight, 0), 100, 1e-9), 'effective weights total 100');
 });
 
 scoringSuite.it('ties share a rank and the next place skips (1, 1, 3)', () => {
@@ -191,6 +191,24 @@ apiSuite.it('bootstraps with weeks, criteria, default weights and a source label
   assert(boot.source.demo === true, 'demo data must be labelled');
 });
 
+apiSuite.it('signs in a demo account with its dummy credentials and never returns the password', async () => {
+  const api = makeApi();
+  const [teacher, student] = (await api.listDemoAccounts());
+  const t = await api.login({ email: teacher.email, password: teacher.password });
+  assert(t.role === 'teacher' && t.student_id === null, 'teacher account');
+  const s = await api.login({ email: student.email, password: student.password });
+  assert(s.role === 'student' && s.student_id === 's01', 'student account');
+  assert(!('password' in s) && !('email' in s), 'the session account must not echo credentials');
+});
+
+apiSuite.it('rejects a wrong password with 401', async () => {
+  const api = makeApi();
+  const [teacher] = await api.listDemoAccounts();
+  let status = null;
+  try { await api.login({ email: teacher.email, password: 'wrong' }); } catch (e) { status = e.status; }
+  assert(status === 401, `expected 401, got ${status}`);
+});
+
 apiSuite.it('returns a fully ranked table for a week', async () => {
   const api = makeApi();
   const boot = await api.getBootstrap();
@@ -283,8 +301,8 @@ apiSuite.it('marks the missing entry rather than scoring it zero', async () => {
   assert(rosa.missing.includes('participation'), 'missing criterion not reported');
   const ex = await api.getExplanation({ studentId: rosa.student_id, weekId: 'w7', weights: boot.weights });
   const part = ex.parts.find((p) => p.key === 'participation');
-  assert(part.missing && part.points === 0 && part.effectiveWeight === 0, 'missing part should carry no weight');
-  assert(approx(ex.parts.reduce((a, p) => a + p.effectiveWeight, 0), 100, 1e-9), 'remaining weights not rescaled to 100');
+  assert(part.missing && part.points === 0 && part.effective_weight === 0, 'missing part should carry no weight');
+  assert(approx(ex.parts.reduce((a, p) => a + p.effective_weight, 0), 100, 1e-9), 'remaining weights not rescaled to 100');
 });
 
 apiSuite.it('refuses a student who asks for another student\u2019s breakdown', async () => {
@@ -323,7 +341,7 @@ apiSuite.it('serves the last good snapshot when the source is unreachable', asyn
   const res = await api.getRanking({ weekId: 'w5' });
   assert(res.rows.length === 35, 'the table went blank instead of serving the cache');
   assert(res.stale === true, 'the response is not marked stale');
-  assert(typeof res.lastUpdated === 'number', 'no "last updated" time to show');
+  assert(typeof res.last_updated === 'string' && !Number.isNaN(Date.parse(res.last_updated)), 'no "last updated" time to show');
   api.__clearError();
 });
 

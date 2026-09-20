@@ -300,7 +300,7 @@ class Component extends DCLogic {
           criteriaKeys: boot.criteria.map((c) => c.key),
           weights: boot.weights,
           draftWeights: boot.weights,
-          lastUpdated: boot.lastUpdated,
+          lastUpdated: boot.last_updated,
           issues: boot.issues,
         },
         this.loadRanking,
@@ -348,7 +348,7 @@ class Component extends DCLogic {
         weights,
         nameMode,
       });
-      this.setState({ loading: false, errorMsg: null, rows: res.rows, lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues });
+      this.setState({ loading: false, errorMsg: null, rows: res.rows, lastUpdated: res.last_updated, stale: res.stale, issues: res.issues });
     } catch (err) {
       this.setState({ loading: false, errorMsg: err.message });
     }
@@ -491,7 +491,7 @@ class Component extends DCLogic {
             label: p.label,
             earnedText: p.missing ? '—' : `${p.earned} / ${p.possible}`,
             pctText: p.missing ? '—' : `${this.fmt(p.normalised)}`,
-            weightText: p.missing ? '—' : `${this.fmt(p.effectiveWeight, 0)}`,
+            weightText: p.missing ? '—' : `${this.fmt(p.effective_weight, 0)}`,
             pointsText: p.missing ? '—' : this.fmt(p.points),
           })),
           weightTotal: '100',
@@ -517,7 +517,7 @@ class Component extends DCLogic {
       themeLabel: s.theme === 'light' ? 'Dark' : 'Light',
       loading: s.loading && !s.errorMsg,
       errorMsg: s.errorMsg,
-      klassName: boot ? boot.klass.name : 'Loading…',
+      klassName: boot ? boot.class.name : 'Loading…',
       demo: boot ? boot.source.demo : false,
       lastUpdatedText: s.lastUpdated ? `Updated ${new Date(s.lastUpdated).toLocaleTimeString()}` : '',
       stale: s.stale,
@@ -537,7 +537,7 @@ class Component extends DCLogic {
       isEmpty: !!boot && !s.loading && rows.length === 0 && !s.errorMsg,
       showAllLabel: s.showAll ? `Show top ${topN}` : `Show all ${rows.length}`,
       footnote: boot
-        ? `${rows.length} students · ${s.criteriaKeys.length} of ${boot.criteria.length} criteria · ties broken for display by ${boot.tieBreakers.join(', then ')}`
+        ? `${rows.length} students · ${s.criteriaKeys.length} of ${boot.criteria.length} criteria · ties broken for display by ${boot.tie_breakers.join(', then ')}`
         : '',
       shortcutHint: '← → week · 1–5 single criterion · 0 all criteria · P present · Esc close',
       drawer,
@@ -565,7 +565,7 @@ class Component extends DCLogic {
       onRefresh: async () => {
         try {
           const r = await this.api.refresh();
-          this.setState({ lastUpdated: r.lastUpdated, stale: r.stale, issues: r.issues, errorMsg: null }, this.loadRanking);
+          this.setState({ lastUpdated: r.last_updated, stale: r.stale, issues: r.issues, errorMsg: null }, this.loadRanking);
         } catch (err) {
           this.setState({ errorMsg: err.message });
         }
