@@ -39,7 +39,7 @@ make test      # run the backend tests
 
 Then open <http://localhost:8000>. The interactive API docs are at <http://localhost:8000/api/docs>.
 
-`make run` serves both the API and the frontend from one origin, so the session cookie works. There is no sign-in screen yet: with demo data the page signs in as the demo teacher automatically.
+`make run` serves both the API and the frontend from one origin, so the session cookie works. The page opens on a sign-in screen; with demo data it lists the demo teacher and students so you can fill the form with one click. Teachers get the controls, and students get a read-only table where only their own row opens.
 
 ## How it works
 
@@ -97,7 +97,7 @@ This is an early version, built on demo data.
 - [x] FastAPI backend implementing the whole OpenAPI contract, on a mock database
 - [x] Teacher view: table, podium, week and cumulative windows, weights, breakdowns, Present mode
 - [x] Roles enforced on the server
-- [ ] Student view and a sign-in screen (the API already supports them)
+- [x] Sign-in screen and student view (email and password; Google sign-in is not wired up yet)
 - [ ] Google Sheets adapter, so teachers enter scores in a sheet
 - [ ] A real database for weights and accounts
 - [ ] Clever roster sync and sign-in

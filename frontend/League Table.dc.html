@@ -37,6 +37,58 @@
 
 <div data-theme="{{ theme }}" style="min-height: 100vh; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding-bottom: 64px;">
 
+  <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
+    <div style="min-height: calc(100vh - 64px); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: flex-end; padding: var(--space-4) var(--space-6);">
+        <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" style="min-height: 44px;">{{ themeLabel }}</button>
+      </div>
+      <main style="flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: var(--space-6) var(--space-4) var(--space-8);">
+        <div style="width: min(440px, 100%); display: grid; gap: var(--space-6);">
+          <div>
+            <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">League table</div>
+            <h1 style="margin: var(--space-1) 0 var(--space-2);">Sign in</h1>
+            <p style="font-size: 14px; opacity: 0.8; margin: 0;">Teachers and students sign in here with the email and password from the teacher. What you see afterwards depends on your role.</p>
+          </div>
+
+          <form onSubmit="{{ onSubmitLogin }}" class="card" style="padding: var(--space-6); gap: var(--space-4);">
+            <div class="field">
+              <label for="login-email">Email</label>
+              <input id="login-email" name="email" type="email" class="input" autocomplete="username" required value="{{ email }}" onInput="{{ onEmail }}" style="min-height: 44px;">
+            </div>
+            <div class="field">
+              <label for="login-password">Password</label>
+              <input id="login-password" name="password" type="password" class="input" autocomplete="current-password" required value="{{ password }}" onInput="{{ onPassword }}" style="min-height: 44px;">
+            </div>
+            <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
+              <div role="alert" style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ loginError }}</div>
+            </sc-if>
+            <button type="submit" class="btn btn-primary btn-block" disabled="{{ signingIn }}" style="min-height: 44px;">{{ signInLabel }}</button>
+          </form>
+
+          <sc-if value="{{ hasDemoAccounts }}" hint-placeholder-val="{{ true }}">
+            <section aria-label="Demo accounts" style="display: grid; gap: var(--space-3);">
+              <div style="display: flex; align-items: center; gap: var(--space-2);">
+                <span class="tag tag-outline">Demo data</span>
+                <span style="font-size: 13px; opacity: 0.75;">Pick an account to fill in the form.</span>
+              </div>
+              <div style="display: grid; gap: var(--space-2);">
+                <sc-for list="{{ demoAccounts }}" as="d" hint-placeholder-count="3">
+                  <button type="button" class="btn btn-secondary" onClick="{{ d.onClick }}" style="min-height: 44px; justify-content: space-between; gap: var(--space-3);">
+                    <span style="font-family: var(--font-heading); font-size: 16px;">{{ d.label }}</span>
+                    <span style="font-size: 12px; opacity: 0.7;">{{ d.email }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </section>
+          </sc-if>
+        </div>
+      </main>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ true }}">
+  <div>
+
   <header style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-divider);">
     <div style="margin-right: auto; display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;">
       <span style="font-family: var(--font-heading); font-size: clamp(22px, 2vw, 30px); letter-spacing: -0.015em;">{{ klassName }}</span>
@@ -47,9 +99,13 @@
         <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">Demo data</span>
       </sc-if>
       <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
-      <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
+      <sc-if value="{{ isTeacher }}" hint-placeholder-val="{{ true }}">
+        <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
+      </sc-if>
       <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" style="min-height: 44px;">{{ themeLabel }}</button>
       <button class="btn btn-secondary" onClick="{{ onTogglePresent }}" style="min-height: 44px;">{{ presentLabel }}</button>
+      <span class="tag tag-outline">{{ roleLabel }}</span>
+      <button class="btn btn-ghost" onClick="{{ onSignOut }}" style="min-height: 44px;">Sign out</button>
     </div>
   </header>
 
@@ -92,7 +148,9 @@
         <sc-for list="{{ criteriaChips }}" as="chip" hint-placeholder-count="5">
           <button onClick="{{ chip.onClick }}" aria-pressed="{{ chip.active }}" title="{{ chip.hint }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ chip.bg }}; border: 1px solid {{ chip.border }}; color: {{ chip.color }};">{{ chip.label }}</button>
         </sc-for>
-        <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights</button>
+        <sc-if value="{{ isTeacher }}" hint-placeholder-val="{{ true }}">
+          <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights</button>
+        </sc-if>
       </div>
 
       <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
@@ -120,7 +178,7 @@
     <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
       <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: end; margin-bottom: var(--space-8);">
         <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
-          <button onClick="{{ p.onClick }}" style="text-align: center; cursor: pointer; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
+          <button onClick="{{ p.onClick }}" tabIndex="{{ p.tabIndex }}" style="text-align: center; cursor: {{ p.cursor }}; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
             <div style="font-family: var(--font-heading); font-size: clamp(30px, 3.4vw, 56px); line-height: 1; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ p.rank }}</div>
             <div style="margin: var(--space-3) auto var(--space-2); width: {{ p.avatarSize }}; height: {{ p.avatarSize }}; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: {{ p.monogramSize }}; color: var(--color-text);">{{ p.monogram }}</div>
             <div style="font-family: var(--font-heading); font-size: clamp(20px, 1.9vw, 34px); line-height: 1.15; color: var(--color-text);">{{ p.name }}</div>
@@ -140,7 +198,7 @@
         </div>
 
         <sc-for list="{{ visibleRows }}" as="row" hint-placeholder-count="10">
-          <div role="row" onClick="{{ row.onClick }}" tabIndex="0" onKeyDown="{{ row.onKeyDown }}" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 34%) 120px 130px; gap: var(--space-3); align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: pointer; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
+          <div role="row" onClick="{{ row.onClick }}" tabIndex="{{ row.tabIndex }}" onKeyDown="{{ row.onKeyDown }}" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 34%) 120px 130px; gap: var(--space-3); align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: {{ row.cursor }}; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="{{ row.hover }}">
             <div role="cell" style="font-family: var(--font-heading); font-size: clamp(26px, 2.4vw, 48px); line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: {{ row.rankColor }};">{{ row.rank }}</div>
             <div role="cell" style="display: flex; align-items: center; gap: var(--space-3); min-width: 0;">
               <span style="flex: none; width: 40px; height: 40px; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 15px;">{{ row.monogram }}</span>
@@ -257,12 +315,21 @@
     <span>{{ shortcutHint }}</span>
     <span style="margin-left: auto;"><a href="Tests.dc.html">Service &amp; scoring tests</a></span>
   </footer>
+  </div>
+  </sc-if>
 </div>
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:35,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
 class Component extends DCLogic {
   state = {
+    account: null,
+    authChecked: false,
+    email: '',
+    password: '',
+    loginError: null,
+    signingIn: false,
+    demoAccounts: [],
     loading: true,
     errorMsg: null,
     boot: null,
@@ -283,17 +350,72 @@ class Component extends DCLogic {
     issues: [],
   };
 
-  async componentDidMount() {
+  componentDidMount() {
     document.addEventListener('keydown', this.onKey);
+    this.init();
+  }
+
+  /** Find out whether there is already a session; if not, show the sign-in screen. */
+  init = async () => {
+    this.setState({ errorMsg: null });
     try {
-      const base = document.baseURI;
-      const { createHttpApi, signInAsDemoTeacher } = await import(new URL('services/httpApi.js', base).href);
-      // The backend serves this page, so the API is on the same origin. There is no
-      // sign-in screen yet: with demo data the page signs in as the demo teacher, and
-      // does so again if the server restarts and forgets the session.
-      const api = createHttpApi({ baseUrl: '/api', onUnauthorized: () => signInAsDemoTeacher(api) });
-      this.api = api;
-      await signInAsDemoTeacher(api);
+      if (!this.api) {
+        const { createHttpApi } = await import(new URL('services/httpApi.js', document.baseURI).href);
+        // The backend serves this page, so the API is on the same origin. If the server
+        // restarts and forgets the session, the next class request lands back on sign-in.
+        this.api = createHttpApi({
+          baseUrl: '/api',
+          onUnauthorized: async () => {
+            await this.showLogin('Your session ended. Please sign in again.');
+            throw Object.assign(new Error('Please sign in.'), { status: 401 });
+          },
+        });
+      }
+      let account = null;
+      try {
+        account = await this.api.getCurrentAccount();
+      } catch (err) {
+        if (err.status !== 401) throw err;
+      }
+      if (account) await this.enter(account);
+      else await this.showLogin();
+    } catch (err) {
+      this.setState({ authChecked: true, loading: false, loginError: err.message });
+    }
+  };
+
+  /** Show the sign-in screen and forget everything from the previous session. */
+  showLogin = async (message = null) => {
+    this.setState({
+      account: null,
+      authChecked: true,
+      loginError: message,
+      password: '',
+      signingIn: false,
+      boot: null,
+      rows: [],
+      drawer: null,
+      weightsOpen: false,
+      presenting: false,
+      showAll: false,
+      windowMode: 'week',
+      criteriaKeys: [],
+      stale: false,
+      issues: [],
+      errorMsg: null,
+    });
+    // Demo accounts exist only with demo data; any other source answers 404.
+    try {
+      this.setState({ demoAccounts: await this.api.listDemoAccounts() });
+    } catch {
+      this.setState({ demoAccounts: [] });
+    }
+  };
+
+  /** Start the app for a signed-in account. */
+  enter = async (account) => {
+    this.setState({ account, authChecked: true, loading: true, errorMsg: null, loginError: null, password: '' });
+    try {
       const boot = await this.api.getBootstrap('c1');
       this.setState(
         {
@@ -308,9 +430,32 @@ class Component extends DCLogic {
         this.loadRanking,
       );
     } catch (err) {
-      this.setState({ loading: false, errorMsg: err.message });
+      if (err.status !== 401) this.setState({ loading: false, errorMsg: err.message });
     }
-  }
+  };
+
+  submitLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const { email, password, signingIn } = this.state;
+    if (signingIn) return;
+    this.setState({ signingIn: true, loginError: null });
+    try {
+      const account = await this.api.login({ email: email.trim(), password });
+      this.setState({ signingIn: false });
+      await this.enter(account);
+    } catch (err) {
+      this.setState({ signingIn: false, password: '', loginError: err.message });
+    }
+  };
+
+  signOut = async () => {
+    try {
+      await this.api.logout();
+    } catch {
+      // The session is already gone on the server; either way the person is signed out.
+    }
+    await this.showLogin();
+  };
 
   componentWillUnmount() {
     document.removeEventListener('keydown', this.onKey);
@@ -356,7 +501,14 @@ class Component extends DCLogic {
     }
   };
 
+  /** A teacher may open anyone's breakdown; a student only their own (the server enforces it too). */
+  canOpen(studentId) {
+    const { account } = this.state;
+    return !!account && (account.role === 'teacher' || account.student_id === studentId);
+  }
+
   openDrawer = async (studentId) => {
+    if (!this.canOpen(studentId)) return;
     const { boot, weekIdx, windowMode, criteriaKeys, weights, nameMode } = this.state;
     try {
       const ex = await this.api.getExplanation({
@@ -412,6 +564,8 @@ class Component extends DCLogic {
         avatarSize: i === 0 ? '84px' : '64px',
         monogramSize: i === 0 ? '30px' : '22px',
         delay: `${i * 90}ms`,
+        cursor: this.canOpen(r.student_id) ? 'pointer' : 'default',
+        tabIndex: this.canOpen(r.student_id) ? 0 : -1,
         onClick: () => this.openDrawer(r.student_id),
       }));
 
@@ -425,11 +579,16 @@ class Component extends DCLogic {
       barWidth: `${Math.max(2, (r.score / (best || 100)) * 100)}%`,
       barFill: r.rank <= 3 ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-accent) 45%, transparent)',
       rankColor: r.rank <= 3 ? 'var(--color-accent)' : 'var(--color-text)',
-      bg: r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
+      bg: r.student_id === s.account?.student_id || r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
       deltaText: deltaText(r.rank_delta),
       deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
       gapText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to ${r.rank - 1 > 0 ? 'the place above' : 'first'}`,
-      flag: [r.tied ? 'tied' : null, r.missing && r.missing.length ? 'no entry' : null].filter(Boolean).join(' · '),
+      flag: [r.student_id === s.account?.student_id ? 'you' : null, r.tied ? 'tied' : null, r.missing && r.missing.length ? 'no entry' : null]
+        .filter(Boolean)
+        .join(' · '),
+      cursor: this.canOpen(r.student_id) ? 'pointer' : 'default',
+      tabIndex: this.canOpen(r.student_id) ? 0 : -1,
+      hover: this.canOpen(r.student_id) ? 'background: color-mix(in srgb, var(--color-accent) 8%, transparent);' : '',
       delay: `${Math.min(i, 12) * 35}ms`,
       onClick: () => this.openDrawer(r.student_id),
       onKeyDown: (e) => {
@@ -513,7 +672,34 @@ class Component extends DCLogic {
 
     const issues = s.issues || [];
 
+    const signedIn = !!s.account;
+    const isTeacher = s.account?.role === 'teacher';
+    const demoLabel = (a) => {
+      if (a.role === 'teacher') return 'Teacher';
+      const first = a.email.split('@')[0];
+      return `${first[0].toUpperCase()}${first.slice(1)} · student`;
+    };
+
     return {
+      signedIn,
+      isTeacher,
+      roleLabel: isTeacher ? 'Teacher' : 'Student',
+      showLogin: s.authChecked && !signedIn,
+      email: s.email,
+      password: s.password,
+      loginError: s.loginError,
+      signingIn: s.signingIn,
+      signInLabel: s.signingIn ? 'Signing in…' : 'Sign in',
+      hasDemoAccounts: s.demoAccounts.length > 0,
+      demoAccounts: s.demoAccounts.map((a) => ({
+        label: demoLabel(a),
+        email: a.email,
+        onClick: () => this.setState({ email: a.email, password: a.password, loginError: null }),
+      })),
+      onEmail: (e) => this.setState({ email: e.target.value }),
+      onPassword: (e) => this.setState({ password: e.target.value }),
+      onSubmitLogin: this.submitLogin,
+      onSignOut: this.signOut,
       theme: s.theme,
       themeLabel: s.theme === 'light' ? 'Dark' : 'Light',
       loading: s.loading && !s.errorMsg,

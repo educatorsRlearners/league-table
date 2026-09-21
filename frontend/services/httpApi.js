@@ -109,8 +109,8 @@ export function createHttpApi({ baseUrl = '/api', fetch: fetchImpl, onUnauthoriz
 }
 
 /**
- * The page has no sign-in screen yet, so with demo data it signs in as the demo teacher.
- * An existing session is reused. Against a real data source this fails with a message.
+ * A shortcut for scripts and tests, not used by the page: with demo data it signs in as the
+ * demo teacher. An existing session is reused. Against a real data source this fails with a message.
  */
 export async function signInAsDemoTeacher(api) {
   try {
