@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: League Table API
-  version: 0.1.0
+  version: 0.2.0
   license:
     name: MIT
     identifier: MIT
@@ -1064,23 +1064,38 @@ components:
         adjustment:
           $ref: '#/components/schemas/AdjustmentSettings'
 
+    AdjustmentPatch:
+      type: object
+      description: Only the fields given are changed. Type weights are merged into the current ones.
+      properties:
+        type_weights:
+          oneOf:
+            - $ref: '#/components/schemas/Weights'
+            - type: 'null'
+        rate:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 1
+        cap:
+          type: [number, 'null']
+          minimum: 1
+          maximum: 3
+        flag_hours:
+          type: [number, 'null']
+          minimum: 0
+
     SaveSettingsRequest:
       type: object
+      description: Every field is optional, and `null` means the same as leaving it out.
       properties:
         weights:
-          $ref: '#/components/schemas/Weights'
+          oneOf:
+            - $ref: '#/components/schemas/Weights'
+            - type: 'null'
         adjustment:
-          type: object
-          description: Only the fields given are changed.
-          properties:
-            type_weights:
-              $ref: '#/components/schemas/Weights'
-            rate:
-              type: number
-            cap:
-              type: number
-            flag_hours:
-              type: number
+          oneOf:
+            - $ref: '#/components/schemas/AdjustmentPatch'
+            - type: 'null'
 
     SourceInfo:
       type: object
