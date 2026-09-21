@@ -4,7 +4,7 @@
 
 import { normalise, scoreStudent, rankRows, gapToNext, nearestAbove, normaliseWeights, displayName } from './scoring.js';
 import { createApi, ApiError } from './api.js';
-import { createHttpApi, signInAsDemoTeacher } from './httpApi.js';
+import { createHttpApi, signInAsDemoInstructor } from './httpApi.js';
 import { createToySource } from './mockSource.js';
 
 const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
@@ -456,10 +456,10 @@ httpSuite.it('asks for an explanation on the student path and never sends a call
 });
 
 httpSuite.it('saves weights with a JSON PUT', async () => {
-  const f = fakeFetch(json({ class_id: 'c1', weights: { homework: 100 } }));
+  const f = fakeFetch(json({ weights: { homework: 100 }, adjustment: {} }));
   const res = await createHttpApi({ fetch: f }).saveWeights('c1', { homework: 100 });
   const { url, init } = f.calls[0];
-  assert(init.method === 'PUT' && url.pathname === '/api/classes/c1/weights', 'PUT /classes/c1/weights');
+  assert(init.method === 'PUT' && url.pathname === '/api/classes/c1/settings', 'PUT /classes/c1/settings');
   assert(JSON.parse(init.body).weights.homework === 100, 'weights in the body');
   assert(new Headers(init.headers).get('content-type') === 'application/json', 'JSON content type');
   assert(res.weights.homework === 100, 'returns the stored weights');
@@ -543,34 +543,42 @@ httpSuite.it('does not retry a 401 forever', async () => {
 });
 
 httpSuite.it('a failed login is a 401, not a re-authentication loop', async () => {
-  const f = fakeFetch(json({ detail: 'Incorrect email or password.' }, 401));
+  const f = fakeFetch(json({ detail: 'That code is not valid.' }, 401));
   let called = false;
   const api = createHttpApi({ fetch: f, onUnauthorized: async () => { called = true; } });
   try {
-    await api.login({ email: 'a@b.test', password: 'x' });
+    await api.login({ code: 'nope' });
     assert(false, 'should have thrown');
   } catch (err) {
-    assert(err.status === 401 && err.message === 'Incorrect email or password.', err.message);
+    assert(err.status === 401 && err.message === 'That code is not valid.', err.message);
   }
   assert(!called && f.calls.length === 1, 'no retry on the auth endpoints');
 });
 
-httpSuite.it('signs in as the demo teacher only when there is no session', async () => {
-  const teacher = { email: 't@demo.test', password: 'pw', role: 'teacher', id: 'a1', student_id: null, external_id: 'x' };
-  const student = { ...teacher, email: 's@demo.test', role: 'student', id: 'a2' };
+httpSuite.it('signs in with the access code alone', async () => {
+  const f = fakeFetch(json({ id: 'a2', role: 'student' }));
+  await createHttpApi({ fetch: f }).login({ code: 'demo-amara' });
+  const call = f.calls[0];
+  assert(call.url.pathname === '/api/auth/login' && call.init.method === 'POST', 'POST /auth/login');
+  assert(JSON.stringify(JSON.parse(call.init.body)) === '{"code":"demo-amara"}', 'only the code is sent');
+});
+
+httpSuite.it('signs in as the demo instructor only when there is no session', async () => {
+  const instructor = { code: 'demo-instructor', role: 'instructor', id: 'a1', student_id: null, external_id: 'x' };
+  const student = { ...instructor, code: 'demo-amara', role: 'student', id: 'a2' };
   const routes = {
     'GET /api/auth/me': () => json({ detail: 'Please sign in.' }, 401),
-    'GET /api/demo/accounts': () => json([student, teacher]),
-    'POST /api/auth/login': () => json({ id: 'a1', role: 'teacher' }),
+    'GET /api/demo/accounts': () => json([student, instructor]),
+    'POST /api/auth/login': () => json({ id: 'a1', role: 'instructor' }),
   };
   const f = fakeFetch((c) => routes[`${c.init.method || 'GET'} ${c.url.pathname}`]());
-  const account = await signInAsDemoTeacher(createHttpApi({ fetch: f }));
+  const account = await signInAsDemoInstructor(createHttpApi({ fetch: f }));
   const login = f.calls.find((c) => c.url.pathname === '/api/auth/login');
-  assert(JSON.parse(login.init.body).email === 't@demo.test', 'signed in with the teacher, not the student');
-  assert(account.role === 'teacher', 'returns the account');
+  assert(JSON.parse(login.init.body).code === 'demo-instructor', 'signed in with the instructor, not the student');
+  assert(account.role === 'instructor', 'returns the account');
 
-  const signedIn = fakeFetch(json({ id: 'a1', role: 'teacher' }));
-  await signInAsDemoTeacher(createHttpApi({ fetch: signedIn }));
+  const signedIn = fakeFetch(json({ id: 'a1', role: 'instructor' }));
+  await signInAsDemoInstructor(createHttpApi({ fetch: signedIn }));
   assert(signedIn.calls.length === 1, 'an existing session is reused');
 });
 
@@ -581,11 +589,66 @@ httpSuite.it('explains itself when demo sign-in is not available', async () => {
   };
   const f = fakeFetch((c) => routes[`${c.init.method || 'GET'} ${c.url.pathname}`]());
   try {
-    await signInAsDemoTeacher(createHttpApi({ fetch: f }));
+    await signInAsDemoInstructor(createHttpApi({ fetch: f }));
     assert(false, 'should have thrown');
   } catch (err) {
     assert(/sign in/i.test(err.message), err.message);
   }
+});
+
+/** Every call the commitments screens make: its method, path and body. */
+const CALLS = [
+  ['getMyCommitments', (a) => a.getMyCommitments(), 'GET', '/api/me/commitments', undefined],
+  ['saveMyBaseline', (a) => a.saveMyBaseline({ work: 12 }), 'PUT', '/api/me/commitments/baseline', { hours: { work: 12 } }],
+  ['saveMyWeek', (a) => a.saveMyWeek(15, { work: 8 }), 'PUT', '/api/me/commitments/weeks/15', { hours: { work: 8 } }],
+  ['resetMyWeek', (a) => a.resetMyWeek(15), 'DELETE', '/api/me/commitments/weeks/15', undefined],
+  ['previewMyAdjustment', (a) => a.previewMyAdjustment({ hours: { work: 4 }, weekId: 'w9' }), 'POST', '/api/me/commitments/preview', { hours: { work: 4 }, week_id: 'w9' }],
+  ['listApprovals', (a) => a.listApprovals(), 'GET', '/api/classes/c1/approvals', undefined],
+  ['decideApproval', (a) => a.decideApproval('c1', 'b7', { decision: 'approve', effectiveWeek: 4 }), 'POST', '/api/classes/c1/approvals/b7', { decision: 'approve', effective_week: 4 }],
+  ['reverseWeeklyUpdate', (a) => a.reverseWeeklyUpdate('c1', 's05', 15), 'POST', '/api/classes/c1/students/s05/weeks/15/reverse', undefined],
+  ['getChangeLog', (a) => a.getChangeLog('c1'), 'GET', '/api/classes/c1/change-log', undefined],
+  ['listStudentCommitments', (a) => a.listStudentCommitments(), 'GET', '/api/classes/c1/commitments', undefined],
+  ['getSettings', (a) => a.getSettings(), 'GET', '/api/classes/c1/settings', undefined],
+  ['saveSettings', (a) => a.saveSettings('c1', { adjustment: { cap: 1.5 } }), 'PUT', '/api/classes/c1/settings', { adjustment: { cap: 1.5 } }],
+  ['saveWeights', (a) => a.saveWeights('c1', { homework: 5 }), 'PUT', '/api/classes/c1/settings', { weights: { homework: 5 } }],
+  ['getExplainer', (a) => a.getExplainer(), 'GET', '/api/classes/c1/explainer', undefined],
+];
+
+for (const [name, call, method, path, body] of CALLS) {
+  httpSuite.it(`${name} sends ${method} ${path}`, async () => {
+    const f = fakeFetch(json({}));
+    await call(createHttpApi({ fetch: f }));
+    const sent = f.calls[0];
+    assert(sent.init.method === method, `method ${sent.init.method}`);
+    assert(sent.url.pathname === path, `path ${sent.url.pathname}`);
+    const actual = sent.init.body === undefined ? undefined : JSON.parse(sent.init.body);
+    assert(JSON.stringify(actual) === JSON.stringify(body), `body ${sent.init.body}`);
+  });
+}
+
+httpSuite.it('asks for a rolling window with its length, and only then', async () => {
+  const f = fakeFetch(json({}));
+  const api = createHttpApi({ fetch: f });
+  await api.getRanking({ weekId: 'w9', windowMode: 'rolling', rollingWeeks: 3 });
+  await api.getRanking({ weekId: 'w9', windowMode: 'cumulative', rollingWeeks: 3 });
+  assert(f.calls[0].url.searchParams.get('window') === 'rolling', 'window');
+  assert(f.calls[0].url.searchParams.get('rolling_weeks') === '3', 'rolling_weeks');
+  assert(!f.calls[1].url.searchParams.has('rolling_weeks'), 'not sent for other windows');
+});
+
+httpSuite.it('the change log is filtered by student and limited on the server', async () => {
+  const f = fakeFetch(json([]));
+  await createHttpApi({ fetch: f }).getChangeLog('c1', { studentId: 's05', limit: 50 });
+  const q = f.calls[0].url.searchParams;
+  assert(q.get('student_id') === 's05' && q.get('limit') === '50', q.toString());
+});
+
+httpSuite.it('a commitments call after the session ended signs in again and retries', async () => {
+  let ok = false;
+  const f = fakeFetch(() => (ok ? json({ types: [] }) : json({ detail: 'Please sign in.' }, 401)));
+  const api = createHttpApi({ fetch: f, onUnauthorized: async () => { ok = true; } });
+  await api.getMyCommitments();
+  assert(f.calls.length === 2, `${f.calls.length} requests`);
 });
 
 export const SUITES = [scoringSuite, contractSuite, apiSuite, httpSuite];

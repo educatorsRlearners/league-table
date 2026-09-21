@@ -63,9 +63,10 @@ export function createHttpApi({ baseUrl = '/api', fetch: fetchImpl, onUnauthoriz
     return res.status === 204 ? null : res.json();
   }
 
-  const viewQuery = ({ weekId, windowMode = 'week', criteriaKeys, weights, nameMode = 'full' }) => ({
+  const viewQuery = ({ weekId, windowMode = 'week', rollingWeeks, criteriaKeys, weights, nameMode = 'full' }) => ({
     week: weekId,
     window: windowMode,
+    rolling_weeks: windowMode === 'rolling' ? rollingWeeks : undefined,
     criteria: criteriaKeys && criteriaKeys.length ? criteriaKeys.join(',') : undefined,
     weights: weights ? JSON.stringify(weights) : undefined,
     name_mode: nameMode,
@@ -85,8 +86,54 @@ export function createHttpApi({ baseUrl = '/api', fetch: fetchImpl, onUnauthoriz
         query: viewQuery(view),
       }),
 
-    /** PUT /classes/{id}/weights */
-    saveWeights: (classId, weights) => send('PUT', `/classes/${classId}/weights`, { body: { weights } }),
+    /** GET /classes/{id}/settings — instructor only */
+    getSettings: (classId = 'c1') => send('GET', `/classes/${classId}/settings`),
+
+    /** PUT /classes/{id}/settings — criterion weights and/or adjustment parameters; instructor only */
+    saveSettings: (classId, { weights, adjustment } = {}) =>
+      send('PUT', `/classes/${classId}/settings`, { body: { weights, adjustment } }),
+
+    /** Criterion weights only; the same call the mock services layer offers. */
+    saveWeights: (classId, weights) => send('PUT', `/classes/${classId}/settings`, { body: { weights } }),
+
+    /** GET /classes/{id}/explainer — the formula and current parameters, for everyone */
+    getExplainer: (classId = 'c1') => send('GET', `/classes/${classId}/explainer`),
+
+    /** GET /me/commitments — the signed-in student's own */
+    getMyCommitments: () => send('GET', '/me/commitments'),
+
+    /** PUT /me/commitments/baseline — submitted as pending, for approval */
+    saveMyBaseline: (hours) => send('PUT', '/me/commitments/baseline', { body: { hours } }),
+
+    /** PUT /me/commitments/weeks/{n} — current or previous week only */
+    saveMyWeek: (weekNumber, hours) => send('PUT', `/me/commitments/weeks/${weekNumber}`, { body: { hours } }),
+
+    /** DELETE /me/commitments/weeks/{n} — back to the baseline */
+    resetMyWeek: (weekNumber) => send('DELETE', `/me/commitments/weeks/${weekNumber}`),
+
+    /** POST /me/commitments/preview — the server's factor and adjusted score for unsaved hours */
+    previewMyAdjustment: ({ hours, weekId }) =>
+      send('POST', '/me/commitments/preview', { body: { hours, week_id: weekId ?? null } }),
+
+    /** GET /classes/{id}/approvals — instructor only */
+    listApprovals: (classId = 'c1') => send('GET', `/classes/${classId}/approvals`),
+
+    /** POST /classes/{id}/approvals/{aid} — approve from a week, or reject */
+    decideApproval: (classId, approvalId, { decision, effectiveWeek }) =>
+      send('POST', `/classes/${classId}/approvals/${encodeURIComponent(approvalId)}`, {
+        body: { decision, effective_week: effectiveWeek ?? null },
+      }),
+
+    /** POST /classes/{id}/students/{sid}/weeks/{n}/reverse */
+    reverseWeeklyUpdate: (classId, studentId, weekNumber) =>
+      send('POST', `/classes/${classId}/students/${encodeURIComponent(studentId)}/weeks/${weekNumber}/reverse`),
+
+    /** GET /classes/{id}/change-log */
+    getChangeLog: (classId = 'c1', { studentId, limit } = {}) =>
+      send('GET', `/classes/${classId}/change-log`, { query: { student_id: studentId, limit } }),
+
+    /** GET /classes/{id}/commitments — every student's status, hours and factor */
+    listStudentCommitments: (classId = 'c1') => send('GET', `/classes/${classId}/commitments`),
 
     /** POST /classes/{id}/refresh */
     refresh: (classId = 'c1') => send('POST', `/classes/${classId}/refresh`),
@@ -94,8 +141,8 @@ export function createHttpApi({ baseUrl = '/api', fetch: fetchImpl, onUnauthoriz
     /** GET /classes/{id}/status — unlike the mock, this is asynchronous. */
     getStatus: (classId = 'c1') => send('GET', `/classes/${classId}/status`),
 
-    /** POST /auth/login */
-    login: ({ email, password }) => send('POST', '/auth/login', { body: { email, password } }),
+    /** POST /auth/login — a student's access code, or the instructor's passcode */
+    login: ({ code }) => send('POST', '/auth/login', { body: { code } }),
 
     /** GET /auth/me */
     getCurrentAccount: () => send('GET', '/auth/me'),
@@ -110,9 +157,9 @@ export function createHttpApi({ baseUrl = '/api', fetch: fetchImpl, onUnauthoriz
 
 /**
  * A shortcut for scripts and tests, not used by the page: with demo data it signs in as the
- * demo teacher. An existing session is reused. Against a real data source this fails with a message.
+ * demo instructor. An existing session is reused.
  */
-export async function signInAsDemoTeacher(api) {
+export async function signInAsDemoInstructor(api) {
   try {
     return await api.getCurrentAccount();
   } catch (err) {
@@ -126,7 +173,7 @@ export async function signInAsDemoTeacher(api) {
     if (err.status === 404) throw needSignIn;
     throw err;
   }
-  const teacher = accounts.find((a) => a.role === 'teacher');
-  if (!teacher) throw needSignIn;
-  return api.login({ email: teacher.email, password: teacher.password });
+  const instructor = accounts.find((a) => a.role === 'instructor');
+  if (!instructor) throw needSignIn;
+  return api.login({ code: instructor.code });
 }
