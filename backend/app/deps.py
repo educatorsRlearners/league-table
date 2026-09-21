@@ -1,16 +1,19 @@
 """Shared FastAPI dependencies: the app context, the signed-in account and role checks."""
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import APIKeyCookie
 
-from app.datasource import DataSource
-from app.mock_db import InMemorySettings, MockAccount
-from app.models import SourceInfo
+from app.commitments import Adjuster, CommitmentBook, current_week
+from app.datasource import DataSource, Snapshot
+from app.identity import IdentityProvider
+from app.models import DemoAccount, SourceInfo
 from app.service import LeagueService
+from app.store import AppStore, StoredAccount
 
 SESSION_COOKIE = "session"
 
@@ -39,16 +42,37 @@ class SessionStore:
 @dataclass
 class AppContext:
     db: DataSource
-    settings: InMemorySettings
+    store: AppStore
     service: LeagueService
     sessions: SessionStore
-    verify_google_token: Callable[[str], str | None]
-
-    def accounts(self) -> list[MockAccount]:
-        return getattr(self.db, "list_accounts", lambda: [])()
+    identity: IdentityProvider
+    clock: Callable[[], float]
+    demo_accounts: list[DemoAccount] = field(default_factory=list)
 
     def source_info(self) -> SourceInfo:
         return SourceInfo(kind=self.db.kind, label=self.db.label, demo=self.db.kind == "toy")
+
+    def now(self) -> str:
+        """The server clock as an ISO 8601 UTC string, for stamping stored changes."""
+        return datetime.fromtimestamp(self.clock(), tz=timezone.utc).isoformat()
+
+    def today(self) -> date:
+        return datetime.fromtimestamp(self.clock(), tz=timezone.utc).date()
+
+    def adjuster(self, class_id: str) -> Adjuster:
+        """The adjustment as currently set and approved, read fresh so an edit shows at once."""
+        settings = self.store.get_settings(class_id)
+        book = CommitmentBook(self.store.list_baselines(), self.store.list_weekly_updates())
+        return Adjuster(settings.adjustment, book)
+
+    def class_id_of(self, student_id: str) -> str | None:
+        for cls in self.db.list_classes():
+            if any(s.id == student_id for s in self.service.snapshot(cls.id).students):
+                return cls.id
+        return None
+
+    def current_week_of(self, snapshot: Snapshot):
+        return current_week(snapshot.weeks, self.today())
 
 
 def get_ctx(request: Request) -> AppContext:
@@ -57,17 +81,23 @@ def get_ctx(request: Request) -> AppContext:
 
 def current_account(
     token: str | None = Depends(session_cookie), ctx: AppContext = Depends(get_ctx)
-) -> MockAccount:
+) -> StoredAccount:
     account_id = ctx.sessions.account_id(token)
-    account = next((a for a in ctx.accounts() if a.id == account_id), None)
+    account = ctx.store.get_account(account_id) if account_id else None
     if account is None:
         raise HTTPException(status_code=401, detail="Please sign in.")
     return account
 
 
-def require_teacher(account: MockAccount = Depends(current_account)) -> MockAccount:
-    if account.role != "teacher":
-        raise HTTPException(status_code=403, detail="Only a teacher can do this.")
+def require_instructor(account: StoredAccount = Depends(current_account)) -> StoredAccount:
+    if account.role != "instructor":
+        raise HTTPException(status_code=403, detail="Only the instructor can do this.")
+    return account
+
+
+def require_student(account: StoredAccount = Depends(current_account)) -> StoredAccount:
+    if account.role != "student" or account.student_id is None:
+        raise HTTPException(status_code=403, detail="Only a student can do this.")
     return account
 
 

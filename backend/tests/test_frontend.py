@@ -41,7 +41,7 @@ def test_an_unknown_api_path_is_a_json_404(anon):
     assert isinstance(response.json()["detail"], str)
 
 
-def test_can_be_left_out(db, clock):
-    client = TestClient(create_app(db=db, clock=clock, frontend_dir=None))
+def test_can_be_left_out(db, store, clock):
+    client = TestClient(create_app(db=db, store=store, clock=clock, instructor_passcode="x", frontend_dir=None))
     assert client.get("/League%20Table.dc.html").status_code == 404
     assert client.get("/api/demo/accounts").status_code == 200

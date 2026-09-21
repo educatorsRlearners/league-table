@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from factories import ADA, BEN, TEACHER, build_test_db, signed_in
+from factories import ADA, BEN, CY, INSTRUCTOR, build_test_db, build_test_store, signed_in
 
 
 class FakeClock:
@@ -29,8 +29,13 @@ def db():
 
 
 @pytest.fixture
-def app(db, clock):
-    return create_app(db=db, clock=clock)
+def store():
+    return build_test_store()
+
+
+@pytest.fixture
+def app(db, store, clock):
+    return create_app(db=db, store=store, clock=clock, instructor_passcode=INSTRUCTOR)
 
 
 @pytest.fixture
@@ -40,8 +45,8 @@ def anon(app):
 
 
 @pytest.fixture
-def teacher(app):
-    return signed_in(app, TEACHER)
+def instructor(app):
+    return signed_in(app, INSTRUCTOR)
 
 
 @pytest.fixture
@@ -57,11 +62,17 @@ def ben(app):
 
 
 @pytest.fixture
+def cy(app):
+    """Student s03."""
+    return signed_in(app, CY)
+
+
+@pytest.fixture
 def toy_app(clock):
     """The app with its default seeded demo data."""
     return create_app(clock=clock)
 
 
 @pytest.fixture
-def toy_teacher(toy_app):
-    return signed_in(toy_app, {"email": "teacher@demo.test", "password": "demo-teacher-1"})
+def toy_instructor(toy_app):
+    return signed_in(toy_app, "demo-instructor")

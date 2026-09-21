@@ -3,13 +3,17 @@ from datetime import datetime, timezone
 from fastapi import Depends
 
 from app.datasource import Snapshot
-from app.deps import AppContext, class_router, get_ctx, require_teacher
+from app.commitments import InvalidHours, validate_adjustment
+from app.deps import AppContext, class_router, get_ctx, require_instructor
 from app.errors import unprocessable
+from app.explainer import build_explainer
 from app.models import (
-    ClassBootstrap, Criterion, Error, SaveWeightsRequest, Week, WeightsResponse,
+    AdjustmentSettings, ClassBootstrap, Criterion, Error, Explainer, SaveSettingsRequest, Settings, Week,
 )
 from app.ranking import TIE_BREAKER_KEYS
 from app.scoring import normalise_weights
+from app.store import AdjustmentSettings as StoredAdjustment
+from app.store import LogEntry, Settings as StoredSettings
 
 router = class_router()
 
@@ -24,7 +28,7 @@ def utc(seconds: float) -> datetime:
 
 def current_weights(ctx: AppContext, snapshot: Snapshot) -> dict[str, float]:
     """Saved weights, or each criterion's default weight if none are saved. Totals 100."""
-    saved = ctx.settings.get_weights(snapshot.cls.id)
+    saved = ctx.store.get_settings(snapshot.cls.id).weights
     if saved is not None:
         return {c.key: saved.get(c.key, 0.0) for c in snapshot.criteria}
     return normalise_weights({c.key: c.default_weight for c in snapshot.criteria})
@@ -77,42 +81,98 @@ def list_criteria(class_id: str, ctx: AppContext = Depends(get_ctx)):
     return ctx.service.snapshot(class_id).criteria
 
 
+FORBIDDEN = {403: {"model": Error, "description": "The caller's role does not allow this."}}
+
+
+def settings_body(ctx: AppContext, snapshot: Snapshot) -> Settings:
+    adjustment = ctx.store.get_settings(snapshot.cls.id).adjustment
+    return Settings(
+        weights=current_weights(ctx, snapshot),
+        adjustment=AdjustmentSettings(
+            type_weights=adjustment.type_weights, rate=adjustment.rate,
+            cap=adjustment.cap, flag_hours=adjustment.flag_hours,
+        ),
+    )
+
+
 @router.get(
-    "/weights",
+    "/settings",
     tags=["Class"],
-    operation_id="getWeights",
-    summary="Saved criterion weights",
-    response_model=WeightsResponse,
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE,
+    operation_id="getSettings",
+    summary="Criterion weights and adjustment parameters (instructor only)",
+    response_model=Settings,
+    dependencies=[Depends(require_instructor)],
+    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE | FORBIDDEN,
 )
-def get_weights(class_id: str, ctx: AppContext = Depends(get_ctx)):
-    snapshot = ctx.service.snapshot(class_id)
-    return WeightsResponse(class_id=class_id, weights=current_weights(ctx, snapshot))
+def get_settings(class_id: str, ctx: AppContext = Depends(get_ctx)):
+    return settings_body(ctx, ctx.service.snapshot(class_id))
 
 
 @router.put(
-    "/weights",
+    "/settings",
     tags=["Class"],
-    operation_id="saveWeights",
-    summary="Save criterion weights (teacher only)",
-    response_model=WeightsResponse,
-    dependencies=[Depends(require_teacher)],
-    responses=UNAUTHORIZED
-    | NOT_FOUND
-    | UNAVAILABLE
-    | {403: {"model": Error, "description": "The caller's role does not allow this."}},
+    operation_id="saveSettings",
+    summary="Save criterion weights and adjustment parameters (instructor only)",
+    response_model=Settings,
+    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE | FORBIDDEN,
 )
-def save_weights(class_id: str, body: SaveWeightsRequest, ctx: AppContext = Depends(get_ctx)):
+def save_settings(
+    class_id: str,
+    body: SaveSettingsRequest,
+    account=Depends(require_instructor),
+    ctx: AppContext = Depends(get_ctx),
+):
+    """Every field is optional; what is left out keeps its value. A change re-ranks every week."""
     snapshot = ctx.service.snapshot(class_id)
-    keys = [c.key for c in snapshot.criteria]
+    current = ctx.store.get_settings(class_id)
 
-    unknown = [key for key in body.weights if key not in keys]
-    if unknown:
-        raise unprocessable(("body", "weights"), f"Unknown criterion: {', '.join(unknown)}", body.weights)
-    if sum(body.weights.values()) == 0:
-        raise unprocessable(("body", "weights"), "At least one weight must be above zero.", body.weights)
+    weights = current.weights
+    if body.weights is not None:
+        keys = [c.key for c in snapshot.criteria]
+        unknown = [key for key in body.weights if key not in keys]
+        if unknown:
+            raise unprocessable(("body", "weights"), f"Unknown criterion: {', '.join(unknown)}", body.weights)
+        if sum(body.weights.values()) == 0:
+            raise unprocessable(("body", "weights"), "At least one weight must be above zero.", body.weights)
+        # Criteria left out are stored as zero, so the saved map always covers every criterion.
+        weights = normalise_weights({key: body.weights.get(key, 0.0) for key in keys})
 
-    # Criteria left out are stored as zero, so the saved map always covers every criterion.
-    weights = normalise_weights({key: body.weights.get(key, 0.0) for key in keys})
-    ctx.settings.save_weights(class_id, weights)
-    return WeightsResponse(class_id=class_id, weights=weights)
+    adjustment = current.adjustment
+    if body.adjustment is not None:
+        patch = body.adjustment.model_dump(exclude_none=True)
+        merged = {
+            "type_weights": {**adjustment.type_weights, **patch.pop("type_weights", {})},
+            "rate": adjustment.rate, "cap": adjustment.cap, "flag_hours": adjustment.flag_hours,
+        } | patch
+        try:
+            adjustment = validate_adjustment(StoredAdjustment(**merged))
+        except InvalidHours as error:
+            raise unprocessable(("body", "adjustment"), str(error), patch)
+
+    saved = StoredSettings(weights=weights, adjustment=adjustment)
+    ctx.store.save_settings(
+        class_id, saved,
+        LogEntry("", account.id, "settings_changed", None, None,
+                 {"adjustment": _plain(current.adjustment)}, {"adjustment": _plain(adjustment)}, ctx.now()),
+    )
+    return settings_body(ctx, snapshot)
+
+
+def _plain(adjustment: StoredAdjustment) -> dict:
+    return {
+        "type_weights": dict(adjustment.type_weights), "rate": adjustment.rate,
+        "cap": adjustment.cap, "flag_hours": adjustment.flag_hours,
+    }
+
+
+@router.get(
+    "/explainer",
+    tags=["Class"],
+    operation_id="getExplainer",
+    summary="The scoring formula and its current parameters",
+    description="The same for everyone; it holds no one's hours.",
+    response_model=Explainer,
+    responses=UNAUTHORIZED | NOT_FOUND,
+)
+def get_explainer(class_id: str, ctx: AppContext = Depends(get_ctx)):
+    return build_explainer(ctx.store.get_settings(class_id).adjustment)

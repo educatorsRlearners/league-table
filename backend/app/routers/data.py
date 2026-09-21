@@ -1,6 +1,6 @@
 from fastapi import Depends
 
-from app.deps import AppContext, class_router, get_ctx, require_teacher
+from app.deps import AppContext, class_router, get_ctx, require_instructor
 from app.models import Error, RefreshResult, Status
 from app.routers.classes import NOT_FOUND, UNAUTHORIZED, UNAVAILABLE, utc
 
@@ -30,9 +30,9 @@ def get_status(class_id: str, ctx: AppContext = Depends(get_ctx)):
     "/refresh",
     tags=["Data"],
     operation_id="refresh",
-    summary="Re-read the data source now (teacher only)",
+    summary="Re-read the data source now (instructor only)",
     response_model=RefreshResult,
-    dependencies=[Depends(require_teacher)],
+    dependencies=[Depends(require_instructor)],
     responses=UNAUTHORIZED
     | NOT_FOUND
     | UNAVAILABLE

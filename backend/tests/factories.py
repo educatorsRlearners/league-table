@@ -22,15 +22,24 @@ Cumulative through week 2 (earned and possible are summed, not percentages avera
     s01 90, s02 89.2857 (part = 25/35), s03 79, s04 72, s05 76.
 """
 
+from datetime import date, timedelta
+
 from fastapi.testclient import TestClient
 
 from app.datasource import Entry, Student
-from app.mock_db import MockAccount, MockDatabase
+from app.identity import hash_code
+from app.mock_db import MockDatabase
 from app.models import Class, Criterion, Week
+from app.store import MemoryStore, StoredAccount
 
-TEACHER = {"email": "teacher@demo.test", "password": "demo-teacher-1"}
-ADA = {"email": "ada@demo.test", "password": "pw-ada"}
-BEN = {"email": "ben@demo.test", "password": "pw-ben"}
+INSTRUCTOR = "instructor-passcode"
+ADA = "ada-code"
+BEN = "ben-code"
+CY = "cy-code"
+
+# The tests' FakeClock starts on Friday 15 Jan 2027, which is in week 3 of this term (weeks
+# start on Mondays), so weeks 2 and 3 are the ones a student can edit.
+WEEK_STARTS = {1: date(2026, 12, 28), 2: date(2027, 1, 4), 3: date(2027, 1, 11)}
 
 _CRITERIA = [
     ("k1", "homework", "Homework", "tasks on time", 50, 0),
@@ -53,9 +62,9 @@ _ENTRIES = [
 ]
 
 
-def signed_in(app, credentials) -> TestClient:
+def signed_in(app, code) -> TestClient:
     client = TestClient(app)
-    response = client.post("/api/auth/login", json=credentials)
+    response = client.post("/api/auth/login", json={"code": code})
     assert response.status_code == 200, response.text
     return client
 
@@ -110,14 +119,19 @@ def build_test_db() -> MockDatabase:
             for cid, key, label, unit, weight, order in _CRITERIA
         ],
         weeks=[
-            Week(id=f"w{n}", term_id="t1", week_number=n,
-                 start_date=f"2026-01-{5 + 7 * (n - 1):02d}", end_date=f"2026-01-{9 + 7 * (n - 1):02d}")
-            for n in (1, 2, 3)
+            Week(id=f"w{n}", term_id="t1", week_number=n, start_date=start, end_date=start + timedelta(days=4))
+            for n, start in WEEK_STARTS.items()
         ],
         entries=entries,
-        accounts=[
-            MockAccount(id="a1", role="teacher", student_id=None, external_id="demo:teacher", **TEACHER),
-            MockAccount(id="a2", role="student", student_id="s01", external_id="demo:ada", **ADA),
-            MockAccount(id="a3", role="student", student_id="s02", external_id="demo:ben", **BEN),
-        ],
+    )
+
+
+def build_test_store() -> MemoryStore:
+    return MemoryStore(
+        [
+            StoredAccount("a1", "instructor", None, "demo:instructor", None),
+            StoredAccount("a2", "student", "s01", "demo:ada", hash_code(ADA)),
+            StoredAccount("a3", "student", "s02", "demo:ben", hash_code(BEN)),
+            StoredAccount("a4", "student", "s03", "demo:cy", hash_code(CY)),
+        ]
     )
