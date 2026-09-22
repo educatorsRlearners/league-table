@@ -313,23 +313,27 @@ Scores are read-only because the instructor enters them in the Google Sheet. Eve
 
 **FastAPI service**
 
-We assume a REST API with JSON responses, and FastAPI provides exactly that. It publishes its own OpenAPI schema, so the front end can generate a typed client and the interactive API docs stay in step with the code. Proposed endpoints:
+We assume a REST API with JSON responses, and FastAPI provides exactly that. It publishes its own OpenAPI schema, so the front end can generate a typed client and the interactive API docs stay in step with the code. The implemented surface (see `openapi.yaml`, which the contract test checks against the running app):
 
 | Endpoint | Who can call it | Returns or does |
 | --- | --- | --- |
-| `GET /classes/{id}/ranking?week=&criteria=&window=` | Instructor, student | Ranked rows: rank, name as displayed, adjusted score, rank change. Students never receive another student's raw score, factor or hours |
-| `GET /classes/{id}/students/{sid}/explanation?week=` | Instructor (any student), student (own only) | Criteria breakdown, raw score, weighted hours by type, factor, adjusted score, points to the next rank |
-| `GET /classes/{id}/weeks` and `/criteria` | Instructor, student | Weeks and criteria for the controls |
-| `GET /classes/{id}/explainer` | Instructor, student | The formula, current parameters and worked examples, with no personal data |
-| `GET /me/commitments` | Student | Own baseline, weekly updates, approval status and factor by week |
-| `PUT /me/commitments/baseline` | Student | Submits a baseline, which starts as pending |
-| `PUT /me/commitments/weeks/{n}` | Student | Sets hours for week n; refused unless n is the current or previous week |
-| `GET /classes/{id}/approvals` | Instructor | Pending baselines with hours by type |
-| `POST /classes/{id}/approvals/{aid}` | Instructor | Approves with an effective week, or rejects |
-| `POST /classes/{id}/students/{sid}/weeks/{n}/reverse` | Instructor | Reverses a weekly update |
-| `GET /classes/{id}/change-log` | Instructor | The commitment change log |
-| `PUT /classes/{id}/settings` | Instructor | Criterion weights and adjustment parameters |
-| `POST /auth/login` | Instructor, student | Exchanges an access code or passcode for a session |
+| `GET /classes` | Instructor | The instructor's classes |
+| `GET /classes/{classId}/bootstrap` | Instructor, student (own class) | Weeks, criteria, weights, settings, tie-breakers, accounts, issues, data source info |
+| `GET /classes/{classId}/ranking?week=&criteria=&window=` | Instructor, student | Ranked rows: rank, name as displayed, adjusted score, rank change. Students never receive another student's raw score, factor or hours |
+| `GET /classes/{classId}/students/{studentId}/explanation?week=` | Instructor (any student), student (own only) | Criteria breakdown, raw score, weighted hours by type, factor, adjusted score, points to the next rank |
+| `GET /classes/{classId}/explainer` | Instructor, student | The formula, current parameters and worked examples, with no personal data |
+| `GET /classes/{classId}/status` | Instructor, student | Cache status ("last updated", stale flag, data-check issues) |
+| `POST /classes/{classId}/refresh` | Instructor, student | Forces a fresh read; rate-limited to one every 10 seconds |
+| `PUT /classes/{classId}/settings` | Instructor | Criterion weights and adjustment parameters |
+| `GET /me/commitments?classId=&studentId=` | Student (own only) | Own baseline, weekly updates, approval status and factor by week |
+| `GET /me/standing?classId=&studentId=` | Student (own only) | The student's own level, active signals and help pointer; no ranks, no classmates, no notes |
+| `GET /instructor/digest` | Instructor | Cross-class risk digest: newly, still and recently-cleared flags |
+| `GET /classes/{classId}/students/{studentId}/risk` | Instructor (any student), student (own only) | Full risk record for instructors (signals, metrics, thresholds, history, notes); own standing for students |
+| `POST /classes/{classId}/students/{studentId}/notes` | Instructor | Logs a private outreach note on the student's risk record |
+| `GET /classes/{classId}/risk-settings` | Instructor | Per-class risk thresholds and active signals |
+| `PUT /classes/{classId}/risk-settings` | Instructor | Saves per-class risk thresholds and active signals |
+
+Weeks are addressed by week id in queries (e.g. `?week=w5`) and by `week_number` in commitment payloads. Not yet in the API: commitment writes (`PUT /me/commitments/baseline`, `PUT /me/commitments/weeks/{week_number}`), the approvals queue, reversal, the change log, and access-code sign-in — the browser demo covers those flows through its in-memory mock, and they remain the next endpoints to build.
 
 **Service requirements**
 
