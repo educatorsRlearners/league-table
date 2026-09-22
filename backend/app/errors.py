@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -11,22 +11,26 @@ class RefreshTooSoon(Exception):
         super().__init__(f"Please wait {retry_after}s before refreshing again.")
 
 
-def unprocessable(loc: tuple[str, ...], message: str, value=None) -> RequestValidationError:
-    """A 422 in FastAPI's own shape, for problems that need data to detect."""
-    return RequestValidationError(
-        [{"type": "value_error", "loc": loc, "msg": message, "input": value}]
-    )
-
-
 def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(SourceUnavailable)
     async def source_unavailable(request: Request, exc: SourceUnavailable):
-        return JSONResponse(status_code=503, content={"detail": "The data source did not respond."})
+        return JSONResponse(status_code=503, content={"message": "The data source did not respond."})
 
     @app.exception_handler(RefreshTooSoon)
     async def refresh_too_soon(request: Request, exc: RefreshTooSoon):
         return JSONResponse(
             status_code=429,
-            content={"detail": str(exc)},
+            content={"message": str(exc)},
             headers={"Retry-After": str(exc.retry_after)},
         )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError):
+        return JSONResponse(status_code=422, content={"message": str(exc.errors())})
+
+    # Normalise all HTTP errors to {"message": ...} per openapi.yaml Error schema.
+    @app.exception_handler(HTTPException)
+    async def http_normaliser(request: Request, exc: HTTPException):
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        return JSONResponse(status_code=exc.status_code, content={"message": detail},
+                            headers=exc.headers or {})

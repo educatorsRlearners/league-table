@@ -1,114 +1,105 @@
-"""Shared FastAPI dependencies: the app context, the signed-in account and role checks."""
+"""Shared context + helpers for routers."""
 
-import secrets
-from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from typing import Callable
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import APIKeyCookie
+import json
+from dataclasses import dataclass
+from typing import Any, Callable
 
-from app.commitments import Adjuster, CommitmentBook, current_week
-from app.datasource import DataSource, Snapshot
-from app.identity import IdentityProvider
-from app.models import DemoAccount, SourceInfo
+from fastapi import Depends, HTTPException, Query
+from pydantic import TypeAdapter, ValidationError
+
+from app.auth import Caller, get_caller, instructor_id_of
+from app.datasource import Snapshot
 from app.service import LeagueService
-from app.store import AppStore, StoredAccount
 
-SESSION_COOKIE = "session"
-
-session_cookie = APIKeyCookie(name=SESSION_COOKIE, scheme_name="sessionCookie", auto_error=False)
-
-
-class SessionStore:
-    """Server-side sessions: an opaque random token mapped to an account id."""
-
-    def __init__(self) -> None:
-        self._sessions: dict[str, str] = {}
-
-    def create(self, account_id: str) -> str:
-        token = secrets.token_urlsafe(32)
-        self._sessions[token] = account_id
-        return token
-
-    def account_id(self, token: str | None) -> str | None:
-        return self._sessions.get(token) if token else None
-
-    def destroy(self, token: str | None) -> None:
-        if token:
-            self._sessions.pop(token, None)
+_ctx = None
 
 
 @dataclass
 class AppContext:
-    db: DataSource
-    store: AppStore
+    db: Any
+    store: Any
     service: LeagueService
-    sessions: SessionStore
-    identity: IdentityProvider
     clock: Callable[[], float]
-    demo_accounts: list[DemoAccount] = field(default_factory=list)
 
-    def source_info(self) -> SourceInfo:
-        return SourceInfo(kind=self.db.kind, label=self.db.label, demo=self.db.kind == "toy")
+    def source_info(self) -> dict:
+        return {"kind": self.db.kind, "label": self.db.label,
+                "demo": self.db.kind == "toy", "store": self.store.label}
 
-    def now(self) -> str:
-        """The server clock as an ISO 8601 UTC string, for stamping stored changes."""
-        return datetime.fromtimestamp(self.clock(), tz=timezone.utc).isoformat()
-
-    def today(self) -> date:
-        return datetime.fromtimestamp(self.clock(), tz=timezone.utc).date()
-
-    def adjuster(self, class_id: str) -> Adjuster:
-        """The adjustment as currently set and approved, read fresh so an edit shows at once."""
-        settings = self.store.get_settings(class_id)
-        book = CommitmentBook(self.store.list_baselines(), self.store.list_weekly_updates())
-        return Adjuster(settings.adjustment, book)
-
-    def class_id_of(self, student_id: str) -> str | None:
-        for cls in self.db.list_classes():
-            if any(s.id == student_id for s in self.service.snapshot(cls.id).students):
-                return cls.id
-        return None
-
-    def current_week_of(self, snapshot: Snapshot):
-        return current_week(snapshot.weeks, self.today())
+    def now_ms(self) -> int:
+        return int(self.clock() * 1000)
 
 
-def get_ctx(request: Request) -> AppContext:
-    return request.app.state.ctx
+def get_ctx() -> AppContext:
+    assert _ctx is not None, "app context not initialised"
+    return _ctx
 
 
-def current_account(
-    token: str | None = Depends(session_cookie), ctx: AppContext = Depends(get_ctx)
-) -> StoredAccount:
-    account_id = ctx.sessions.account_id(token)
-    account = ctx.store.get_account(account_id) if account_id else None
-    if account is None:
-        raise HTTPException(status_code=401, detail="Please sign in.")
-    return account
+def set_ctx(ctx: AppContext) -> None:
+    global _ctx
+    _ctx = ctx
 
 
-def require_instructor(account: StoredAccount = Depends(current_account)) -> StoredAccount:
-    if account.role != "instructor":
-        raise HTTPException(status_code=403, detail="Only the instructor can do this.")
-    return account
-
-
-def require_student(account: StoredAccount = Depends(current_account)) -> StoredAccount:
-    if account.role != "student" or account.student_id is None:
-        raise HTTPException(status_code=403, detail="Only a student can do this.")
-    return account
-
-
-def class_router() -> APIRouter:
-    """A router under /classes/{class_id} that needs a session and an existing class."""
-    return APIRouter(
-        prefix="/classes/{class_id}", dependencies=[Depends(current_account), Depends(valid_class)]
-    )
-
-
-def valid_class(class_id: str, ctx: AppContext = Depends(get_ctx)) -> str:
+def need_class(ctx: AppContext, class_id: str) -> Snapshot:
     if not ctx.service.has_class(class_id):
         raise HTTPException(status_code=404, detail="Unknown class.")
-    return class_id
+    return ctx.service.snapshot(class_id)
+
+
+def student_class_ids(ctx: AppContext, student_id: str) -> list[str]:
+    out = []
+    try:
+        classes = ctx.db.list_classes()
+    except Exception:
+        return out
+    for c in classes:
+        try:
+            if any(s.id == student_id for s in ctx.db.list_students(c.id)):
+                out.append(c.id)
+        except Exception:
+            continue
+    return out
+
+
+def ensure_student_in_class(ctx: AppContext, caller: Caller, class_id: str) -> None:
+    if caller.role != "student":
+        return
+    if caller.classId == class_id:
+        return
+    # fall back to membership lookup (token class may be stale)
+    if class_id in student_class_ids(ctx, caller.studentId or ""):
+        return
+    raise HTTPException(status_code=403, detail="That class is not yours to read.")
+
+
+_weights_adapter = TypeAdapter(dict[str, float])
+
+
+def parse_criteria(raw: str | list[str] | None) -> list[str] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        keys: list[str] = []
+        for item in raw:
+            keys.extend([k.strip() for k in str(item).split(",") if k.strip()])
+        return keys or None
+    keys = [k.strip() for k in raw.split(",") if k.strip()]
+    return keys or None
+
+
+def parse_weights(raw: str | dict | None) -> dict | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="weights must be a JSON object.")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="weights must be a JSON object.")
+    try:
+        return _weights_adapter.validate_python(data)
+    except ValidationError:
+        raise HTTPException(status_code=422, detail="weights must map keys to non-negative numbers.")

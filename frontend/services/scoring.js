@@ -1,6 +1,8 @@
 // Pure scoring logic. No I/O, no adapter detail — operates only on normalised
-// model types (students, criteria, entries). Mirrors what the FastAPI service
-// would run server-side.
+// model types (students, criteria, entries, commitments). Mirrors what the
+// FastAPI service would run server-side.
+
+export const ZERO_HOURS = { work: 0, childcare: 0, eldercare: 0 };
 
 export function normalise(earned, possible) {
   if (possible == null || possible <= 0) return null;
@@ -21,7 +23,7 @@ export function aggregate(entries) {
 }
 
 /**
- * Weighted score for one student.
+ * Step 1 — weighted raw score for one student in one window.
  * Missing criteria are excluded and the remaining weights are rescaled,
  * so absence of data is never scored as zero.
  */
@@ -46,7 +48,7 @@ export function scoreStudent({ entries, criteria, weights }) {
       possible: missing ? null : a.possible,
       normalised,
       weight,
-      effective_weight: effectiveWeight,
+      effectiveWeight,
       points: missing ? 0 : (normalised * effectiveWeight) / 100,
       missing,
     };
@@ -60,16 +62,72 @@ export function scoreStudent({ entries, criteria, weights }) {
   };
 }
 
+/* ------------------------------------------------ commitment adjustment */
+
+/** Which hours apply to a student in a given week. */
+export function resolveHours({ baseline, weeklyUpdates = [], weekNumber }) {
+  const approved = baseline && baseline.status === 'approved';
+  if (!approved) {
+    return { hours: { ...ZERO_HOURS }, source: baseline ? baseline.status : 'none' };
+  }
+  const update = weeklyUpdates.find((u) => u.week_number === weekNumber && !u.reversed_at);
+  if (update) {
+    return {
+      hours: { work: update.work_hours, childcare: update.childcare_hours, eldercare: update.eldercare_hours },
+      source: 'weekly',
+    };
+  }
+  if (weekNumber >= (baseline.effective_from_week ?? 1)) {
+    return {
+      hours: { work: baseline.work_hours, childcare: baseline.childcare_hours, eldercare: baseline.eldercare_hours },
+      source: 'baseline',
+    };
+  }
+  return { hours: { ...ZERO_HOURS }, source: 'before-effective' };
+}
+
+/** Step 2a — H = Σ a_k · h_k */
+export function weightedHours(hours = {}, typeWeights = {}) {
+  return Object.keys(typeWeights).reduce((s, k) => s + (typeWeights[k] ?? 0) * (hours[k] ?? 0), 0);
+}
+
+/** Step 2b — f = min(1 + r·H, f_max) */
+export function commitmentFactor(h, rate, cap) {
+  return Math.min(1 + rate * h, cap);
+}
+
+/** Step 3 — adjusted = min(100, raw · f) */
+export function adjust(raw, factor) {
+  if (raw == null) return { adjusted: null, capped: false };
+  const value = raw * factor;
+  return { adjusted: Math.min(100, value), capped: value > 100 + 1e-9 };
+}
+
+/** Cumulative and rolling windows average the weekly adjusted scores. */
+export function mean(values) {
+  const nums = values.filter((v) => v != null);
+  if (!nums.length) return null;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+/* ------------------------------------------------------------- ranking */
+
 const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
- * Assign competition ranks (1, 1, 3). Ties are decided for *display order only*
- * by the tie-breaker criteria, which never change the shared rank number.
+ * Assign competition ranks (1, 1, 3) on the adjusted score. Students tied on
+ * adjusted score — including several at 100 — are ordered by the higher raw
+ * score, then by the stated tie-breaker criteria; any still tied share a rank.
  */
 export function rankRows(rows, tieBreakers = []) {
-  const keyed = rows.map((r) => ({ ...r, scoreRounded: r.score == null ? -1 : round1(r.score) }));
+  const keyed = rows.map((r) => ({
+    ...r,
+    scoreRounded: r.score == null ? -1 : round1(r.score),
+    rawRounded: r.raw == null ? -1 : round1(r.raw),
+  }));
   keyed.sort((a, b) => {
     if (b.scoreRounded !== a.scoreRounded) return b.scoreRounded - a.scoreRounded;
+    if (b.rawRounded !== a.rawRounded) return b.rawRounded - a.rawRounded;
     for (const key of tieBreakers) {
       const av = a.normalisedByKey?.[key] ?? -1;
       const bv = b.normalisedByKey?.[key] ?? -1;
@@ -91,25 +149,18 @@ export function rankRows(rows, tieBreakers = []) {
       row.tied = false;
     }
   });
-  // mark the first member of a tie group as tied too
   for (let i = 0; i < keyed.length - 1; i++) {
     if (keyed[i + 1].rank === keyed[i].rank) keyed[i].tied = true;
   }
   return keyed;
 }
 
-/** The closest row with a better rank, skipping a tie partner; null at the top. */
-export function nearestAbove(rows, index) {
-  for (let i = index - 1; i >= 0; i--) {
-    if (rows[i].rank < rows[index].rank) return rows[i];
-  }
-  return null;
-}
-
 /** Points a student needs to add to reach the rank above them. */
 export function gapToNext(rows, index) {
-  const above = nearestAbove(rows, index);
-  return above ? Math.max(0, above.score - rows[index].score) : null;
+  for (let i = index - 1; i >= 0; i--) {
+    if (rows[i].rank < rows[index].rank) return Math.max(0, rows[i].score - rows[index].score);
+  }
+  return null;
 }
 
 export function gapToBelow(rows, index) {

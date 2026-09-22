@@ -1,55 +1,35 @@
-"""Request and response schemas. Field names match openapi.yaml."""
+"""Response schemas. Field names match openapi.yaml exactly."""
 
-from datetime import date, datetime
-from typing import Annotated, Any, Literal
+from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Literal
 
-from app.store import BaselineStatus, Role
+from pydantic import BaseModel, Field
 
-__all__ = ["Role", "BaselineStatus"]
-
-WindowMode = Literal["week", "cumulative", "rolling"]
-NameMode = Literal["full", "nickname", "initials"]
-
-Weight = Annotated[float, Field(ge=0, allow_inf_nan=False)]
-Weights = dict[str, Weight]
-Hours = dict[str, Annotated[float, Field(allow_inf_nan=False)]]
+WindowMode = Literal["week", "rolling", "cumulative"]
+NameMode = Literal["full", "initials", "nickname"]
 
 
 class Error(BaseModel):
-    detail: str
-
-
-class Account(BaseModel):
-    id: str
-    role: Role
-    student_id: str | None
-    external_id: str
-
-
-class DemoAccount(Account):
-    name: str
-    code: str
-
-
-class LoginRequest(BaseModel):
-    code: str = Field(min_length=1, json_schema_extra={"format": "password"})
+    message: str
+    status: int | None = None
 
 
 class Class(BaseModel):
     id: str
-    external_id: str
+    instructor_id: str
     name: str
     term_id: str
+    external_id: str | None = None
+    sheet_id: str | None = None
 
 
 class Week(BaseModel):
     id: str
     term_id: str
     week_number: int
-    start_date: date
-    end_date: date
+    start_date: str
+    end_date: str
 
 
 class Criterion(BaseModel):
@@ -57,15 +37,52 @@ class Criterion(BaseModel):
     class_id: str
     key: str
     label: str
-    unit: str
-    default_weight: Weight
+    unit: str | None = None
+    default_weight: float
     sort_order: int
+
+
+class Account(BaseModel):
+    id: str
+    role: Literal["instructor", "student"]
+    student_id: str | None = None
+    class_ids: list[str]
+    external_id: str | None = None
+
+
+class Hours(BaseModel):
+    work: float = 0
+    childcare: float = 0
+    eldercare: float = 0
+
+
+class TypeWeights(BaseModel):
+    work: float = 1
+    childcare: float = 1
+    eldercare: float = 1
+
+
+class LeagueSettings(BaseModel):
+    weights: dict[str, float] | None = None
+    typeWeights: TypeWeights = Field(default_factory=TypeWeights)
+    rate: float = 0.01
+    cap: float = 1.25
+    tieBreakers: list[str] = Field(default_factory=lambda: ["attendance", "homework"])
+
+
+class LeagueSettingsPatch(BaseModel):
+    weights: dict[str, float] | None = None
+    typeWeights: TypeWeights | None = None
+    rate: float | None = None
+    cap: float | None = None
+    tieBreakers: list[str] | None = None
 
 
 class SourceInfo(BaseModel):
     kind: str
     label: str
     demo: bool
+    store: str
 
 
 class Issue(BaseModel):
@@ -74,286 +91,258 @@ class Issue(BaseModel):
     message: str
 
 
-class ClassBootstrap(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    class_: Class = Field(alias="class")
-    weeks: list[Week]
-    criteria: list[Criterion]
-    weights: Weights
-    tie_breakers: list[str]
-    source: SourceInfo
-    last_updated: datetime
-    issues: list[Issue]
-
-
-class RankingRow(BaseModel):
-    """What every signed-in person sees of a classmate: the adjusted score and rank only."""
-
-    student_id: str
-    display_name: str
-    score: float
-    rank: int = Field(ge=1)
-    tied: bool
-    rank_delta: int | None
-    missing: list[str]
-    gap_to_next: float | None
-    gap_to_below: float | None
-
-
-class Ranking(BaseModel):
-    class_id: str
-    week_id: str
-    window_mode: WindowMode
-    rolling_weeks: int | None
-    criteria_keys: list[str]
-    weights: Weights
-    rows: list[RankingRow]
-    last_updated: datetime
-    stale: bool
-    issues: list[Issue]
-
-
 class ScorePart(BaseModel):
     key: str
     label: str
-    earned: float | None
-    possible: float | None
-    normalised: float | None
+    earned: float | None = None
+    possible: float | None = None
+    normalised: float | None = None
     weight: float
-    effective_weight: float
+    effectiveWeight: float
     points: float
     missing: bool
 
 
-class WeekBreakdown(BaseModel):
-    """One week of a student's score, before and after the adjustment."""
+class RankingRow(BaseModel):
+    student_id: str
+    display_name: str
+    score: float
+    rank: int
+    tied: bool
+    rank_delta: int | None = None
+    gap_to_next: float | None = None
+    gap_to_below: float | None = None
+    missing: list[str] = Field(default_factory=list)
+    is_self: bool = False
+    raw: float | None = None
+    factor: float | None = None
+    weighted_hours: float | None = None
+    capped: bool | None = None
+    hours_source: str | None = None
 
-    week_id: str
+
+class RankingResponse(BaseModel):
+    classId: str
+    weekId: str
+    windowMode: str
+    rollingN: int
+    criteriaKeys: list[str]
+    weights: dict[str, float]
+    rows: list[RankingRow]
+    weekCount: int
+    lastUpdated: int
+    stale: bool
+    issues: list[Issue] = Field(default_factory=list)
+
+
+class WeekScore(BaseModel):
     week_number: int
-    raw_score: float
+    raw: float
     weighted_hours: float
     factor: float
-    adjusted_score: float
+    adjusted: float
     capped: bool
 
 
 class Explanation(BaseModel):
-    """How a rank was reached. `score` is the adjusted score the table ranks on.
-
-    In a window of several weeks each week is scored on its own and the weekly scores are
-    averaged, so `raw_score` and `score` are means and `parts` average the weekly points.
-    `factor`, `weighted_hours` and `hours` are only given for a single week.
-    """
-
     student_id: str
     display_name: str
-    rank: int = Field(ge=1)
+    rank: int
     tied: bool
     score: float
-    raw_score: float
-    factor: float | None
-    weighted_hours: float | None
-    hours: Hours | None = Field(description="Weighted hours by commitment type, for a single week.")
+    raw: float
+    focusRaw: float
+    focusAdjusted: float
+    focusCapped: bool
+    factor: float
+    weighted_hours: float
     capped: bool
-    parts: list[ScorePart]
-    weeks: list[WeekBreakdown]
-    gap_to_next: float | None
-    gap_to_below: float | None
-    above: str | None
-    week_id: str
-    window_mode: WindowMode
-    rolling_weeks: int | None
-
-
-class Status(BaseModel):
-    last_updated: datetime | None
-    stale: bool
-    issues: list[Issue]
-    source: SourceInfo
-
-
-class RefreshResult(BaseModel):
-    last_updated: datetime
-    issues: list[Issue]
-    stale: bool
-
-
-# Commitments
-
-
-class CommitmentType(BaseModel):
-    key: str
-    label: str
-
-
-class HourLimits(BaseModel):
-    step: float
-    per_type_max: float
-    total_max: float
-
-
-class HoursRequest(BaseModel):
-    hours: Hours = Field(description="Hours per week by commitment type; a type left out counts as 0.")
-
-
-class Baseline(BaseModel):
-    id: str
-    student_id: str
     hours: Hours
-    status: BaselineStatus
-    effective_from_week: int | None
-    submitted_at: datetime
-    decided_at: datetime | None
-
-
-class WeeklyUpdate(BaseModel):
-    week_id: str
-    week_number: int
-    hours: Hours | None = Field(description="`null` means the student reset this week to their baseline.")
-    entered_at: datetime
-    editable: bool
-
-
-class WeekFactor(BaseModel):
-    week_id: str
-    week_number: int
-    source: Literal["none", "baseline", "weekly"]
-    hours: Hours | None
-    weighted_hours: float
-    factor: float
-
-
-class EditWindow(BaseModel):
-    current_week_id: str | None
-    editable_week_ids: list[str]
-
-
-class MyCommitments(BaseModel):
-    types: list[CommitmentType]
-    limits: HourLimits
-    baseline: Baseline | None = Field(description="The latest submission, whatever its status.")
-    in_effect: Baseline | None = Field(description="The approved baseline that counts now, if any.")
-    weekly_updates: list[WeeklyUpdate]
-    weeks: list[WeekFactor]
-    edit_window: EditWindow
-
-
-class PreviewRequest(BaseModel):
-    hours: Hours
-    week_id: str | None = Field(default=None, description="Defaults to the student's latest week with scores.")
-
-
-class Preview(BaseModel):
-    week_id: str
-    raw_score: float
-    weighted_hours: float
-    factor: float
-    adjusted_score: float
-    capped: bool
-
-
-class PendingApproval(BaseModel):
-    id: str
-    student_id: str
-    display_name: str
-    hours: Hours
-    submitted_at: datetime
-    is_change: bool = Field(description="`true` when the student already has an approved baseline.")
-    current: Hours | None = Field(description="The approved baseline's hours, for comparison.")
-    suggested_effective_week: int | None
-
-
-class Approvals(BaseModel):
-    pending: list[PendingApproval]
-    current_week: int | None
-
-
-class DecisionRequest(BaseModel):
-    decision: Literal["approve", "reject"]
-    effective_week: int | None = Field(
-        default=None, ge=1, description="Week the baseline counts from. Defaults to the current week."
-    )
-
-
-class StudentCommitments(BaseModel):
-    student_id: str
-    display_name: str
-    status: Literal["none", "pending", "approved", "rejected"]
-    hours: Hours | None
-    effective_from_week: int | None
-    weighted_hours: float
-    factor: float
-
-
-class LogEntry(BaseModel):
-    id: str
-    actor_id: str
-    actor_name: str
-    action: str
-    student_id: str | None
-    student_name: str | None
-    week_id: str | None
-    week_number: int | None
-    old_values: dict[str, Any] | None
-    new_values: dict[str, Any] | None
-    at: datetime
-    flagged: bool = Field(description="A weekly entry that differs from the baseline by more than the threshold.")
-    reversible: bool
-
-
-# Settings and explainer
-
-
-class AdjustmentSettings(BaseModel):
-    type_weights: Weights
+    hours_source: str | None = None
+    typeWeights: TypeWeights
     rate: float
     cap: float
-    flag_hours: float
-
-
-class AdjustmentPatch(BaseModel):
-    type_weights: Weights | None = None
-    rate: float | None = None
-    cap: float | None = None
-    flag_hours: float | None = None
-
-
-class Settings(BaseModel):
-    weights: Weights
-    adjustment: AdjustmentSettings
-
-
-class SaveSettingsRequest(BaseModel):
-    weights: Weights | None = None
-    adjustment: AdjustmentPatch | None = None
-
-
-class FactorRow(BaseModel):
-    weighted_hours: float
-    factor: float
-
-
-class WorkedExample(BaseModel):
-    title: str
-    raw_score: float
-    hours: Hours
-    weighted_hours: float
-    factor: float
-    adjusted_score: float
-    capped: bool
-    steps: list[str]
+    focusWeek: int
+    parts: list[ScorePart]
+    weeks: list[WeekScore]
+    gap_to_next: float | None = None
+    gap_to_below: float | None = None
+    above: str | None = None
+    weekId: str
+    windowMode: str
 
 
 class Explainer(BaseModel):
-    """The formula and the current parameters, with no personal data."""
-
-    formula: list[str]
-    types: list[CommitmentType]
-    type_weights: Weights
+    typeWeights: TypeWeights
     rate: float
     cap: float
-    limits: HourLimits
-    factor_table: list[FactorRow]
-    examples: list[WorkedExample]
-    rules: list[str]
+    table: list[dict[str, float]]
+    example: dict[str, Any]
+
+
+class Bootstrap(BaseModel):
+    klass: Class
+    classes: list[Class]
+    weeks: list[Week]
+    criteria: list[Criterion]
+    weights: dict[str, float]
+    defaultWeights: dict[str, float]
+    settings: dict[str, Any]
+    tieBreakers: list[str]
+    accounts: list[Account]
+    weeksWithData: list[str]
+    latestCompleteWeekId: str | None = None
+    source: SourceInfo
+    lastUpdated: int
+    issues: list[Issue] = Field(default_factory=list)
+    rollingN: int = 4
+
+
+class Baseline(BaseModel):
+    id: str | None = None
+    student_id: str
+    work_hours: float = 0
+    childcare_hours: float = 0
+    eldercare_hours: float = 0
+    status: str
+    effective_from_week: int | None = None
+    submitted_at: str | None = None
+    decided_by: str | None = None
+    decided_at: str | None = None
+
+
+class WeeklyUpdate(BaseModel):
+    id: str | None = None
+    student_id: str
+    week_id: str
+    week_number: int
+    work_hours: float = 0
+    childcare_hours: float = 0
+    eldercare_hours: float = 0
+    entered_at: str | None = None
+    reversed_by: str | None = None
+    reversed_at: str | None = None
+
+
+class Commitments(BaseModel):
+    studentId: str
+    baseline: Baseline | None = None
+    weeklyUpdates: list[WeeklyUpdate] = Field(default_factory=list)
+    byWeek: list[dict[str, Any]]
+
+
+class Signal(BaseModel):
+    key: str
+    label: str
+    active: bool
+    on: bool
+    summary: str
+    evidence: list[dict[str, str]]
+
+
+class RiskMetrics(BaseModel):
+    declineRun: int = 0
+    missedAssignments: int = 0
+    attendancePct: float | None = None
+    participationPct: float | None = None
+    projected: float | None = None
+    hours: float | None = None
+    missingRun: int = 0
+
+
+class RiskThresholds(BaseModel):
+    declineWeeks: int = 3
+    missedAssignments: int = 2
+    attendancePct: float = 70
+    participationPct: float = 50
+    projectedGrade: float = 60
+    commitmentHours: float = 20
+    missingWeeks: int = 2
+
+
+class RiskSettings(BaseModel):
+    thresholds: RiskThresholds = Field(default_factory=RiskThresholds)
+    active: dict[str, bool] = Field(default_factory=lambda: {
+        "downward_trend": True, "missed_engagement": True, "low_projected_grade": True,
+        "heavy_commitments": True, "missing_data": True})
+
+
+class RiskSettingsPatch(BaseModel):
+    thresholds: dict[str, float | int] | None = None
+    active: dict[str, bool] | None = None
+
+
+class DigestRow(BaseModel):
+    student_id: str
+    display_name: str
+    level: str
+    status: Literal["new", "still", "cleared"]
+    priorLevel: str | None = None
+    signals: list[str] = Field(default_factory=list)
+    notes: int = 0
+
+
+class DigestGroup(BaseModel):
+    classId: str
+    className: str
+    week: int
+    comparedWith: int | None = None
+    comparedWithStored: bool = False
+    rows: list[DigestRow] = Field(default_factory=list)
+
+
+class Digest(BaseModel):
+    instructorId: str
+    groups: list[DigestGroup] = Field(default_factory=list)
+    computedAt: str
+
+
+class Note(BaseModel):
+    id: str
+    instructor_id: str
+    class_id: str
+    student_id: str
+    body: str
+    created_at: str
+
+
+class NoteRequest(BaseModel):
+    body: str
+
+
+class RiskRecord(BaseModel):
+    classId: str
+    className: str
+    student_id: str
+    display_name: str
+    week: int
+    level: str
+    oneAway: str | None = None
+    signals: list[Signal]
+    metrics: RiskMetrics
+    thresholds: RiskThresholds
+    history: list[dict[str, Any]] = Field(default_factory=list)
+    notes: list[Note] = Field(default_factory=list)
+
+
+class Standing(BaseModel):
+    student_id: str
+    display_name: str
+    week: int
+    level: str
+    signals: list[Signal]
+    metrics: RiskMetrics
+    help: str
+
+
+class RefreshResult(BaseModel):
+    lastUpdated: int
+    issues: list[Issue] = Field(default_factory=list)
+    stale: bool
+
+
+class StatusResult(BaseModel):
+    lastUpdated: int | None = None
+    stale: bool = False
+    issues: list[Issue] = Field(default_factory=list)
+    source: SourceInfo

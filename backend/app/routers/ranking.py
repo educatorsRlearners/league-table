@@ -1,207 +1,161 @@
-import json
-from dataclasses import dataclass
+"""Ranking + explanation. Tag: ranking."""
 
-from fastapi import Depends, HTTPException, Query
-from pydantic import TypeAdapter, ValidationError
+from __future__ import annotations
 
-from app.datasource import Snapshot
-from app.deps import AppContext, class_router, current_account, get_ctx
-from app.errors import unprocessable
-from app.models import (
-    Criterion, Error, Explanation, NameMode, Ranking, RankingRow, WeekBreakdown, Weights, WindowMode,
-)
-from app.ranking import (
-    DEFAULT_ROLLING_WEEKS, above_name, gap_to_below, gap_to_next, previous_ranks, rank_table,
-)
-from app.store import StoredAccount
-from app.routers.classes import NOT_FOUND, UNAUTHORIZED, UNAVAILABLE, current_weights, utc
-from app.scoring import normalise_weights
+from typing import Annotated
 
-router = class_router()
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 
-_weights_adapter = TypeAdapter(Weights)
+from app.auth import Caller, get_caller
+from app.deps import ensure_student_in_class, get_ctx, need_class, parse_criteria, parse_weights
+from app.models import Explanation, RankingResponse
+from app.service import DEFAULT_ROLLING_N, build_rows, resolved_weights, window_weeks
+
+router = APIRouter(tags=["ranking"])
 
 
-@dataclass
-class ViewOptions:
-    """The query parameters the ranking and explanation share, as sent."""
-
-    week: str
-    window: WindowMode
-    criteria: list[str] | None
-    weights: dict[str, float] | None
-    name_mode: NameMode
-    rolling_weeks: int = DEFAULT_ROLLING_WEEKS
-
-
-def view_options(
-    week: str = Query(description="ID of the week to rank. With `window=cumulative`, the last week included."),
-    window: WindowMode = Query(default="week", description="`week` scores only that week; `cumulative` averages week 1 through `week`; `rolling` averages the last `rolling_weeks` weeks ending at `week`."),
-    rolling_weeks: int = Query(default=DEFAULT_ROLLING_WEEKS, ge=2, le=16, description="How many weeks a `rolling` window covers."),
-    criteria: str | None = Query(default=None, description="Criterion keys to include, comma-separated. Omitted or empty means all."),
-    weights: str | None = Query(default=None, description="JSON object of criterion key to weight, to preview unsaved weights."),
-    name_mode: NameMode = Query(default="full", description="How names are shown in `display_name`."),
-) -> ViewOptions:
-    keys = [key.strip() for key in criteria.split(",") if key.strip()] if criteria else None
-    return ViewOptions(week, window, keys or None, parse_weights(weights), name_mode, rolling_weeks)
+def _resolve(snap, criteria_keys, weights):
+    keys = criteria_keys if criteria_keys else [c.key for c in snap.criteria]
+    known = {c.key for c in snap.criteria}
+    unknown = [k for k in keys if k not in known]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown criterion: {', '.join(unknown)}")
+    if weights is not None:
+        unknown_w = [k for k in weights if k not in known]
+        if unknown_w:
+            raise HTTPException(status_code=422, detail=f"Unknown criterion: {', '.join(unknown_w)}")
+    return keys, resolved_weights(snap, keys, weights)
 
 
-def parse_weights(raw: str | None) -> dict[str, float] | None:
-    if raw is None:
-        return None
-    message = "Must be a JSON object mapping criterion key to a non-negative number."
-    try:
-        return _weights_adapter.validate_python(json.loads(raw))
-    except (ValueError, ValidationError):
-        raise unprocessable(("query", "weights"), message, raw)
+def _scope(row: dict, caller: Caller) -> dict:
+    public = {
+        "student_id": row["student_id"],
+        "display_name": row["display_name"],
+        "score": row["score"],
+        "rank": row["rank"],
+        "tied": row["tied"],
+        "rank_delta": row.get("rank_delta"),
+        "gap_to_next": row.get("gap_to_next"),
+        "gap_to_below": row.get("gap_to_below"),
+        "missing": row.get("missing", row.get("missingKeys", [])),
+        "is_self": caller.role == "student" and caller.studentId == row["student_id"],
+    }
+    if caller.role == "instructor" or row["student_id"] == caller.studentId:
+        public.update({"raw": row["raw"], "factor": row["factor"],
+                       "weighted_hours": row["weighted_hours"], "capped": row["capped"],
+                       "hours_source": row.get("hours_source")})
+    return public
 
 
-@dataclass
-class View:
-    """What the caller asked for, checked against the class and ready to score."""
-
-    week_id: str
-    window: WindowMode
-    criteria: list[Criterion]
-    weights: dict[str, float]  # selected criteria only, rescaled to total 100
-    name_mode: NameMode
-    rolling_weeks: int
-
-
-def resolve_view(ctx: AppContext, snapshot: Snapshot, options: ViewOptions) -> View:
-    if options.week not in {w.id for w in snapshot.weeks}:
-        raise HTTPException(status_code=404, detail="Unknown week.")
-
-    known = {c.key for c in snapshot.criteria}
-    if options.criteria:
-        unknown = [key for key in options.criteria if key not in known]
-        if unknown:
-            raise unprocessable(("query", "criteria"), f"Unknown criterion: {', '.join(unknown)}", options.criteria)
-        selected = [c for c in snapshot.criteria if c.key in options.criteria]
-    else:
-        selected = list(snapshot.criteria)
-
-    if options.weights is not None:
-        unknown = [key for key in options.weights if key not in known]
-        if unknown:
-            raise unprocessable(("query", "weights"), f"Unknown criterion: {', '.join(unknown)}", options.weights)
-        base = options.weights
-    else:
-        base = current_weights(ctx, snapshot)
-
-    # Criteria not listed get weight 0; only the selected criteria share the 100 points.
-    weights = normalise_weights({c.key: base.get(c.key, 0.0) for c in selected})
-    return View(options.week, options.window, selected, weights, options.name_mode, options.rolling_weeks)
-
-
-@router.get(
-    "/ranking",
-    tags=["Ranking"],
-    operation_id="getRanking",
-    summary="The ranked table for a week or cumulative window",
-    response_model=Ranking,
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE,
-)
-def get_ranking(class_id: str, options: ViewOptions = Depends(view_options), ctx: AppContext = Depends(get_ctx)):
-    snapshot = ctx.service.snapshot(class_id)
-    view = resolve_view(ctx, snapshot, options)
-    adjuster = ctx.adjuster(class_id)
-    rows = rank_table(
-        snapshot, week_id=view.week_id, window=view.window, criteria=view.criteria, weights=view.weights,
-        name_mode=view.name_mode, adjuster=adjuster, rolling_weeks=view.rolling_weeks,
-    )
-    before = previous_ranks(
-        snapshot, week_id=view.week_id, window=view.window, criteria=view.criteria, weights=view.weights,
-        adjuster=adjuster, rolling_weeks=view.rolling_weeks,
-    )
-    return Ranking(
-        class_id=class_id,
-        week_id=view.week_id,
-        window_mode=view.window,
-        rolling_weeks=view.rolling_weeks if view.window == "rolling" else None,
-        criteria_keys=[c.key for c in view.criteria],
-        weights=view.weights,
-        rows=[
-            RankingRow(
-                student_id=row.student_id,
-                display_name=row.display_name,
-                score=row.score,
-                rank=row.rank,
-                tied=row.tied,
-                rank_delta=before[row.student_id] - row.rank if row.student_id in before else None,
-                missing=row.missing_keys,
-                gap_to_next=gap_to_next(rows, i),
-                gap_to_below=gap_to_below(rows, i),
-            )
-            for i, row in enumerate(rows)
-        ],
-        last_updated=utc(snapshot.at),
-        stale=snapshot.stale,
-        issues=snapshot.issues,
-    )
-
-
-@router.get(
-    "/students/{student_id}/explanation",
-    tags=["Ranking"],
-    operation_id="getExplanation",
-    summary="How one student's rank was reached, criterion by criterion",
-    response_model=Explanation,
-    responses=UNAUTHORIZED
-    | UNAVAILABLE
-    | {
-        403: {"model": Error, "description": "A student asked for someone else's breakdown."},
-        404: {"model": Error, "description": "Unknown class or student, or no entries in this window."},
-    },
-)
-def get_explanation(
-    class_id: str,
-    student_id: str,
-    options: ViewOptions = Depends(view_options),
-    account: StoredAccount = Depends(current_account),
-    ctx: AppContext = Depends(get_ctx),
+@router.get("/classes/{classId}/ranking", tags=["ranking"],
+            responses={401: {}, 403: {}})
+def get_ranking(
+    classId: str,
+    week: Annotated[str, Query(description="Week id (e.g. `w5`).")],
+    criteria: Annotated[list[str] | None, Query(description="Criterion keys. Repeat or comma-separated.")] = None,
+    window: Annotated[str, Query(description="week, rolling or cumulative.")] = "week",
+    rollingN: Annotated[int, Query(description="Rolling window size.", ge=1, le=16)] = DEFAULT_ROLLING_N,
+    weights: Annotated[str | None, Query(description="Weight override map (serialised JSON object).")] = None,
+    nameMode: Annotated[str, Query(description="full, initials or nickname.")] = "full",
+    caller: Caller = Depends(get_caller), ctx=Depends(get_ctx),
 ):
-    # Checked before anything is read, so a student learns nothing about other students' ids.
-    if account.role == "student" and account.student_id != student_id:
+    snap = need_class(ctx, classId)
+    ensure_student_in_class(ctx, caller, classId)
+    if window not in ("week", "rolling", "cumulative"):
+        raise HTTPException(status_code=422, detail="window must be week, rolling or cumulative.")
+    if nameMode not in ("full", "initials", "nickname"):
+        raise HTTPException(status_code=422, detail="nameMode must be full, initials or nickname.")
+    criteria_keys = parse_criteria(criteria)
+    weights_map = parse_weights(weights)
+    keys, w = _resolve(snap, criteria_keys, weights_map)
+    if week not in {ww.id for ww in snap.weeks}:
+        return JSONResponse({"classId": classId, "weekId": week, "windowMode": window, "rollingN": rollingN,
+                "criteriaKeys": keys, "weights": w, "rows": [], "weekCount": 0,
+                "lastUpdated": int(snap.at * 1000), "stale": snap.stale,
+                "issues": [i.model_dump() for i in snap.issues]})
+    rows = build_rows(snap, week_id=week, window_mode=window, rolling_n=rollingN,
+                      weights=w, criteria_keys=keys, name_mode=nameMode)
+    idx = next(i for i, ww in enumerate(snap.weeks) if ww.id == week)
+    prev_map = {}
+    if idx > 0:
+        prev = build_rows(snap, week_id=snap.weeks[idx - 1].id, window_mode=window,
+                          rolling_n=rollingN, weights=w, criteria_keys=keys, name_mode=nameMode)
+        prev_map = {r["student_id"]: r["rank"] for r in prev}
+    decorated = []
+    for r in rows:
+        scoped = _scope({**r, "rank_delta": (prev_map[r["student_id"]] - r["rank"]
+                                             if r["student_id"] in prev_map else None),
+                         "missing": r.get("missingKeys", [])}, caller)
+        decorated.append(scoped)
+    return JSONResponse({"classId": classId, "weekId": week, "windowMode": window, "rollingN": rollingN,
+            "criteriaKeys": keys, "weights": w, "rows": decorated,
+            "weekCount": len(window_weeks(snap.weeks, week, window, rollingN)),
+            "lastUpdated": int(snap.at * 1000), "stale": snap.stale,
+            "issues": [i.model_dump() for i in snap.issues]})
+
+
+@router.get("/classes/{classId}/students/{studentId}/explanation", response_model=Explanation,
+            tags=["students"], responses={401: {}, 403: {}, 404: {}})
+def get_explanation(
+    classId: str,
+    studentId: str,
+    week: Annotated[str, Query(description="Week id.")],
+    criteria: Annotated[list[str] | None, Query(description="Criterion keys.")] = None,
+    window: Annotated[str, Query(description="week, rolling or cumulative.")] = "week",
+    rollingN: Annotated[int, Query(description="Rolling window size.", ge=1, le=16)] = DEFAULT_ROLLING_N,
+    weights: Annotated[str | None, Query(description="Weight override map (serialised JSON object).")] = None,
+    nameMode: Annotated[str, Query(description="full, initials or nickname.")] = "full",
+    caller: Caller = Depends(get_caller), ctx=Depends(get_ctx),
+):
+    if caller.role == "student" and caller.studentId != studentId:
         raise HTTPException(status_code=403, detail="A student may only open their own breakdown.")
-
-    snapshot = ctx.service.snapshot(class_id)
-    view = resolve_view(ctx, snapshot, options)
-    rows = rank_table(
-        snapshot, week_id=view.week_id, window=view.window, criteria=view.criteria, weights=view.weights,
-        name_mode=view.name_mode, adjuster=ctx.adjuster(class_id), rolling_weeks=view.rolling_weeks,
-    )
-    index = next((i for i, row in enumerate(rows) if row.student_id == student_id), None)
-    if index is None:
+    snap = need_class(ctx, classId)
+    if window not in ("week", "rolling", "cumulative"):
+        raise HTTPException(status_code=422, detail="window must be week, rolling or cumulative.")
+    if nameMode not in ("full", "initials", "nickname"):
+        raise HTTPException(status_code=422, detail="nameMode must be full, initials or nickname.")
+    criteria_keys = parse_criteria(criteria)
+    weights_map = parse_weights(weights)
+    keys, w = _resolve(snap, criteria_keys, weights_map)
+    rows = build_rows(snap, week_id=week, window_mode=window, rolling_n=rollingN,
+                      weights=w, criteria_keys=keys, name_mode=nameMode)
+    i = next((n for n, r in enumerate(rows) if r["student_id"] == studentId), None)
+    if i is None:
         raise HTTPException(status_code=404, detail="No entries for that student in this window.")
-
-    row = rows[index]
-    single = len(row.weeks) == 1
-    only = row.weeks[0].adjustment
-    return Explanation(
-        student_id=student_id,
-        display_name=row.display_name,
-        rank=row.rank,
-        tied=row.tied,
-        score=row.score,
-        raw_score=row.raw,
-        factor=only.factor if single else None,
-        weighted_hours=only.weighted_total if single else None,
-        hours=only.weighted if single else None,
-        capped=row.capped,
-        parts=row.parts,
-        weeks=[
-            WeekBreakdown(
-                week_id=w.week.id, week_number=w.week.week_number, raw_score=w.raw,
-                weighted_hours=w.adjustment.weighted_total, factor=w.adjustment.factor,
-                adjusted_score=w.adjustment.adjusted, capped=w.adjustment.capped,
-            )
-            for w in row.weeks
-        ],
-        gap_to_next=gap_to_next(rows, index),
-        gap_to_below=gap_to_below(rows, index),
-        above=above_name(rows, index),
-        week_id=view.week_id,
-        window_mode=view.window,
-        rolling_weeks=view.rolling_weeks if view.window == "rolling" else None,
-    )
+    row = rows[i]
+    focus = row["weeks"][-1]
+    focus_parts = [{
+        "key": p["key"], "label": p["label"], "earned": p["earned"], "possible": p["possible"],
+        "normalised": p["normalised"], "weight": p["weight"],
+        "effectiveWeight": p["effectiveWeight"], "points": p["points"], "missing": p["missing"],
+    } for p in focus["parts"]]
+    return {
+        "student_id": studentId,
+        "display_name": row["display_name"],
+        "rank": row["rank"],
+        "tied": row["tied"],
+        "score": row["score"],
+        "raw": row["raw"],
+        "focusRaw": focus["raw"],
+        "focusAdjusted": focus["adjusted"],
+        "focusCapped": focus["capped"],
+        "factor": row["factor"],
+        "weighted_hours": row["weighted_hours"],
+        "capped": row["capped"],
+        "hours": focus["hours"],
+        "hours_source": focus["hours_source"],
+        "typeWeights": snap.settings.get("typeWeights", {}),
+        "rate": snap.settings.get("rate", 0.01),
+        "cap": snap.settings.get("cap", 1.25),
+        "focusWeek": focus["week_number"],
+        "parts": focus_parts,
+        "weeks": [{"week_number": r["week_number"], "raw": r["raw"],
+                   "weighted_hours": r["weighted_hours"], "factor": r["factor"],
+                   "adjusted": r["adjusted"], "capped": r["capped"]} for r in row["weeks"]],
+        "gap_to_next": row.get("gap_to_next"),
+        "gap_to_below": row.get("gap_to_below"),
+        "above": next((r["display_name"] for r in reversed(rows[:i]) if r["rank"] < row["rank"]), None),
+        "weekId": week,
+        "windowMode": window,
+    }

@@ -1,1721 +1,1025 @@
 openapi: 3.1.0
 info:
-  title: League Table API
-  version: 0.2.0
-  license:
-    name: MIT
-    identifier: MIT
+  title: League Table Backend (as expected by frontend/services/api.js)
+  version: 1.0.0
   description: |
-    The backend the League Table frontend (`frontend/services/httpApi.js`) talks to.
+    Backend contract derived exclusively from the frontend API client
+    (`frontend/services/api.js`, `mockSource.js`, `scoring.js`, `risk.js`,
+    `tests.js`, and callers in `frontend/League Table.dc.html`).
 
-    Scoring, the commitments adjustment, ranking and tie-breaking all run on the server;
-    the browser only renders the result. A student's raw score is weighted by criterion,
-    multiplied by a capped factor from the weekly hours they report and approved by the
-    instructor, and clipped at 100. Classmates see only the final adjusted score and rank.
+    Note on `.claude/settings.json`: it only enables editor plugins
+    (`typescript-lsp`, `code-simplifier`) — there are no extra data-source
+    tools to consult, so this spec is grounded in the files above.
 
-    **Conventions**
-    - Every field, query parameter and path parameter is `snake_case`, matching the
-      data model in `_docs/spec.md` and FastAPI's defaults. The frontend's services
-      layer translates its own JS option names (`weekId`, `windowMode`, ...) at the
-      HTTP boundary.
-    - Timestamps (`last_updated`, `submitted_at`, ...) are ISO 8601 UTC strings, or
-      `null` before any successful read.
-    - Errors carry a human-readable `detail` message and an HTTP status; the client
-      shows the message to the user.
-
-    **Authentication**
-    Every endpoint except `POST /auth/login` and `GET /demo/accounts` needs a session
-    cookie. Roles are enforced by the server, never the browser. An `instructor` can do
-    everything; a `student` may read the full ranking but only their own breakdown and
-    commitments, and may not change settings or approve anything. Sign-in is by access
-    code (students) or passcode (instructor) and sits behind an `IdentityProvider`, so
-    university sign-in can replace it later.
+    Conventions used by the frontend:
+    - `createApi({ source, store })` fans out reads to a DataSource
+      (students/criteria/weeks/entries) and an AppStore (settings,
+      commitments, risk, notes). The HTTP surface below is what a FastAPI
+      service must expose to replace it.
+    - Every method sends a `caller` object (`{ role: 'instructor' }` or
+      `{ role: 'student', studentId, classId }`). Over HTTP this maps to the
+      Bearer JWT identity; role/ownership rules are documented per endpoint.
+    - Scores: raw 0-100 weighted sum (missing criteria excluded + rescaled),
+      factor `min(1 + rate*H, cap)`, adjusted `min(100, raw*factor)`.
+      Multi-week windows average weekly adjusted scores.
+    - Ranks are competition ranks (1,1,3), ordered by adjusted, then raw,
+      then configured tie-breakers.
 servers:
-  - url: /api
-    description: Same origin as the frontend
-
-tags:
-  - name: Auth
-    description: Sign-in and session.
-  - name: Class
-    description: Class metadata and the controls' data (weeks, criteria, weights).
-  - name: Ranking
-    description: The ranked table and per-student explanations.
-  - name: Commitments
-    description: Weekly hours a student reports, and the instructor's approvals, reversals and change log.
-  - name: Data
-    description: Cache status and refresh of the read-only data source.
-
+  - url: http://localhost:8000
 security:
-  - sessionCookie: []
-
+  - bearerAuth: []
+tags:
+  - name: classes
+  - name: ranking
+  - name: students
+  - name: commitments
+  - name: risk
+  - name: settings
+  - name: cache
 paths:
-  /auth/login:
-    post:
-      tags: [Auth]
-      operationId: login
-      summary: Sign in with an access code or the instructor passcode
-      description: |
-        A student's personal access code or the instructor's passcode, exchanged for a
-        session. The service stores only a hash of each student's code. With demo data,
-        the codes from `GET /demo/accounts` work here. A wrong code returns 401.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: Signed in. The session cookie is set on the response.
-          headers:
-            Set-Cookie:
-              description: HttpOnly session cookie.
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Account'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /auth/me:
+  /classes:
     get:
-      tags: [Auth]
-      operationId: getCurrentAccount
-      summary: The signed-in account
-      description: Lets the frontend learn the caller's role and, for students, their `student_id`.
-      responses:
-        '200':
-          description: The current account.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Account'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/logout:
-    post:
-      tags: [Auth]
-      operationId: logout
-      summary: End the session
-      responses:
-        '204':
-          description: Session ended and cookie cleared.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /demo/accounts:
-    get:
-      tags: [Auth]
-      operationId: listDemoAccounts
-      summary: Demo accounts and their codes (demo data only)
+      tags: [classes]
+      summary: List the instructor's classes
       description: |
-        Lists the seeded demo instructor and students so sign-in and role rules can be
-        tried without real people, and includes their access codes for
-        `POST /auth/login`. Exists only while the toy adapter is the active data
-        source; any other source returns 404. It is never part of the class
-        bootstrap.
-      security: []
+        Frontend: `listClasses(instructorId = 'i1')`.
+        Auth: instructor Bearer JWT. The `instructor_id` query defaults to the
+        caller's own id server-side; passing another instructor's id is forbidden.
+      parameters:
+        - $ref: '#/components/parameters/InstructorIdQuery'
       responses:
         '200':
-          description: Demo accounts.
+          description: Classes taught by the instructor
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/DemoAccount'
-        '404':
-          description: The active data source is not demo data.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /classes/{class_id}:
-    get:
-      tags: [Class]
-      operationId: getClass
-      summary: Everything the page needs to start
-      description: |
-        The frontend's `getBootstrap`. Returns the class, its weeks and criteria, the
-        saved weights (or each criterion's `default_weight` if none are saved), and
-        the data-source status, in one call.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: Class bootstrap.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClassBootstrap'
-        '401':
+                  $ref: '#/components/schemas/Class'
+        '401': 
           $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/weeks:
-    get:
-      tags: [Class]
-      operationId: listWeeks
-      summary: Weeks of the term, in order
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: Weeks, oldest first.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Week'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/criteria:
-    get:
-      tags: [Class]
-      operationId: listCriteria
-      summary: Ranking criteria, in display order
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: Criteria ordered by `sort_order`.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Criterion'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/settings:
-    get:
-      tags: [Class]
-      operationId: getSettings
-      summary: Criterion weights and adjustment parameters (instructor only)
-      description: Weights fall back to each criterion's `default_weight` when nothing has been saved.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: The current settings.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Settings'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
+        '403': 
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-    put:
-      tags: [Class]
-      operationId: saveSettings
-      summary: Save criterion weights and adjustment parameters (instructor only)
+
+  /classes/{classId}/bootstrap:
+    get:
+      tags: [classes]
+      summary: Bootstrap the table view (weeks + criteria + settings)
       description: |
-        Every field is optional; what is left out keeps its value. Criterion weights are
-        rescaled to total 100, preserving proportions, and criteria left out are stored as
-        zero. Adjustment fields are merged into the current ones and range-checked. Rankings
-        are computed on the fly, so a change re-ranks every week. Adjustment changes are
-        written to the change log.
+        Frontend: `getBootstrap(classId = 'c1')`. Aggregates what api.js
+        header describes as `GET /classes/{id}/weeks + /criteria + /settings`
+        plus accounts, source label, latest-complete-week, and data-check issues.
+        Auth: any authenticated user (student must belong to the class).
       parameters:
         - $ref: '#/components/parameters/ClassId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SaveSettingsRequest'
       responses:
         '200':
-          description: The stored settings.
+          description: Bootstrap payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Settings'
-        '401':
+                $ref: '#/components/schemas/Bootstrap'
+        '401': 
           $ref: '#/components/responses/Unauthorized'
-        '403':
+        '403': 
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/explainer:
-    get:
-      tags: [Class]
-      operationId: getExplainer
-      summary: The scoring formula and its current parameters
-      description: |
-        The same for everyone: the formula, the current type weights, rate and cap, a
-        factor table and worked examples. It holds no one's hours.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: The explainer.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Explainer'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
+        '404': 
           $ref: '#/components/responses/NotFound'
 
-  /classes/{class_id}/ranking:
+  /classes/{classId}/ranking:
     get:
-      tags: [Ranking]
-      operationId: getRanking
-      summary: The ranked table for a week or cumulative window
+      tags: [ranking]
+      summary: Fully ranked table for a week/window
       description: |
-        Scores every student with entries in the window and ranks them by adjusted score.
-        Each week is scored on its own: criteria are weighted into a raw score, multiplied
-        by that week's commitments factor and clipped at 100. A window of several weeks
-        averages the weekly adjusted scores, and a week where a student has no entries is
-        left out of their average. Students level on adjusted score are ordered by raw
-        score, then by the tie-breaker criteria (attendance, then homework); any still level
-        share a rank (1, 1, 3). A criterion a student has no data for is left out and the
-        remaining weights are rescaled, so missing data is never scored as zero.
-
-        Rows carry the adjusted score and rank only: never another student's raw score,
-        factor or hours.
-
-        `rank_delta` compares against the previous week's table with the same
-        criteria, weights and window mode, and is `null` for the first week or when
-        the student was not ranked then.
-
-        Any signed-in role may call this. `weights` lets the instructor preview weights
-        before saving them; when omitted, the saved weights are used.
+        Frontend: `getRanking({ classId, weekId, windowMode, rollingN,
+        criteriaKeys, weights, nameMode, caller })`.
+        Auth: instructor sees full rows (raw/factor/hours); a student caller
+        receives scoped rows (adjusted score + rank only, except own row).
+        Student requesting a class that is not theirs -> 403.
+        Unknown/empty week -> 200 with `rows: []`.
       parameters:
         - $ref: '#/components/parameters/ClassId'
-        - $ref: '#/components/parameters/Week'
-        - $ref: '#/components/parameters/Window'
-        - $ref: '#/components/parameters/RollingWeeks'
-        - $ref: '#/components/parameters/Criteria'
-        - $ref: '#/components/parameters/Weights'
-        - $ref: '#/components/parameters/NameMode'
-      responses:
-        '200':
-          description: The ranking, best first.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Ranking'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/students/{student_id}/explanation:
-    get:
-      tags: [Ranking]
-      operationId: getExplanation
-      summary: How one student's rank was reached, criterion by criterion
-      description: |
-        The instructor may open any student. A student may open only their own; asking
-        for another student's breakdown returns 403 regardless of what the client
-        sends. Accepts the same window, criteria, weights and name mode as the
-        ranking so the breakdown always matches the table being viewed.
-
-        Shows the criteria (which add up to the raw score), the weighted hours by type,
-        the factor, the adjusted score, whether it was clipped at 100 and the gap to the
-        next rank. For a window of several weeks, `weeks` lists each week and the scores
-        are means.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-        - name: student_id
-          in: path
+        - name: week
+          in: query
           required: true
-          schema:
-            type: string
-          example: s01
-        - $ref: '#/components/parameters/Week'
-        - $ref: '#/components/parameters/Window'
-        - $ref: '#/components/parameters/RollingWeeks'
-        - $ref: '#/components/parameters/Criteria'
-        - $ref: '#/components/parameters/Weights'
-        - $ref: '#/components/parameters/NameMode'
+          description: Week id (e.g. `w5`). Matches `weekId` param.
+          schema: { type: string, example: w5 }
+        - name: criteria
+          in: query
+          required: false
+          description: Criterion keys. Repeat (`?criteria=a&criteria=b`) or comma-separated. Defaults to all.
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: window
+          in: query
+          required: false
+          schema: { type: string, enum: [week, rolling, cumulative], default: week }
+        - name: rollingN
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 16, default: 4 }
+        - name: weights
+          in: query
+          required: false
+          description: Weight override map (serialised JSON object). Rescaled to total 100 server-side.
+          schema: { type: object, additionalProperties: { type: number } }
+        - name: nameMode
+          in: query
+          required: false
+          schema: { type: string, enum: [full, initials, nickname], default: full }
       responses:
         '200':
-          description: The breakdown.
+          description: Ranked rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingResponse'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Student asked for another class
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/students/{studentId}/explanation:
+    get:
+      tags: [students]
+      summary: Score breakdown for one student in a window
+      description: |
+        Frontend: `getExplanation({ classId, studentId, weekId, windowMode,
+        rollingN, criteriaKeys, weights, nameMode, caller })`.
+        Auth: instructor any student; student only own `studentId` -> else 403.
+        `parts` always describe the focus (latest) week; `weeks` carries the
+        per-week raw/hours/factor/adjusted series. 404 when the student has no
+        entries in the window.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - $ref: '#/components/parameters/StudentId'
+        - name: week
+          in: query
+          required: true
+          schema: { type: string }
+        - name: criteria
+          in: query
+          required: false
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: window
+          in: query
+          required: false
+          schema: { type: string, enum: [week, rolling, cumulative], default: week }
+        - name: rollingN
+          in: query
+          required: false
+          schema: { type: integer, default: 4 }
+        - name: weights
+          in: query
+          required: false
+          schema: { type: object, additionalProperties: { type: number } }
+        - name: nameMode
+          in: query
+          required: false
+          schema: { type: string, enum: [full, initials, nickname], default: full }
+      responses:
+        '200':
+          description: Explanation payload
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Explanation'
-        '401':
+        '401': 
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: Unknown class or student, or the student has no entries in this window.
+          description: Student asked for another student's breakdown
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
+              schema: 
+          $ref: '#/components/schemas/Error'
+        '404':
+          description: No entries for that student in this window
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
 
-  /classes/{class_id}/status:
+  /classes/{classId}/explainer:
     get:
-      tags: [Data]
-      operationId: getStatus
-      summary: Data freshness and validation issues
+      tags: [classes]
+      summary: Formula and current values, no personal data
       description: |
-        Read from the server's cache; never triggers a fetch from the data source.
-        `last_updated` is `null` before the first successful read.
+        Frontend: `getExplainer(classId)`. Returns typeWeights/rate/cap, a
+        factor table for hours [0,10,20,25], and the worked example
+        (raw 80, 12 work + 6 childcare -> 94.4). Must never mention students.
+        Auth: any authenticated user.
       parameters:
         - $ref: '#/components/parameters/ClassId'
       responses:
         '200':
-          description: Current status.
+          description: Explainer payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
-        '401':
+                $ref: '#/components/schemas/Explainer'
+        '401': 
           $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /classes/{class_id}/refresh:
-    post:
-      tags: [Data]
-      operationId: refresh
-      summary: Re-read the data source now (instructor only)
-      description: |
-        Bypasses the server's cache (60 s TTL). Rate limited to one call per 10
-        seconds; a call inside the cooldown returns 429 with a message such as
-        "Please wait 7s before refreshing again." If the source fails but a previous
-        snapshot exists, the call succeeds with `stale: true`.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: Refreshed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RefreshResult'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          description: Refreshed too recently.
-          headers:
-            Retry-After:
-              description: Seconds until the next refresh is allowed.
-              schema:
-                type: integer
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
 
   /me/commitments:
     get:
-      tags: [Commitments]
-      operationId: getMyCommitments
-      summary: Your baseline, weekly updates and factor by week (student only)
-      responses:
-        '200':
-          description: The signed-in student's own commitments.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MyCommitments'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /me/commitments/baseline:
-    put:
-      tags: [Commitments]
-      operationId: saveMyBaseline
-      summary: Submit a semester baseline for approval (student only)
+      tags: [commitments]
+      summary: Own hours, status and factor by week
       description: |
-        One set of weekly hours for the whole semester. It starts as `pending` and has no
-        effect until the instructor approves it. Submitting again while one is pending
-        replaces it; submitting after an approval is a baseline change that also waits for
-        approval, and the old baseline stays in force meanwhile. Hours go in half-hour steps,
-        at most 80 per type and 120 in total.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HoursRequest'
-      responses:
-        '200':
-          description: The pending baseline.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Baseline'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /me/commitments/weeks/{week_number}:
-    put:
-      tags: [Commitments]
-      operationId: saveMyWeek
-      summary: Set your hours for one week (student only)
-      description: |
-        Replaces the baseline hours for that week. Only the current and previous week can
-        be edited, judged by the Weeks calendar and the server's clock; any other week is
-        refused with 403. The update takes effect at once and is logged, but only counts
-        once an approved baseline covers that week. A large difference from the baseline is
-        flagged in the change log.
+        Frontend: `getCommitments({ classId, studentId, caller })`.
+        Auth: instructor any student; student only own `studentId` -> else 403.
       parameters:
-        - $ref: '#/components/parameters/WeekNumber'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HoursRequest'
-      responses:
-        '200':
-          description: The weekly update.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WeeklyUpdate'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-    delete:
-      tags: [Commitments]
-      operationId: resetMyWeek
-      summary: Reset one week to your baseline (student only)
-      description: Follows the same edit window. Resetting a week that already follows the baseline does nothing.
-      parameters:
-        - $ref: '#/components/parameters/WeekNumber'
-      responses:
-        '204':
-          description: The week follows the baseline.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /me/commitments/preview:
-    post:
-      tags: [Commitments]
-      operationId: previewMyAdjustment
-      summary: Your factor and adjusted score for hours you have not saved (student only)
-      description: |
-        For the live preview as a student types. Shows what the hours would give once an
-        approved baseline covers the week, using the current settings. Nothing is stored.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PreviewRequest'
-      responses:
-        '200':
-          description: The preview.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Preview'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /classes/{class_id}/approvals:
-    get:
-      tags: [Commitments]
-      operationId: listApprovals
-      summary: Baselines waiting for a decision (instructor only)
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-      responses:
-        '200':
-          description: Pending baselines and baseline changes, with hours by type.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Approvals'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/approvals/{approval_id}:
-    post:
-      tags: [Commitments]
-      operationId: decideApproval
-      summary: Approve a baseline from a week, or reject it (instructor only)
-      description: |
-        Approving makes the baseline count from `effective_week`, by default the current
-        week, so earlier weeks keep the factor they had. A baseline it replaces stays in
-        force before that week. Rejecting leaves the factor as it was.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-        - name: approval_id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: b3
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DecisionRequest'
-      responses:
-        '200':
-          description: The decided baseline.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Baseline'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: That baseline has already been decided.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/students/{student_id}/weeks/{week_number}/reverse:
-    post:
-      tags: [Commitments]
-      operationId: reverseWeeklyUpdate
-      summary: Reverse a student's weekly update (instructor only)
-      description: |
-        Restores the value before the update, whether an earlier update or the baseline,
-        and logs the reversal. The student can enter that week again.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-        - name: student_id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: s01
-        - $ref: '#/components/parameters/WeekNumber'
-      responses:
-        '204':
-          description: Reversed.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: Unknown class, student or week, or no weekly update to reverse.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
-
-  /classes/{class_id}/change-log:
-    get:
-      tags: [Commitments]
-      operationId: getChangeLog
-      summary: Every commitment change, newest first (instructor only)
-      description: |
-        Every submission, approval, rejection, weekly update, reset and reversal, and every
-        change to the adjustment settings, with who, when, and the old and new values.
-      parameters:
-        - $ref: '#/components/parameters/ClassId'
-        - name: student_id
+        - name: classId
           in: query
-          description: Only this student's entries.
-          schema:
-            type: string
-        - name: limit
+          required: true
+          schema: { type: string }
+        - name: studentId
           in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 1000
-            default: 200
+          required: true
+          schema: { type: string }
       responses:
         '200':
-          description: Log entries.
+          description: Commitments payload
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/LogEntry'
-        '401':
+                $ref: '#/components/schemas/Commitments'
+        '401': 
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/SourceUnavailable'
+          description: Student read another student's hours
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
 
-  /classes/{class_id}/commitments:
+  /instructor/digest:
     get:
-      tags: [Commitments]
-      operationId: listStudentCommitments
-      summary: Every student's baseline status, hours and factor (instructor only)
+      tags: [risk]
+      summary: Cross-class risk digest
+      description: |
+        Frontend: `getDigest(instructorId = 'i1')`.
+        Auth: instructor-only. Covers every class taught. Each class group
+        carries evaluation week, `comparedWith` (stored snapshot or prior
+        week), and only rows with status new|still|cleared (never `quiet`),
+        sorted by level severity. First visit `comparedWithStored=false`.
+      parameters:
+        - name: instructorId
+          in: query
+          required: false
+          schema: { type: string, default: i1 }
+      responses:
+        '200':
+          description: Digest payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Digest'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403': 
+          $ref: '#/components/responses/Forbidden'
+
+  /classes/{classId}/students/{studentId}/risk:
+    get:
+      tags: [risk]
+      summary: Risk record (instructor) / own standing source (student)
+      description: |
+        Frontend: `getRiskRecord({ classId, studentId, caller })`.
+        Auth: instructor gets everything incl. `notes`; student only own record
+        and receives `notes: []`. Other student's record -> 403. Unknown
+        student -> 404. Includes 5 signals (on or off) with summaries+evidence,
+        metrics, thresholds in force, and per-week level history.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Risk record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskRecord'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Student opened another student's standing
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+        '404':
+          description: No such student in this class
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/students/{studentId}/notes:
+    post:
+      tags: [risk]
+      summary: Log outreach (instructor-private note)
+      description: |
+        Frontend: `addNote({ classId, studentId, body, caller })`.
+        Auth: instructor-only -> student 403. Empty body -> 400. Body is
+        trimmed server-side. Notes never travel to a student.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - $ref: '#/components/parameters/StudentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, example: 'Called home 22 Sep' }
+      responses:
+        '201':
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          description: Empty note body
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Only an instructor can log outreach
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/risk-settings:
+    get:
+      tags: [risk]
+      summary: Get per-class risk thresholds
+      description: |
+        Frontend: `getRiskSettings(classId)`. Per-class; never crosses over.
+        Auth: instructor.
       parameters:
         - $ref: '#/components/parameters/ClassId'
       responses:
         '200':
-          description: One row per student.
+          description: Risk settings
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StudentCommitments'
-        '401':
+                $ref: '#/components/schemas/RiskSettings'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403': 
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [risk]
+      summary: Save per-class risk thresholds
+      description: |
+        Frontend: `saveRiskSettings(classId, patch)`. Partial `{ thresholds,
+        active }` merged server-side. Recomputes going forward; stored
+        snapshots keep levels in effect at the time (history not rewritten).
+        Auth: instructor.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskSettingsPatch'
+      responses:
+        '200':
+          description: Saved risk settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskSettings'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403': 
+          $ref: '#/components/responses/Forbidden'
+
+  /me/standing:
+    get:
+      tags: [students]
+      summary: Student's own level and signals, nothing else
+      description: |
+        Frontend: `getMyStanding({ classId, studentId, caller })`.
+        Auth: student own only -> else 403. Lists only signals that are on,
+        plus `help` pointer. Contains no `notes`, no rank/classmate
+        comparison, no other student data.
+      parameters:
+        - name: classId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: studentId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Own standing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standing'
+        '401': 
           $ref: '#/components/responses/Unauthorized'
         '403':
+          description: Student asked for another student's standing
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/settings:
+    put:
+      tags: [settings]
+      summary: Save weights and adjustment parameters
+      description: |
+        Frontend: `saveSettings(classId, patch)`. `{ weights, typeWeights,
+        rate, cap, tieBreakers? }`; weights normalised to total 100
+        server-side and become the new default. Per-class. Auth: instructor.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeagueSettingsPatch'
+      responses:
+        '200':
+          description: Saved league settings (incl. normalised weights)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeagueSettings'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '403': 
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+
+  /classes/{classId}/refresh:
+    post:
+      tags: [cache]
+      summary: Force a fresh read (rate-limited)
+      description: |
+        Frontend: `refresh(classId)`. Local cooldown 10s -> 429 with
+        `Retry-After`-style message. On source failure serves last good
+        snapshot with `stale: true` (or 503 when nothing cached).
+        Auth: authenticated (instructor in the UI).
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Refresh result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lastUpdated, issues, stale]
+                properties:
+                  lastUpdated: { type: integer, description: Epoch ms }
+                  issues: { type: array, items: { $ref: '#/components/schemas/Issue' } }
+                  stale: { type: boolean }
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Refresh rate limit (one per 10s)
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
         '503':
-          $ref: '#/components/responses/SourceUnavailable'
+          description: Source unreachable and nothing cached
+          content:
+            application/json:
+              schema: 
+          $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/status:
+    get:
+      tags: [cache]
+      summary: Cache status ("last updated")
+      description: |
+        Frontend: `getStatus(classId)` (+ `describeSource()`).
+        Returns lastUpdated epoch ms (null when never loaded), stale flag,
+        data-check issues, and source label. Auth: authenticated.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Status payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lastUpdated, stale, issues, source]
+                properties:
+                  lastUpdated: { type: integer, nullable: true }
+                  stale: { type: boolean }
+                  issues: { type: array, items: { $ref: '#/components/schemas/Issue' } }
+                  source: { $ref: '#/components/schemas/SourceInfo' }
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
 
 components:
   securitySchemes:
-    sessionCookie:
-      type: apiKey
-      in: cookie
-      name: session
-      description: HttpOnly session cookie set by `/auth/login`.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT identifying the caller. Server derives role (instructor/student),
+        studentId, and class membership; this replaces the frontend `caller`
+        object. Ownership rules (own row/breakdown/commitments/standing only)
+        are enforced with 403.
 
   parameters:
     ClassId:
-      name: class_id
+      name: classId
       in: path
       required: true
-      schema:
-        type: string
-      example: c1
-    Week:
-      name: week
-      in: query
-      required: true
-      description: ID of the week to rank. With `window=cumulative`, this is the last week included.
-      schema:
-        type: string
-      example: w5
-    Window:
-      name: window
-      in: query
-      description: |
-        `week` scores only that week. `cumulative` averages the weekly adjusted scores from
-        week 1 through `week`, and `rolling` averages the last `rolling_weeks` weeks ending
-        at `week`.
-      schema:
-        type: string
-        enum: [week, cumulative, rolling]
-        default: week
-    RollingWeeks:
-      name: rolling_weeks
-      in: query
-      description: How many weeks a `rolling` window covers.
-      schema:
-        type: integer
-        minimum: 2
-        maximum: 16
-        default: 4
-    WeekNumber:
-      name: week_number
+      schema: { type: string, example: c1 }
+    StudentId:
+      name: studentId
       in: path
       required: true
-      description: The week's number in the term (1 to 16), not its ID.
-      schema:
-        type: integer
-      example: 5
-    Criteria:
-      name: criteria
+      schema: { type: string, example: s01 }
+    InstructorIdQuery:
+      name: instructor_id
       in: query
-      description: Criterion keys to include, comma-separated. Omitted or empty means all criteria.
-      style: form
-      explode: false
-      schema:
-        type: array
-        items:
-          type: string
-      example: [homework, attendance]
-    Weights:
-      name: weights
-      in: query
-      description: |
-        JSON-encoded object mapping criterion key to weight, for previewing unsaved
-        weights. Criteria not listed get weight 0. The server rescales the weights
-        of the selected criteria to total 100. Omitted means use the saved weights.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Weights'
-          example: { homework: 40, attendance: 30, participation: 30 }
-    NameMode:
-      name: name_mode
-      in: query
-      description: |
-        How names are shown in `display_name`. `nickname` falls back to the full
-        name when a student has none; `initials` shows "First L.".
-      schema:
-        type: string
-        enum: [full, nickname, initials]
-        default: full
+      required: false
+      schema: { type: string, default: i1 }
 
   responses:
     Unauthorized:
-      description: No valid session.
+      description: Missing/invalid Bearer token
       content:
         application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+          schema: 
+          $ref: '#/components/schemas/Error'
     Forbidden:
-      description: The caller's role does not allow this.
+      description: Authenticated but not allowed (role/class ownership)
       content:
         application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example:
-            detail: A student may only open their own breakdown.
+          schema: 
+          $ref: '#/components/schemas/Error'
     NotFound:
-      description: Unknown class.
+      description: Unknown class/week/student
       content:
         application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    ValidationError:
-      description: |
-        A parameter or body field is missing or malformed. Uses FastAPI's default 422
-        body, where `detail` is a list of per-field problems.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ValidationError'
-    SourceUnavailable:
-      description: |
-        The data source did not respond and there is no earlier snapshot to serve.
-        When a snapshot exists the server serves it with `stale: true` instead.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example:
-            detail: The data source did not respond.
+          schema: 
+          $ref: '#/components/schemas/Error'
 
   schemas:
     Error:
       type: object
-      required: [detail]
+      required: [message]
       properties:
-        detail:
-          type: string
-          description: Message safe to show to the user.
-
-    ValidationError:
-      type: object
-      required: [detail]
-      properties:
-        detail:
-          type: array
-          items:
-            type: object
-            required: [loc, msg, type]
-            properties:
-              loc:
-                type: array
-                description: Where the problem is, e.g. `["query", "week"]`.
-                items:
-                  type: [string, integer]
-              msg:
-                type: string
-              type:
-                type: string
-
-    Role:
-      type: string
-      enum: [instructor, student]
-
-    Account:
-      type: object
-      required: [id, role, student_id, external_id]
-      properties:
-        id:
-          type: string
-          example: a2
-        role:
-          $ref: '#/components/schemas/Role'
-        student_id:
-          type: [string, 'null']
-          description: The student this account belongs to; `null` for the instructor.
-          example: s01
-        external_id:
-          type: string
-          description: ID from an outside identity system, so sign-in can be matched later.
-          example: demo:amara
-
-    DemoAccount:
-      description: |
-        A seeded demo account with its access code. These codes are public by design and
-        must never be accepted by a deployment using real student data.
-      allOf:
-        - $ref: '#/components/schemas/Account'
-        - type: object
-          required: [name, code]
-          properties:
-            name:
-              type: string
-              example: Amara Okonkwo
-            code:
-              type: string
-              example: demo-amara
-
-    LoginRequest:
-      type: object
-      required: [code]
-      properties:
-        code:
-          type: string
-          format: password
-          minLength: 1
-          description: A student's access code, or the instructor's passcode.
+        message: { type: string }
+        status: { type: integer }
 
     Class:
       type: object
-      required: [id, external_id, name, term_id]
+      required: [id, instructor_id, name, term_id]
       properties:
-        id:
-          type: string
-          example: c1
-        external_id:
-          type: string
-          example: demo:phys101-b
-        name:
-          type: string
-          example: Introductory Physics · Group B
-        term_id:
-          type: string
-          example: t1
+        id: { type: string, example: c1 }
+        instructor_id: { type: string, example: i1 }
+        external_id: { type: string, example: 'univ:PHYS-204-A' }
+        name: { type: string, example: 'PHYS 204 · Mechanics' }
+        term_id: { type: string, example: t1 }
+        sheet_id: { type: string, example: sheet-phys204 }
 
     Week:
       type: object
       required: [id, term_id, week_number, start_date, end_date]
       properties:
-        id:
-          type: string
-          example: w1
-        term_id:
-          type: string
-          example: t1
-        week_number:
-          type: integer
-          example: 1
-        start_date:
-          type: string
-          format: date
-        end_date:
-          type: string
-          format: date
+        id: { type: string, example: w5 }
+        term_id: { type: string, example: t1 }
+        week_number: { type: integer, example: 5 }
+        start_date: { type: string, format: date, example: '2026-08-03' }
+        end_date: { type: string, format: date, example: '2026-08-07' }
 
     Criterion:
       type: object
-      required: [id, class_id, key, label, unit, default_weight, sort_order]
+      required: [id, class_id, key, label, default_weight, sort_order]
       properties:
-        id:
-          type: string
-        class_id:
-          type: string
-        key:
-          type: string
-          description: Stable identifier used in `criteria`, `weights` and score parts.
-          example: homework
-        label:
-          type: string
-          example: Homework
-        unit:
-          type: string
-          example: tasks on time
-        default_weight:
-          type: number
-          minimum: 0
-          example: 25
-        sort_order:
-          type: integer
+        id: { type: string, example: c1-homework }
+        class_id: { type: string, example: c1 }
+        key: { type: string, example: homework }
+        label: { type: string, example: Homework }
+        unit: { type: string, example: 'tasks on time' }
+        default_weight: { type: number, example: 25 }
+        sort_order: { type: integer }
 
-    Weights:
+    Account:
       type: object
-      description: Criterion key to weight. Values are non-negative.
-      additionalProperties:
-        type: number
-        minimum: 0
-      example: { homework: 25, attendance: 20, participation: 20, project: 25, quizzes: 10 }
-
-    AdjustmentSettings:
-      type: object
-      description: |
-        The parameters of the adjustment. Weighted hours are `H = sum(a_k × h_k)`, the factor is
-        `min(1 + rate × H, cap)`, and the adjusted score is `min(100, raw × factor)`.
-      required: [type_weights, rate, cap, flag_hours]
+      required: [id, role, class_ids]
       properties:
-        type_weights:
-          $ref: '#/components/schemas/Weights'
-        rate:
-          type: number
-          minimum: 0
-          maximum: 1
-          description: Factor added per weighted hour.
-          example: 0.01
-        cap:
-          type: number
-          minimum: 1
-          maximum: 3
-          description: The most the factor can reach.
-          example: 1.25
-        flag_hours:
-          type: number
-          minimum: 0
-          description: A weekly entry differing from the baseline by more total hours than this is flagged.
-          example: 10
-
-    Settings:
-      type: object
-      required: [weights, adjustment]
-      properties:
-        weights:
-          $ref: '#/components/schemas/Weights'
-        adjustment:
-          $ref: '#/components/schemas/AdjustmentSettings'
-
-    AdjustmentPatch:
-      type: object
-      description: Only the fields given are changed. Type weights are merged into the current ones.
-      properties:
-        type_weights:
-          oneOf:
-            - $ref: '#/components/schemas/Weights'
-            - type: 'null'
-        rate:
-          type: [number, 'null']
-          minimum: 0
-          maximum: 1
-        cap:
-          type: [number, 'null']
-          minimum: 1
-          maximum: 3
-        flag_hours:
-          type: [number, 'null']
-          minimum: 0
-
-    SaveSettingsRequest:
-      type: object
-      description: Every field is optional, and `null` means the same as leaving it out.
-      properties:
-        weights:
-          oneOf:
-            - $ref: '#/components/schemas/Weights'
-            - type: 'null'
-        adjustment:
-          oneOf:
-            - $ref: '#/components/schemas/AdjustmentPatch'
-            - type: 'null'
-
-    SourceInfo:
-      type: object
-      required: [kind, label, demo]
-      properties:
-        kind:
-          type: string
-          description: Which data-source adapter is active (`toy` for seeded demo data).
-          example: toy
-        label:
-          type: string
-          example: Demo data
-        demo:
-          type: boolean
-          description: True when the data is seeded demo data, so the UI can say so.
-
-    Issue:
-      type: object
-      description: A problem found while validating the source data. The table is still served.
-      required: [level, where, message]
-      properties:
-        level:
-          type: string
-          enum: [error, warning]
-        where:
-          type: string
-          description: ID of the offending entry.
-          example: e12
-        message:
-          type: string
-          example: Unknown student ID "s99"
-
-    ClassBootstrap:
-      type: object
-      required: [class, weeks, criteria, weights, tie_breakers, source, last_updated, issues]
-      properties:
-        class:
-          $ref: '#/components/schemas/Class'
-        weeks:
-          type: array
-          items:
-            $ref: '#/components/schemas/Week'
-        criteria:
-          type: array
-          items:
-            $ref: '#/components/schemas/Criterion'
-        weights:
-          $ref: '#/components/schemas/Weights'
-        tie_breakers:
-          type: array
-          description: Labels of the criteria that order students still level after the raw score, in priority order.
-          items:
-            type: string
-          example: [Attendance, Homework]
-        source:
-          $ref: '#/components/schemas/SourceInfo'
-        last_updated:
-          type: string
-          format: date-time
-          description: When the source was last read successfully (ISO 8601, UTC).
-        issues:
-          type: array
-          items:
-            $ref: '#/components/schemas/Issue'
-
-    RankingRow:
-      type: object
-      required: [student_id, display_name, score, rank, tied, rank_delta, missing, gap_to_next, gap_to_below]
-      properties:
-        student_id:
-          type: string
-        display_name:
-          type: string
-          description: Name in the requested `name_mode`.
-        score:
-          type: number
-          description: The adjusted score, 0 to 100. Nothing else about a classmate's score is sent.
-        rank:
-          type: integer
-          minimum: 1
-          description: Competition rank; students level on every tie-breaker share it.
-        tied:
-          type: boolean
-          description: True for every student in a group that shares a rank, including the first.
-        rank_delta:
-          type: [integer, 'null']
-          description: Places moved since the previous week (positive is up); `null` if there is no previous rank.
-        missing:
-          type: array
-          description: Keys of weighted criteria the student has no data for in this window.
-          items:
-            type: string
-        gap_to_next:
-          type: [number, 'null']
-          description: Points needed to reach the next rank up; `null` at the top.
-        gap_to_below:
-          type: [number, 'null']
-          description: Lead over the next rank down; `null` at the bottom.
-
-    Ranking:
-      type: object
-      required: [class_id, week_id, window_mode, rolling_weeks, criteria_keys, weights, rows, last_updated, stale, issues]
-      properties:
-        class_id:
-          type: string
-        week_id:
-          type: string
-        window_mode:
-          type: string
-          enum: [week, cumulative, rolling]
-        rolling_weeks:
-          type: [integer, 'null']
-          description: The window length for `rolling`; `null` otherwise.
-        criteria_keys:
-          type: array
-          description: The criteria actually used (all criteria when none were requested).
-          items:
-            type: string
-        weights:
-          $ref: '#/components/schemas/Weights'
-        rows:
-          type: array
-          description: Best first. Only students with entries in the window appear.
-          items:
-            $ref: '#/components/schemas/RankingRow'
-        last_updated:
-          type: string
-          format: date-time
-          description: When the source was last read successfully (ISO 8601, UTC).
-        stale:
-          type: boolean
-          description: True when the source failed and the last good snapshot was served instead.
-        issues:
-          type: array
-          items:
-            $ref: '#/components/schemas/Issue'
-
-    ScorePart:
-      type: object
-      description: One criterion's contribution to a student's score.
-      required: [key, label, earned, possible, normalised, weight, effective_weight, points, missing]
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        earned:
-          type: [number, 'null']
-          description: Sum of points earned in the window; `null` when missing.
-        possible:
-          type: [number, 'null']
-          description: Sum of points available in the window; `null` when missing.
-        normalised:
-          type: [number, 'null']
-          description: '`earned / possible` as 0 to 100; `null` when missing.'
-        weight:
-          type: number
-          description: Weight as requested.
-        effective_weight:
-          type: number
-          description: Weight after dropping missing criteria and rescaling to 100; 0 when missing.
-        points:
-          type: number
-          description: '`normalised × effective_weight / 100`; 0 when missing. Parts sum to `raw_score`.'
-        missing:
-          type: boolean
-          description: No data for this criterion in the window; it is excluded, not scored as zero.
-
-    WeekBreakdown:
-      type: object
-      description: One week of a student's score, before and after the adjustment.
-      required: [week_id, week_number, raw_score, weighted_hours, factor, adjusted_score, capped]
-      properties:
-        week_id:
-          type: string
-        week_number:
-          type: integer
-        raw_score:
-          type: number
-        weighted_hours:
-          type: number
-        factor:
-          type: number
-        adjusted_score:
-          type: number
-        capped:
-          type: boolean
-          description: The adjusted score was clipped at 100.
-
-    Explanation:
-      type: object
-      description: |
-        `score` is the adjusted score the table ranks on. For a window of several weeks each week
-        is scored on its own and the weekly scores are averaged, so `raw_score` and `score` are
-        means, `parts` average the weekly points, and `factor`, `weighted_hours` and `hours` are
-        `null`; see `weeks`.
-      required: [student_id, display_name, rank, tied, score, raw_score, factor, weighted_hours, hours, capped, parts, weeks, gap_to_next, gap_to_below, above, week_id, window_mode, rolling_weeks]
-      properties:
-        student_id:
-          type: string
-        display_name:
-          type: string
-        rank:
-          type: integer
-          minimum: 1
-        tied:
-          type: boolean
-        score:
-          type: number
-          description: The adjusted score.
-        raw_score:
-          type: number
-          description: The weighted criteria before the factor; the parts add up to it.
-        factor:
-          type: [number, 'null']
-        weighted_hours:
-          type: [number, 'null']
-        hours:
-          oneOf:
-            - $ref: '#/components/schemas/Hours'
-            - type: 'null'
-          description: Weighted hours by commitment type, for a single week.
-        capped:
-          type: boolean
-          description: Any week's adjusted score was clipped at 100.
-        parts:
-          type: array
-          description: One per selected criterion, in criterion order.
-          items:
-            $ref: '#/components/schemas/ScorePart'
-        weeks:
-          type: array
-          items:
-            $ref: '#/components/schemas/WeekBreakdown'
-        gap_to_next:
-          type: [number, 'null']
-        gap_to_below:
-          type: [number, 'null']
-        above:
-          type: [string, 'null']
-          description: Display name of the nearest student ranked above; `null` at the top.
-        week_id:
-          type: string
-        window_mode:
-          type: string
-          enum: [week, cumulative, rolling]
-        rolling_weeks:
-          type: [integer, 'null']
-
-    Status:
-      type: object
-      required: [last_updated, stale, issues, source]
-      properties:
-        last_updated:
-          type: [string, 'null']
-          format: date-time
-          description: ISO 8601 UTC time of the last successful read, or `null` before the first.
-        stale:
-          type: boolean
-        issues:
-          type: array
-          items:
-            $ref: '#/components/schemas/Issue'
-        source:
-          $ref: '#/components/schemas/SourceInfo'
-
-    RefreshResult:
-      type: object
-      required: [last_updated, issues, stale]
-      properties:
-        last_updated:
-          type: string
-          format: date-time
-        issues:
-          type: array
-          items:
-            $ref: '#/components/schemas/Issue'
-        stale:
-          type: boolean
+        id: { type: string }
+        role: { type: string, enum: [instructor, student] }
+        student_id: { type: string, nullable: true }
+        class_ids: { type: array, items: { type: string } }
+        external_id: { type: string }
 
     Hours:
       type: object
-      description: Hours per week by commitment type key, such as `work`, `childcare` and `eldercare`.
-      additionalProperties:
-        type: number
-      example: { work: 12, childcare: 6, eldercare: 0 }
-
-    CommitmentType:
-      type: object
-      required: [key, label]
+      required: [work, childcare, eldercare]
       properties:
-        key:
-          type: string
-          example: childcare
-        label:
-          type: string
-          example: Child care
+        work: { type: number }
+        childcare: { type: number }
+        eldercare: { type: number }
 
-    HourLimits:
+    TypeWeights:
       type: object
-      required: [step, per_type_max, total_max]
+      required: [work, childcare, eldercare]
       properties:
-        step:
-          type: number
-          example: 0.5
-        per_type_max:
-          type: number
-          example: 80
-        total_max:
-          type: number
-          example: 120
+        work: { type: number, example: 1 }
+        childcare: { type: number, example: 1 }
+        eldercare: { type: number, example: 1 }
 
-    HoursRequest:
+    LeagueSettings:
       type: object
-      required: [hours]
+      required: [typeWeights, rate, cap]
       properties:
-        hours:
-          $ref: '#/components/schemas/Hours'
+        weights: { type: object, additionalProperties: { type: number }, nullable: true }
+        typeWeights: { $ref: '#/components/schemas/TypeWeights' }
+        rate: { type: number, example: 0.01 }
+        cap: { type: number, example: 1.25 }
+        tieBreakers: { type: array, items: { type: string }, example: [attendance, homework] }
 
-    BaselineStatus:
-      type: string
-      enum: [pending, approved, rejected, superseded]
-
-    Baseline:
+    LeagueSettingsPatch:
       type: object
-      required: [id, student_id, hours, status, effective_from_week, submitted_at, decided_at]
       properties:
-        id:
-          type: string
-        student_id:
-          type: string
-        hours:
-          $ref: '#/components/schemas/Hours'
-        status:
-          $ref: '#/components/schemas/BaselineStatus'
-        effective_from_week:
-          type: [integer, 'null']
-          description: The week number it counts from; `null` until approved.
-        submitted_at:
-          type: string
-          format: date-time
-        decided_at:
-          type: [string, 'null']
-          format: date-time
+        weights: { type: object, additionalProperties: { type: number } }
+        typeWeights: { $ref: '#/components/schemas/TypeWeights' }
+        rate: { type: number }
+        cap: { type: number }
+        tieBreakers: { type: array, items: { type: string } }
 
-    WeeklyUpdate:
+    SourceInfo:
       type: object
-      required: [week_id, week_number, hours, entered_at, editable]
+      required: [kind, label, demo, store]
       properties:
-        week_id:
-          type: string
-        week_number:
-          type: integer
-        hours:
-          oneOf:
-            - $ref: '#/components/schemas/Hours'
-            - type: 'null'
-          description: '`null` means the student reset this week to their baseline.'
-        entered_at:
-          type: string
-          format: date-time
-        editable:
-          type: boolean
-          description: The week is still inside the edit window.
+        kind: { type: string, example: toy }
+        label: { type: string, example: 'Demo data' }
+        demo: { type: boolean }
+        store: { type: string, example: 'In memory' }
 
-    WeekFactor:
+    Issue:
       type: object
-      required: [week_id, week_number, source, hours, weighted_hours, factor]
+      required: [level, where, message]
       properties:
-        week_id:
-          type: string
-        week_number:
-          type: integer
-        source:
-          type: string
-          enum: [none, baseline, weekly]
-          description: Where that week's hours come from; `none` means no approved baseline covers it.
-        hours:
-          oneOf:
-            - $ref: '#/components/schemas/Hours'
-            - type: 'null'
-        weighted_hours:
-          type: number
-        factor:
-          type: number
+        level: { type: string, enum: [error, warning] }
+        where: { type: string, description: Entry id }
+        message: { type: string }
 
-    EditWindow:
+    ScorePart:
       type: object
-      required: [current_week_id, editable_week_ids]
+      required: [key, label, weight, effectiveWeight, points, missing]
       properties:
-        current_week_id:
-          type: [string, 'null']
-          description: '`null` outside the term.'
-        editable_week_ids:
-          type: array
-          items:
-            type: string
+        key: { type: string }
+        label: { type: string }
+        earned: { type: number, nullable: true }
+        possible: { type: number, nullable: true }
+        normalised: { type: number, nullable: true }
+        weight: { type: number }
+        effectiveWeight: { type: number }
+        points: { type: number }
+        missing: { type: boolean }
 
-    MyCommitments:
+    RankingRow:
       type: object
-      required: [types, limits, baseline, in_effect, weekly_updates, weeks, edit_window]
+      required: [student_id, display_name, score, rank, tied, rank_delta, gap_to_next, gap_to_below, missing, is_self]
       properties:
-        types:
-          type: array
-          items:
-            $ref: '#/components/schemas/CommitmentType'
-        limits:
-          $ref: '#/components/schemas/HourLimits'
-        baseline:
-          oneOf:
-            - $ref: '#/components/schemas/Baseline'
-            - type: 'null'
-          description: The latest submission, whatever its status.
-        in_effect:
-          oneOf:
-            - $ref: '#/components/schemas/Baseline'
-            - type: 'null'
-          description: The approved baseline that counts now, if any.
-        weekly_updates:
-          type: array
-          items:
-            $ref: '#/components/schemas/WeeklyUpdate'
-        weeks:
-          type: array
-          items:
-            $ref: '#/components/schemas/WeekFactor'
-        edit_window:
-          $ref: '#/components/schemas/EditWindow'
+        student_id: { type: string }
+        display_name: { type: string }
+        score: { type: number, description: Adjusted score (window mean), 0-100 }
+        rank: { type: integer }
+        tied: { type: boolean }
+        rank_delta: { type: integer, nullable: true, description: Previous-week rank minus current rank; null on first appearance }
+        gap_to_next: { type: number, nullable: true }
+        gap_to_below: { type: number, nullable: true }
+        missing: { type: array, items: { type: string } }
+        is_self: { type: boolean }
+        raw: { type: number, description: Instructor or own row only }
+        factor: { type: number, description: Instructor or own row only }
+        weighted_hours: { type: number, description: Instructor or own row only }
+        capped: { type: boolean, description: Instructor or own row only }
+        hours_source: { type: string, nullable: true, description: Instructor or own row only }
 
-    PreviewRequest:
+    RankingResponse:
       type: object
-      required: [hours]
+      required: [classId, weekId, windowMode, rollingN, criteriaKeys, weights, rows, weekCount, lastUpdated, stale, issues]
       properties:
-        hours:
-          $ref: '#/components/schemas/Hours'
-        week_id:
-          type: [string, 'null']
-          description: Defaults to the student's latest week with scores.
+        classId: { type: string }
+        weekId: { type: string }
+        windowMode: { type: string, enum: [week, rolling, cumulative] }
+        rollingN: { type: integer }
+        criteriaKeys: { type: array, items: { type: string } }
+        weights: { type: object, additionalProperties: { type: number } }
+        rows: { type: array, items: { $ref: '#/components/schemas/RankingRow' } }
+        weekCount: { type: integer, description: Weeks covered by the window }
+        lastUpdated: { type: integer }
+        stale: { type: boolean }
+        issues: { type: array, items: { $ref: '#/components/schemas/Issue' } }
 
-    Preview:
+    WeekScore:
       type: object
-      required: [week_id, raw_score, weighted_hours, factor, adjusted_score, capped]
+      required: [week_number, raw, weighted_hours, factor, adjusted, capped]
       properties:
-        week_id:
-          type: string
-        raw_score:
-          type: number
-        weighted_hours:
-          type: number
-        factor:
-          type: number
-        adjusted_score:
-          type: number
-        capped:
-          type: boolean
+        week_number: { type: integer }
+        raw: { type: number }
+        weighted_hours: { type: number }
+        factor: { type: number }
+        adjusted: { type: number }
+        capped: { type: boolean }
 
-    PendingApproval:
+    Explanation:
       type: object
-      required: [id, student_id, display_name, hours, submitted_at, is_change, current, suggested_effective_week]
+      required: [student_id, display_name, rank, tied, score, raw, focusRaw, focusAdjusted, focusCapped, factor, weighted_hours, capped, hours, typeWeights, rate, cap, focusWeek, parts, weeks, weekId, windowMode]
       properties:
-        id:
-          type: string
-        student_id:
-          type: string
-        display_name:
-          type: string
-        hours:
-          $ref: '#/components/schemas/Hours'
-        submitted_at:
-          type: string
-          format: date-time
-        is_change:
-          type: boolean
-          description: The student already has an approved baseline.
-        current:
-          oneOf:
-            - $ref: '#/components/schemas/Hours'
-            - type: 'null'
-          description: The approved baseline's hours, for comparison.
-        suggested_effective_week:
-          type: [integer, 'null']
-
-    Approvals:
-      type: object
-      required: [pending, current_week]
-      properties:
-        pending:
-          type: array
-          items:
-            $ref: '#/components/schemas/PendingApproval'
-        current_week:
-          type: [integer, 'null']
-          description: Number of the current week on the server's clock; `null` outside the term.
-
-    DecisionRequest:
-      type: object
-      required: [decision]
-      properties:
-        decision:
-          type: string
-          enum: [approve, reject]
-        effective_week:
-          type: [integer, 'null']
-          minimum: 1
-          description: The week number the baseline counts from. Defaults to the current week.
-
-    StudentCommitments:
-      type: object
-      required: [student_id, display_name, status, hours, effective_from_week, weighted_hours, factor]
-      properties:
-        student_id:
-          type: string
-        display_name:
-          type: string
-        status:
-          type: string
-          enum: [none, pending, approved, rejected]
-        hours:
-          oneOf:
-            - $ref: '#/components/schemas/Hours'
-            - type: 'null'
-        effective_from_week:
-          type: [integer, 'null']
-        weighted_hours:
-          type: number
-        factor:
-          type: number
-          description: The factor in force this week.
-
-    LogEntry:
-      type: object
-      required: [id, actor_id, actor_name, action, student_id, student_name, week_id, week_number, old_values, new_values, at, flagged, reversible]
-      properties:
-        id:
-          type: string
-        actor_id:
-          type: string
-        actor_name:
-          type: string
-        action:
-          type: string
-          enum: [baseline_submitted, baseline_approved, baseline_rejected, weekly_update, weekly_reset, weekly_reversed, settings_changed]
-        student_id:
-          type: [string, 'null']
-        student_name:
-          type: [string, 'null']
-        week_id:
-          type: [string, 'null']
-        week_number:
-          type: [integer, 'null']
-        old_values:
-          type: [object, 'null']
-        new_values:
-          type: [object, 'null']
-        at:
-          type: string
-          format: date-time
-        flagged:
-          type: boolean
-          description: A weekly entry that differs from the baseline by more than the threshold.
-        reversible:
-          type: boolean
-          description: A weekly entry that can still be reversed with `reverseWeeklyUpdate`.
+        student_id: { type: string }
+        display_name: { type: string }
+        rank: { type: integer }
+        tied: { type: boolean }
+        score: { type: number }
+        raw: { type: number }
+        focusRaw: { type: number }
+        focusAdjusted: { type: number }
+        focusCapped: { type: boolean }
+        factor: { type: number }
+        weighted_hours: { type: number }
+        capped: { type: boolean }
+        hours: { $ref: '#/components/schemas/Hours' }
+        hours_source: { type: string, nullable: true }
+        typeWeights: { $ref: '#/components/schemas/TypeWeights' }
+        rate: { type: number }
+        cap: { type: number }
+        focusWeek: { type: integer }
+        parts: { type: array, items: { $ref: '#/components/schemas/ScorePart' } }
+        weeks: { type: array, items: { $ref: '#/components/schemas/WeekScore' } }
+        gap_to_next: { type: number, nullable: true }
+        gap_to_below: { type: number, nullable: true }
+        above: { type: string, nullable: true }
+        weekId: { type: string }
+        windowMode: { type: string }
 
     Explainer:
       type: object
-      description: The formula and current parameters, with worked examples. It holds no personal data.
-      required: [formula, types, type_weights, rate, cap, limits, factor_table, examples, rules]
+      required: [typeWeights, rate, cap, table, example]
       properties:
-        formula:
-          type: array
-          items:
-            type: string
-        types:
-          type: array
-          items:
-            $ref: '#/components/schemas/CommitmentType'
-        type_weights:
-          $ref: '#/components/schemas/Weights'
-        rate:
-          type: number
-        cap:
-          type: number
-        limits:
-          $ref: '#/components/schemas/HourLimits'
-        factor_table:
+        typeWeights: { $ref: '#/components/schemas/TypeWeights' }
+        rate: { type: number }
+        cap: { type: number }
+        table: { type: array, items: { type: object, required: [hours, factor], properties: { hours: { type: number }, factor: { type: number } } } }
+        example:
+          type: object
+          required: [raw, hours, weighted_hours, factor, adjusted]
+          properties:
+            raw: { type: number, example: 80 }
+            hours: { $ref: '#/components/schemas/Hours' }
+            weighted_hours: { type: number }
+            factor: { type: number }
+            adjusted: { type: number }
+
+    Bootstrap:
+      type: object
+      required: [klass, classes, weeks, criteria, weights, defaultWeights, settings, tieBreakers, accounts, weeksWithData, latestCompleteWeekId, source, lastUpdated, issues, rollingN]
+      properties:
+        klass: { $ref: '#/components/schemas/Class' }
+        classes: { type: array, items: { $ref: '#/components/schemas/Class' } }
+        weeks: { type: array, items: { $ref: '#/components/schemas/Week' } }
+        criteria: { type: array, items: { $ref: '#/components/schemas/Criterion' } }
+        weights: { type: object, additionalProperties: { type: number } }
+        defaultWeights: { type: object, additionalProperties: { type: number } }
+        settings:
+          type: object
+          required: [typeWeights, rate, cap]
+          properties:
+            typeWeights: { $ref: '#/components/schemas/TypeWeights' }
+            rate: { type: number }
+            cap: { type: number }
+        tieBreakers: { type: array, items: { type: string }, description: Resolved labels }
+        accounts: { type: array, items: { $ref: '#/components/schemas/Account' } }
+        weeksWithData: { type: array, items: { type: string } }
+        latestCompleteWeekId: { type: string, nullable: true }
+        source: { $ref: '#/components/schemas/SourceInfo' }
+        lastUpdated: { type: integer }
+        issues: { type: array, items: { $ref: '#/components/schemas/Issue' } }
+        rollingN: { type: integer }
+
+    Baseline:
+      type: object
+      properties:
+        id: { type: string }
+        student_id: { type: string }
+        work_hours: { type: number }
+        childcare_hours: { type: number }
+        eldercare_hours: { type: number }
+        status: { type: string, enum: [approved, pending, rejected, superseded] }
+        effective_from_week: { type: integer, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        decided_by: { type: string, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+
+    WeeklyUpdate:
+      type: object
+      properties:
+        id: { type: string }
+        student_id: { type: string }
+        week_id: { type: string }
+        week_number: { type: integer }
+        work_hours: { type: number }
+        childcare_hours: { type: number }
+        eldercare_hours: { type: number }
+        entered_at: { type: string, format: date-time }
+        reversed_by: { type: string, nullable: true }
+        reversed_at: { type: string, format: date-time, nullable: true }
+
+    Commitments:
+      type: object
+      required: [studentId, baseline, weeklyUpdates, byWeek]
+      properties:
+        studentId: { type: string }
+        baseline: { $ref: '#/components/schemas/Baseline', nullable: true }
+        weeklyUpdates: { type: array, items: { $ref: '#/components/schemas/WeeklyUpdate' } }
+        byWeek:
           type: array
           items:
             type: object
-            required: [weighted_hours, factor]
+            required: [week_number, hours, weighted_hours, factor]
             properties:
-              weighted_hours:
-                type: number
-              factor:
-                type: number
-        examples:
+              week_number: { type: integer }
+              hours: { $ref: '#/components/schemas/Hours' }
+              source: { type: string, nullable: true }
+              weighted_hours: { type: number }
+              factor: { type: number }
+
+    Signal:
+      type: object
+      required: [key, label, active, on, summary, evidence]
+      properties:
+        key: { type: string, enum: [downward_trend, missed_engagement, low_projected_grade, heavy_commitments, missing_data] }
+        label: { type: string }
+        active: { type: boolean }
+        on: { type: boolean }
+        summary: { type: string }
+        evidence: { type: array, items: { type: object, required: [label, value], properties: { label: { type: string }, value: { type: string } } } }
+
+    RiskMetrics:
+      type: object
+      properties:
+        declineRun: { type: integer }
+        missedAssignments: { type: integer }
+        attendancePct: { type: number, nullable: true }
+        participationPct: { type: number, nullable: true }
+        projected: { type: number, nullable: true }
+        hours: { type: number, nullable: true }
+        missingRun: { type: integer }
+
+    RiskThresholds:
+      type: object
+      required: [declineWeeks, missedAssignments, attendancePct, participationPct, projectedGrade, commitmentHours, missingWeeks]
+      properties:
+        declineWeeks: { type: integer, example: 3 }
+        missedAssignments: { type: integer, example: 2 }
+        attendancePct: { type: number, example: 70 }
+        participationPct: { type: number, example: 50 }
+        projectedGrade: { type: number, example: 60 }
+        commitmentHours: { type: number, example: 20 }
+        missingWeeks: { type: integer, example: 2 }
+
+    RiskSettings:
+      type: object
+      required: [thresholds, active]
+      properties:
+        thresholds: { $ref: '#/components/schemas/RiskThresholds' }
+        active:
+          type: object
+          required: [downward_trend, missed_engagement, low_projected_grade, heavy_commitments, missing_data]
+          properties:
+            downward_trend: { type: boolean }
+            missed_engagement: { type: boolean }
+            low_projected_grade: { type: boolean }
+            heavy_commitments: { type: boolean }
+            missing_data: { type: boolean }
+
+    RiskSettingsPatch:
+      type: object
+      properties:
+        thresholds:
+          type: object
+          properties:
+            declineWeeks: { type: integer }
+            missedAssignments: { type: integer }
+            attendancePct: { type: number }
+            participationPct: { type: number }
+            projectedGrade: { type: number }
+            commitmentHours: { type: number }
+            missingWeeks: { type: integer }
+        active:
+          type: object
+          properties:
+            downward_trend: { type: boolean }
+            missed_engagement: { type: boolean }
+            low_projected_grade: { type: boolean }
+            heavy_commitments: { type: boolean }
+            missing_data: { type: boolean }
+
+    DigestRow:
+      type: object
+      required: [student_id, display_name, level, status, signals, notes]
+      properties:
+        student_id: { type: string }
+        display_name: { type: string }
+        level: { type: string, enum: ['Not flagged', Watch, 'At risk', 'High risk'] }
+        status: { type: string, enum: [new, still, cleared] }
+        priorLevel: { type: string, nullable: true }
+        signals: { type: array, items: { type: string }, description: Labels of signals on }
+        notes: { type: integer }
+
+    Digest:
+      type: object
+      required: [instructorId, groups, computedAt]
+      properties:
+        instructorId: { type: string }
+        groups:
           type: array
           items:
             type: object
-            required: [title, raw_score, hours, weighted_hours, factor, adjusted_score, capped, steps]
+            required: [classId, className, week, comparedWith, comparedWithStored, rows]
             properties:
-              title:
-                type: string
-              raw_score:
-                type: number
-              hours:
-                $ref: '#/components/schemas/Hours'
-              weighted_hours:
-                type: number
-              factor:
-                type: number
-              adjusted_score:
-                type: number
-              capped:
-                type: boolean
-              steps:
-                type: array
-                items:
-                  type: string
-        rules:
+              classId: { type: string }
+              className: { type: string }
+              week: { type: integer }
+              comparedWith: { type: integer, nullable: true }
+              comparedWithStored: { type: boolean }
+              rows: { type: array, items: { $ref: '#/components/schemas/DigestRow' } }
+        computedAt: { type: string, format: date-time }
+
+    Note:
+      type: object
+      required: [id, instructor_id, class_id, student_id, body, created_at]
+      properties:
+        id: { type: string }
+        instructor_id: { type: string }
+        class_id: { type: string }
+        student_id: { type: string }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+
+    RiskRecord:
+      type: object
+      required: [classId, className, student_id, display_name, week, level, signals, metrics, thresholds, history, notes]
+      properties:
+        classId: { type: string }
+        className: { type: string }
+        student_id: { type: string }
+        display_name: { type: string }
+        week: { type: integer }
+        level: { type: string }
+        oneAway: { type: string, nullable: true }
+        signals: { type: array, items: { $ref: '#/components/schemas/Signal' } }
+        metrics: { $ref: '#/components/schemas/RiskMetrics' }
+        thresholds: { $ref: '#/components/schemas/RiskThresholds' }
+        history:
           type: array
           items:
-            type: string
+            type: object
+            required: [week_number, level, count]
+            properties:
+              week_number: { type: integer }
+              level: { type: string }
+              count: { type: integer }
+        notes:
+          type: array
+          description: Instructor-private; always [] for a student caller
+          items: { $ref: '#/components/schemas/Note' }
+
+    Standing:
+      type: object
+      required: [student_id, display_name, week, level, signals, metrics, help]
+      properties:
+        student_id: { type: string }
+        display_name: { type: string }
+        week: { type: integer }
+        level: { type: string }
+        signals: { type: array, items: { $ref: '#/components/schemas/Signal' }, description: Only signals with on=true }
+        metrics: { $ref: '#/components/schemas/RiskMetrics' }
+        help: { type: string }

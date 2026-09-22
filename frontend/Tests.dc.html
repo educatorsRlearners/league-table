@@ -29,9 +29,11 @@
   </div>
 
   <p style="font-size: 14px; opacity: 0.8; margin-top: var(--space-4); text-align: justify; max-width: 62ch;">
-    Three suites run in the browser against the same modules the app uses: the pure scoring logic, the
-    DataSource contract that every adapter must satisfy, and the services layer that stands in for the
-    FastAPI endpoints. A Sheets adapter would have to pass the contract suite unchanged.
+    Six suites run in the browser against the same modules the app uses: the pure scoring logic, the
+    commitment adjustment (factor, cap and effective week), ranking and ties, the risk engine's five
+    signals and levels, the DataSource and AppStore contracts that every adapter must satisfy, and the
+    services layer that stands in for the FastAPI endpoints. A Sheets adapter or a SQLite store would
+    have to pass the contract suite unchanged.
   </p>
 
   <sc-for list="{{ suites }}" as="suite" hint-placeholder-count="3">

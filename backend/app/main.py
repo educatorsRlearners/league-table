@@ -1,93 +1,76 @@
-import os
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.datasource import DataSource
-from app.deps import AppContext, SessionStore
+from app.deps import AppContext, set_ctx
 from app.errors import install_handlers
-from app.identity import AccessCodeIdentity, IdentityProvider
-from app.models import DemoAccount
-from app.routers import auth, classes, commitments, data, ranking
+from app.routers import classes, data, ranking, risk
 from app.service import LeagueService
-from app.store import AppStore, MemoryStore
+from app.store import MemoryStore
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 FRONTEND_PAGE = "/League%20Table.dc.html"
 
 DESCRIPTION = """\
-The backend the League Table frontend expects. Scoring, the commitments adjustment, ranking
-and tie-breaking run on the server; the browser only renders the result. The contract is
-`openapi.yaml`.
+Backend contract derived exclusively from the frontend API client
+(`frontend/services/api.js`, `mockSource.js`, `scoring.js`, `risk.js`,
+`tests.js`, and callers in `frontend/League Table.dc.html`).
 """
 
 
 def create_app(
-    db: DataSource | None = None,
-    store: AppStore | None = None,
+    db=None,
+    store=None,
     clock: Callable[[], float] = time.time,
-    identity: IdentityProvider | None = None,
-    instructor_passcode: str | None = None,
-    demo_accounts: list[DemoAccount] | None = None,
     frontend_dir: Path | None = FRONTEND_DIR,
 ) -> FastAPI:
-    """Build the app. With no arguments it runs on the seeded demo class and an in-memory store.
-
-    `db` is any DataSource and `store` any AppStore; `clock` returns epoch seconds. All three
-    can be swapped in tests. The instructor passcode comes from `INSTRUCTOR_PASSCODE` unless
-    given; only demo data has a default. The frontend in `frontend_dir` is served from the same
-    origin as the API, so the session cookie works; pass None to serve the API alone.
-    """
-    if db is None:
+    if db is None or store is None:
         from app.toy_seed import build_toy
 
-        today = datetime.fromtimestamp(clock(), tz=timezone.utc).date()
-        toy = build_toy(today)
-        db, store, demo_accounts = toy.db, toy.store, toy.demo_accounts
-        instructor_passcode = instructor_passcode or toy.instructor_passcode
-    store = store if store is not None else MemoryStore()
-    if identity is None:
-        passcode = instructor_passcode or os.environ.get("INSTRUCTOR_PASSCODE")
-        if not passcode:
-            raise RuntimeError("Set INSTRUCTOR_PASSCODE: the instructor signs in with it.")
-        identity = AccessCodeIdentity(store, passcode)
-
+        toy = build_toy()
+        db = db or toy.db
+        if store is None:
+            store = MemoryStore(class_ids=[c.id for c in toy.db.classes], seed=toy.seed)
     app = FastAPI(
-        title="League Table API",
-        version="0.2.0",
+        title="League Table Backend (as expected by frontend/services/api.js)",
+        version="1.0.0",
         description=DESCRIPTION,
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
-        openapi_url="/api/openapi.json",
+        servers=[{"url": "http://localhost:8000"}],
     )
-    app.state.ctx = AppContext(
-        db=db,
-        store=store,
-        service=LeagueService(db, clock),
-        sessions=SessionStore(),
-        identity=identity,
-        clock=clock,
-        demo_accounts=demo_accounts or [],
-    )
+    ctx = AppContext(db=db, store=store, service=LeagueService(db, store, clock), clock=clock)
+    set_ctx(ctx)
+    app.state.ctx = ctx
     install_handlers(app)
 
-    api = APIRouter(prefix="/api")
-    for module in (auth, classes, ranking, commitments, data):
-        api.include_router(module.router)
-    api.include_router(commitments.me)
-    app.include_router(api)
+    for module in (classes, ranking, risk, data):
+        app.include_router(module.router)
 
-    if frontend_dir is not None:
+    # Align the served OpenAPI with openapi.yaml: global Bearer auth.
+    def _openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        from fastapi.openapi.utils import get_openapi
 
+        schema = get_openapi(title=app.title, version=app.version,
+                             description=app.description, routes=app.routes, servers=[{"url": "http://localhost:8000"}])
+        schema["security"] = [{"bearerAuth": []}]
+        schema["components"].setdefault("securitySchemes", {})["bearerAuth"] = {
+            "type": "http", "scheme": "bearer", "bearerFormat": "JWT",
+            "description": "JWT identifying the caller. Server derives role, studentId and class membership.",
+        }
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = _openapi  # type: ignore[method-assign]
+
+    if frontend_dir is not None and Path(frontend_dir).exists():
         @app.get("/", include_in_schema=False)
         def root():
             return RedirectResponse(FRONTEND_PAGE)
 
-        # Mounted last so it never shadows an API route.
         app.mount("/", StaticFiles(directory=frontend_dir), name="frontend")
     return app

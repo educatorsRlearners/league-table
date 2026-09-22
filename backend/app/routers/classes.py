@@ -1,178 +1,106 @@
-from datetime import datetime, timezone
+"""GET /classes, bootstrap, explainer, settings. Tags: classes, settings."""
 
-from fastapi import Depends
+from __future__ import annotations
 
-from app.datasource import Snapshot
-from app.commitments import InvalidHours, validate_adjustment
-from app.deps import AppContext, class_router, get_ctx, require_instructor
-from app.errors import unprocessable
-from app.explainer import build_explainer
-from app.models import (
-    AdjustmentSettings, ClassBootstrap, Criterion, Error, Explainer, SaveSettingsRequest, Settings, Week,
-)
-from app.ranking import TIE_BREAKER_KEYS
-from app.scoring import normalise_weights
-from app.store import AdjustmentSettings as StoredAdjustment
-from app.store import LogEntry, Settings as StoredSettings
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-router = class_router()
+from app.auth import Caller, get_caller, instructor_id_of, require_instructor
+from app.deps import ensure_student_in_class, get_ctx, need_class, student_class_ids
+from app.models import Bootstrap, Class, Explainer, LeagueSettings, LeagueSettingsPatch
+from app.scoring import commitment_factor, normalise_weights, weighted_hours
+from app.service import DEFAULT_ROLLING_N, latest_complete_week_id
 
-NOT_FOUND = {404: {"model": Error, "description": "Unknown class."}}
-UNAUTHORIZED = {401: {"model": Error, "description": "No valid session."}}
-UNAVAILABLE = {503: {"model": Error, "description": "The data source did not respond and nothing is cached."}}
+router = APIRouter(tags=["classes"])
 
 
-def utc(seconds: float) -> datetime:
-    return datetime.fromtimestamp(seconds, tz=timezone.utc)
+@router.get("/classes", response_model=list[Class], tags=["classes"],
+            responses={401: {"description": "Missing/invalid Bearer token"},
+                       403: {"description": "Forbidden"}})
+def list_classes(instructor_id: str | None = Query(default=None, alias="instructor_id"),
+                 caller: Caller = Depends(get_caller), ctx=Depends(get_ctx)):
+    iid = instructor_id or instructor_id_of(caller)
+    if caller.role == "instructor" and iid != instructor_id_of(caller):
+        raise HTTPException(status_code=403, detail="Passing another instructor's id is forbidden.")
+    if caller.role == "student":
+        raise HTTPException(status_code=403, detail="Instructor only.")
+    return [c.model_dump(exclude_none=True) for c in ctx.db.list_classes(iid)]
 
 
-def current_weights(ctx: AppContext, snapshot: Snapshot) -> dict[str, float]:
-    """Saved weights, or each criterion's default weight if none are saved. Totals 100."""
-    saved = ctx.store.get_settings(snapshot.cls.id).weights
-    if saved is not None:
-        return {c.key: saved.get(c.key, 0.0) for c in snapshot.criteria}
-    return normalise_weights({c.key: c.default_weight for c in snapshot.criteria})
-
-
-@router.get(
-    "",
-    tags=["Class"],
-    operation_id="getClass",
-    summary="Everything the page needs to start",
-    response_model=ClassBootstrap,
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE,
-)
-def get_class(class_id: str, ctx: AppContext = Depends(get_ctx)):
-    snapshot = ctx.service.snapshot(class_id)
-    labels = {c.key: c.label for c in snapshot.criteria}
-    return ClassBootstrap(
-        class_=snapshot.cls,
-        weeks=snapshot.weeks,
-        criteria=snapshot.criteria,
-        weights=current_weights(ctx, snapshot),
-        tie_breakers=[labels[key] for key in TIE_BREAKER_KEYS if key in labels],
-        source=ctx.source_info(),
-        last_updated=utc(snapshot.at),
-        issues=snapshot.issues,
-    )
-
-
-@router.get(
-    "/weeks",
-    tags=["Class"],
-    operation_id="listWeeks",
-    summary="Weeks of the term, in order",
-    response_model=list[Week],
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE,
-)
-def list_weeks(class_id: str, ctx: AppContext = Depends(get_ctx)):
-    return ctx.service.snapshot(class_id).weeks
-
-
-@router.get(
-    "/criteria",
-    tags=["Class"],
-    operation_id="listCriteria",
-    summary="Ranking criteria, in display order",
-    response_model=list[Criterion],
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE,
-)
-def list_criteria(class_id: str, ctx: AppContext = Depends(get_ctx)):
-    return ctx.service.snapshot(class_id).criteria
-
-
-FORBIDDEN = {403: {"model": Error, "description": "The caller's role does not allow this."}}
-
-
-def settings_body(ctx: AppContext, snapshot: Snapshot) -> Settings:
-    adjustment = ctx.store.get_settings(snapshot.cls.id).adjustment
-    return Settings(
-        weights=current_weights(ctx, snapshot),
-        adjustment=AdjustmentSettings(
-            type_weights=adjustment.type_weights, rate=adjustment.rate,
-            cap=adjustment.cap, flag_hours=adjustment.flag_hours,
-        ),
-    )
-
-
-@router.get(
-    "/settings",
-    tags=["Class"],
-    operation_id="getSettings",
-    summary="Criterion weights and adjustment parameters (instructor only)",
-    response_model=Settings,
-    dependencies=[Depends(require_instructor)],
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE | FORBIDDEN,
-)
-def get_settings(class_id: str, ctx: AppContext = Depends(get_ctx)):
-    return settings_body(ctx, ctx.service.snapshot(class_id))
-
-
-@router.put(
-    "/settings",
-    tags=["Class"],
-    operation_id="saveSettings",
-    summary="Save criterion weights and adjustment parameters (instructor only)",
-    response_model=Settings,
-    responses=UNAUTHORIZED | NOT_FOUND | UNAVAILABLE | FORBIDDEN,
-)
-def save_settings(
-    class_id: str,
-    body: SaveSettingsRequest,
-    account=Depends(require_instructor),
-    ctx: AppContext = Depends(get_ctx),
-):
-    """Every field is optional; what is left out keeps its value. A change re-ranks every week."""
-    snapshot = ctx.service.snapshot(class_id)
-    current = ctx.store.get_settings(class_id)
-
-    weights = current.weights
-    if body.weights is not None:
-        keys = [c.key for c in snapshot.criteria]
-        unknown = [key for key in body.weights if key not in keys]
-        if unknown:
-            raise unprocessable(("body", "weights"), f"Unknown criterion: {', '.join(unknown)}", body.weights)
-        if sum(body.weights.values()) == 0:
-            raise unprocessable(("body", "weights"), "At least one weight must be above zero.", body.weights)
-        # Criteria left out are stored as zero, so the saved map always covers every criterion.
-        weights = normalise_weights({key: body.weights.get(key, 0.0) for key in keys})
-
-    adjustment = current.adjustment
-    if body.adjustment is not None:
-        patch = body.adjustment.model_dump(exclude_none=True)
-        merged = {
-            "type_weights": {**adjustment.type_weights, **patch.pop("type_weights", {})},
-            "rate": adjustment.rate, "cap": adjustment.cap, "flag_hours": adjustment.flag_hours,
-        } | patch
-        try:
-            adjustment = validate_adjustment(StoredAdjustment(**merged))
-        except InvalidHours as error:
-            raise unprocessable(("body", "adjustment"), str(error), patch)
-
-    saved = StoredSettings(weights=weights, adjustment=adjustment)
-    ctx.store.save_settings(
-        class_id, saved,
-        LogEntry("", account.id, "settings_changed", None, None,
-                 {"adjustment": _plain(current.adjustment)}, {"adjustment": _plain(adjustment)}, ctx.now()),
-    )
-    return settings_body(ctx, snapshot)
-
-
-def _plain(adjustment: StoredAdjustment) -> dict:
+@router.get("/classes/{classId}/bootstrap", response_model=Bootstrap, tags=["classes"],
+            responses={401: {}, 403: {}, 404: {}})
+def get_bootstrap(classId: str, caller: Caller = Depends(get_caller), ctx=Depends(get_ctx)):
+    snap = need_class(ctx, classId)
+    if caller.role == "student" and classId not in student_class_ids(ctx, caller.studentId or "") \
+            and caller.classId != classId:
+        raise HTTPException(status_code=403, detail="That class is not yours to read.")
+    klass = next((c for c in ctx.db.list_classes() if c.id == classId), None)
+    classes = ctx.db.list_classes(klass.instructor_id if klass else None)
+    settings = snap.settings
+    defaults = {c.key: c.default_weight for c in snap.criteria}
+    weights = settings.get("weights") or defaults
+    labels = {c.key: c.label for c in snap.criteria}
+    tie_labels = [(labels.get(k, k)) for k in (settings.get("tieBreakers") or [])]
+    try:
+        accounts = ctx.db.list_accounts()
+    except AttributeError:
+        accounts = []
+    weeks_with_data = sorted({e.week_id for e in snap.entries})
     return {
-        "type_weights": dict(adjustment.type_weights), "rate": adjustment.rate,
-        "cap": adjustment.cap, "flag_hours": adjustment.flag_hours,
+        "klass": klass.model_dump(exclude_none=True) if klass else {"id": classId},
+        "classes": [c.model_dump(exclude_none=True) for c in classes],
+        "weeks": [w.model_dump() for w in snap.weeks],
+        "criteria": [c.model_dump() for c in snap.criteria],
+        "weights": weights,
+        "defaultWeights": defaults,
+        "settings": {"typeWeights": settings.get("typeWeights", {}),
+                     "rate": settings.get("rate", 0.01), "cap": settings.get("cap", 1.25)},
+        "tieBreakers": tie_labels,
+        "accounts": accounts,
+        "weeksWithData": weeks_with_data,
+        "latestCompleteWeekId": latest_complete_week_id(snap),
+        "source": ctx.source_info(),
+        "lastUpdated": int(snap.at * 1000),
+        "issues": [i.model_dump() for i in snap.issues],
+        "rollingN": DEFAULT_ROLLING_N,
     }
 
 
-@router.get(
-    "/explainer",
-    tags=["Class"],
-    operation_id="getExplainer",
-    summary="The scoring formula and its current parameters",
-    description="The same for everyone; it holds no one's hours.",
-    response_model=Explainer,
-    responses=UNAUTHORIZED | NOT_FOUND,
-)
-def get_explainer(class_id: str, ctx: AppContext = Depends(get_ctx)):
-    return build_explainer(ctx.store.get_settings(class_id).adjustment)
+@router.get("/classes/{classId}/explainer", response_model=Explainer, tags=["classes"],
+            responses={401: {}})
+def get_explainer(classId: str, caller: Caller = Depends(get_caller), ctx=Depends(get_ctx)):
+    snap = need_class(ctx, classId)
+    settings = snap.settings
+    type_weights = settings.get("typeWeights", {"work": 1, "childcare": 1, "eldercare": 1})
+    rate = settings.get("rate", 0.01)
+    cap = settings.get("cap", 1.25)
+    hours = {"work": 12, "childcare": 6, "eldercare": 0}
+    h = weighted_hours(hours, type_weights)
+    factor = commitment_factor(h, rate, cap)
+    adjusted = min(100, 80 * factor)
+    return {
+        "typeWeights": type_weights,
+        "rate": rate,
+        "cap": cap,
+        "table": [{"hours": hh, "factor": commitment_factor(hh, rate, cap)} for hh in [0, 10, 20, 25]],
+        "example": {"raw": 80, "hours": hours, "weighted_hours": h, "factor": factor, "adjusted": adjusted},
+    }
+
+
+@router.put("/classes/{classId}/settings", response_model=LeagueSettings, tags=["settings"],
+            responses={401: {}, 403: {}})
+def save_settings(classId: str, patch: LeagueSettingsPatch,
+                  caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
+    need_class(ctx, classId)
+    data = patch.model_dump(exclude_none=True)
+    if data.get("weights") is not None:
+        data["weights"] = normalise_weights(data["weights"])
+    saved = ctx.store.save_league_settings(classId, data)
+    # bust cache so bootstrap/ranking use new settings
+    ctx.service._cache.pop(classId, None)
+    return {
+        "weights": saved.get("weights"),
+        "typeWeights": saved.get("typeWeights", {"work": 1, "childcare": 1, "eldercare": 1}),
+        "rate": saved.get("rate", 0.01),
+        "cap": saved.get("cap", 1.25),
+        "tieBreakers": saved.get("tieBreakers", []),
+    }

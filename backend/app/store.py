@@ -1,282 +1,175 @@
-"""The read-write AppStore: accounts, commitments, approvals, the change log and settings.
+"""Read-write AppStore matching frontend createToyAppStore contract.
 
-Scores come from the read-only `DataSource`; everything a person enters or an instructor
-decides lives here. `MemoryStore` is the in-memory adapter used for demos and tests. Any
-other adapter (SQLite, later) implements the same `AppStore` protocol and must pass
-`tests/test_store_contract.py`.
-
-Every method that changes a commitment takes the change-log entry to write with it, so a
-change and its log entry are saved together or not at all.
+League settings: {weights|None, typeWeights, rate, cap, tieBreakers}
+Baselines: {id, student_id, work_hours, childcare_hours, eldercare_hours,
+  status, effective_from_week, submitted_at, decided_by, decided_at}
+Weekly updates: {id, student_id, week_id, week_number, work_hours,
+  childcare_hours, eldercare_hours, entered_at, reversed_by, reversed_at}
+Risk settings: {thresholds, active}; risk snapshots: evaluation payloads.
+Notes: {id, instructor_id, class_id, student_id, body, created_at}.
 """
 
+from __future__ import annotations
+
 import threading
-from dataclasses import dataclass, field, replace
-from typing import Any, Literal, Protocol
+from copy import deepcopy
+from typing import Protocol
 
-Role = Literal["instructor", "student"]
-BaselineStatus = Literal["pending", "approved", "rejected", "superseded"]
-Hours = dict[str, float]
-
-# The commitment types are a configured list, so a fourth can be added without a schema change.
-COMMITMENT_TYPES: tuple[tuple[str, str], ...] = (
-    ("work", "Work"),
-    ("childcare", "Child care"),
-    ("eldercare", "Elder care"),
-)
-TYPE_KEYS = tuple(key for key, _ in COMMITMENT_TYPES)
+from app.risk import DEFAULT_ACTIVE, DEFAULT_THRESHOLDS
 
 
-@dataclass(frozen=True, slots=True)
-class StoredAccount:
-    id: str
-    role: Role
-    student_id: str | None
-    external_id: str
-    access_code_hash: str | None  # None for the instructor, who signs in with the passcode
+def default_league_settings() -> dict:
+    return {
+        "typeWeights": {"work": 1, "childcare": 1, "eldercare": 1},
+        "rate": 0.01,
+        "cap": 1.25,
+        "tieBreakers": ["attendance", "homework"],
+    }
 
 
-@dataclass(frozen=True, slots=True)
-class Baseline:
-    """One set of weekly hours for the whole semester, pending the instructor's decision.
-
-    `superseded` covers two cases: a pending baseline replaced by a newer submission
-    (it has no effective week and never counts), and an approved baseline replaced by a
-    later approval (it still counts for the weeks before the new one starts).
-    """
-
-    id: str
-    student_id: str
-    hours: Hours
-    status: BaselineStatus
-    submitted_at: str
-    effective_from_week: int | None = None
-    decided_by: str | None = None
-    decided_at: str | None = None
-    decision_seq: int | None = None  # order of approval; the latest approval wins where they overlap
-
-
-@dataclass(frozen=True, slots=True)
-class WeeklyUpdate:
-    """One submission of hours for one week. `hours=None` means "reset to the baseline".
-
-    Submissions are kept, never overwritten: the active one for a week is the latest that
-    has not been reversed, so reversing it restores the value before it.
-    """
-
-    id: str
-    student_id: str
-    week_id: str
-    hours: Hours | None
-    entered_at: str
-    entry_id: str  # the change-log entry written with it
-    reversed_by: str | None = None
-    reversed_at: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class LogEntry:
-    id: str
-    actor_id: str
-    action: str
-    student_id: str | None
-    week_id: str | None
-    old_values: dict[str, Any] | None
-    new_values: dict[str, Any] | None
-    at: str
-    flagged: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class AdjustmentSettings:
-    """The parameters a, r and f_max of the adjustment, plus the review flag."""
-
-    type_weights: Hours = field(default_factory=lambda: {key: 1.0 for key in TYPE_KEYS})
-    rate: float = 0.01
-    cap: float = 1.25
-    flag_hours: float = 10.0  # flag a weekly entry that differs from the baseline by more than this
-
-
-@dataclass(frozen=True, slots=True)
-class Settings:
-    weights: dict[str, float] | None = None  # criterion weights; None means the criteria's defaults
-    adjustment: AdjustmentSettings = field(default_factory=AdjustmentSettings)
+def default_risk_settings() -> dict:
+    return {"thresholds": dict(DEFAULT_THRESHOLDS), "active": dict(DEFAULT_ACTIVE)}
 
 
 class AppStore(Protocol):
     kind: str
+    label: str
 
-    def get_account(self, account_id: str) -> StoredAccount | None: ...
-
-    def get_account_by_code(self, access_code_hash: str) -> StoredAccount | None: ...
-
-    def list_accounts(self) -> list[StoredAccount]: ...
-
-    def list_baselines(self, student_id: str | None = None) -> list[Baseline]: ...
-
-    def get_baseline(self, baseline_id: str) -> Baseline | None: ...
-
-    def save_baseline(self, student_id: str, hours: Hours, at: str, entry: LogEntry) -> Baseline:
-        """Store a new pending baseline, superseding any pending one, and log it."""
-
-    def decide_baseline(
-        self,
-        baseline_id: str,
-        *,
-        status: Literal["approved", "rejected"],
-        effective_from_week: int | None,
-        decided_by: str,
-        at: str,
-        entry: LogEntry,
-    ) -> Baseline:
-        """Approve or reject a pending baseline and log it. Approving supersedes the old approved one."""
-
-    def list_weekly_updates(self, student_id: str | None = None) -> list[WeeklyUpdate]: ...
-
-    def save_weekly_update(
-        self, student_id: str, week_id: str, hours: Hours | None, at: str, entry: LogEntry
-    ) -> WeeklyUpdate: ...
-
-    def reverse_weekly_update(self, update_id: str, *, reversed_by: str, at: str, entry: LogEntry) -> WeeklyUpdate: ...
-
-    def append_log(self, entry: LogEntry) -> LogEntry: ...
-
-    def list_log(self, student_id: str | None = None) -> list[LogEntry]:
-        """Oldest first."""
-
-    def get_settings(self, class_id: str) -> Settings: ...
-
-    def save_settings(self, class_id: str, settings: Settings, entry: LogEntry | None = None) -> Settings: ...
+    def get_league_settings(self, class_id: str) -> dict: ...
+    def save_league_settings(self, class_id: str, patch: dict) -> dict: ...
+    def list_baselines(self, class_id: str) -> list[dict]: ...
+    def list_weekly_updates(self, class_id: str) -> list[dict]: ...
+    def get_commitments(self, class_id: str, student_id: str) -> dict: ...
+    def get_risk_settings(self, class_id: str) -> dict: ...
+    def save_risk_settings(self, class_id: str, patch: dict) -> dict: ...
+    def get_risk_snapshot(self, class_id: str) -> dict | None: ...
+    def save_risk_snapshot(self, class_id: str, snapshot: dict) -> dict: ...
+    def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict: ...
+    def list_notes(self, class_id: str, student_id: str | None, instructor_id: str) -> list[dict]: ...
 
 
 class MemoryStore:
-    """In memory: lost on restart, so a demo always starts clean."""
-
     kind = "memory"
+    label = "In memory"
 
-    def __init__(self, accounts: list[StoredAccount] | None = None) -> None:
+    def __init__(self, class_ids: list[str] | None = None, seed: dict | None = None) -> None:
         self._lock = threading.RLock()
-        self._accounts = list(accounts or [])
-        self._baselines: list[Baseline] = []
-        self._updates: list[WeeklyUpdate] = []
-        self._log: list[LogEntry] = []
-        self._settings: dict[str, Settings] = {}
-        self._next = {"baseline": 0, "update": 0, "log": 0, "decision": 0}
+        seed = seed or {}
+        self._settings: dict[str, dict] = {}
+        self._weights: dict[str, dict | None] = {}
+        self._baselines: dict[str, list[dict]] = {}
+        self._updates: dict[str, list[dict]] = {}
+        self._risk_settings: dict[str, dict] = {}
+        self._risk_snapshots: dict[str, dict] = {}
+        self._notes: list[dict] = []
+        self._note_seq = 0
+        for cid in class_ids or []:
+            self._settings[cid] = deepcopy(seed.get("settings", {}).get(cid, default_league_settings()))
+            self._weights[cid] = deepcopy(seed.get("weights", {}).get(cid))
+            self._baselines[cid] = deepcopy(seed.get("baselines", {}).get(cid, []))
+            self._updates[cid] = deepcopy(seed.get("weekly_updates", {}).get(cid, []))
+            self._risk_settings[cid] = deepcopy(seed.get("risk_settings", {}).get(cid, default_risk_settings()))
+        for n in seed.get("notes", []):
+            self._notes.append(deepcopy(n))
+            try:
+                num = int(str(n.get("id", "n0"))[1:])
+                self._note_seq = max(self._note_seq, num)
+            except ValueError:
+                pass
 
-    def _id(self, kind: str, prefix: str) -> str:
-        self._next[kind] += 1
-        return f"{prefix}{self._next[kind]}"
+    def _league(self, class_id: str) -> dict:
+        if class_id not in self._settings:
+            self._settings[class_id] = default_league_settings()
+            self._weights[class_id] = None
+            self._baselines.setdefault(class_id, [])
+            self._updates.setdefault(class_id, [])
+            self._risk_settings.setdefault(class_id, default_risk_settings())
+        base = dict(self._settings[class_id])
+        base["weights"] = deepcopy(self._weights.get(class_id))
+        return base
 
-    def _log_entry(self, entry: LogEntry) -> LogEntry:
-        stored = replace(entry, id=self._id("log", "l"))
-        self._log.append(stored)
-        return stored
+    # league settings
 
-    # accounts
-
-    def get_account(self, account_id: str) -> StoredAccount | None:
-        return next((a for a in self._accounts if a.id == account_id), None)
-
-    def get_account_by_code(self, access_code_hash: str) -> StoredAccount | None:
-        return next(
-            (a for a in self._accounts if a.access_code_hash and a.access_code_hash == access_code_hash), None
-        )
-
-    def list_accounts(self) -> list[StoredAccount]:
-        return list(self._accounts)
-
-    # baselines
-
-    def list_baselines(self, student_id: str | None = None) -> list[Baseline]:
+    def get_league_settings(self, class_id: str) -> dict:
         with self._lock:
-            return [b for b in self._baselines if student_id is None or b.student_id == student_id]
+            return self._league(class_id)
 
-    def get_baseline(self, baseline_id: str) -> Baseline | None:
+    def save_league_settings(self, class_id: str, patch: dict) -> dict:
         with self._lock:
-            return next((b for b in self._baselines if b.id == baseline_id), None)
+            self._league(class_id)
+            if "weights" in patch and patch["weights"] is not None:
+                self._weights[class_id] = dict(patch["weights"])
+            rest = {k: v for k, v in patch.items() if k != "weights"}
+            self._settings[class_id] = {**self._settings[class_id], **rest}
+            return self._league(class_id)
 
-    def save_baseline(self, student_id: str, hours: Hours, at: str, entry: LogEntry) -> Baseline:
+    # commitments
+
+    def list_baselines(self, class_id: str) -> list[dict]:
         with self._lock:
-            self._baselines = [
-                replace(b, status="superseded") if b.student_id == student_id and b.status == "pending" else b
-                for b in self._baselines
-            ]
-            baseline = Baseline(
-                id=self._id("baseline", "b"), student_id=student_id, hours=dict(hours),
-                status="pending", submitted_at=at,
-            )
-            self._baselines.append(baseline)
-            self._log_entry(entry)
-            return baseline
+            return deepcopy(self._baselines.get(class_id, []))
 
-    def decide_baseline(self, baseline_id, *, status, effective_from_week, decided_by, at, entry) -> Baseline:
+    def list_weekly_updates(self, class_id: str) -> list[dict]:
         with self._lock:
-            current = self.get_baseline(baseline_id)
-            if current is None or current.status != "pending":
-                raise LookupError("Only a pending baseline can be decided.")
-            decided = replace(
-                current, status=status, decided_by=decided_by, decided_at=at,
-                effective_from_week=effective_from_week if status == "approved" else None,
-                decision_seq=self._next_decision() if status == "approved" else None,
-            )
-            self._baselines = [
-                decided if b.id == baseline_id
-                else replace(b, status="superseded")
-                if status == "approved" and b.student_id == current.student_id and b.status == "approved"
-                else b
-                for b in self._baselines
-            ]
-            self._log_entry(entry)
-            return decided
+            return deepcopy(self._updates.get(class_id, []))
 
-    def _next_decision(self) -> int:
-        self._next["decision"] += 1
-        return self._next["decision"]
-
-    # weekly updates
-
-    def list_weekly_updates(self, student_id: str | None = None) -> list[WeeklyUpdate]:
+    def get_commitments(self, class_id: str, student_id: str) -> dict:
         with self._lock:
-            return [u for u in self._updates if student_id is None or u.student_id == student_id]
+            baselines = [b for b in self._baselines.get(class_id, []) if b["student_id"] == student_id and b["status"] != "superseded"]
+            baseline = baselines[-1] if baselines else None
+            updates = [u for u in self._updates.get(class_id, []) if u["student_id"] == student_id]
+            return {"baseline": deepcopy(baseline), "weeklyUpdates": deepcopy(updates)}
 
-    def save_weekly_update(self, student_id, week_id, hours, at, entry) -> WeeklyUpdate:
+    # risk
+
+    def get_risk_settings(self, class_id: str) -> dict:
         with self._lock:
-            logged = self._log_entry(entry)
-            update = WeeklyUpdate(
-                id=self._id("update", "u"), student_id=student_id, week_id=week_id,
-                hours=None if hours is None else dict(hours), entered_at=at, entry_id=logged.id,
-            )
-            self._updates.append(update)
-            return update
+            if class_id not in self._risk_settings:
+                self._risk_settings[class_id] = default_risk_settings()
+            return deepcopy(self._risk_settings[class_id])
 
-    def reverse_weekly_update(self, update_id, *, reversed_by, at, entry) -> WeeklyUpdate:
+    def save_risk_settings(self, class_id: str, patch: dict) -> dict:
         with self._lock:
-            current = next((u for u in self._updates if u.id == update_id), None)
-            if current is None or current.reversed_at is not None:
-                raise LookupError("There is no weekly update to reverse.")
-            reversed_ = replace(current, reversed_by=reversed_by, reversed_at=at)
-            self._updates = [reversed_ if u.id == update_id else u for u in self._updates]
-            self._log_entry(entry)
-            return reversed_
+            current = self.get_risk_settings(class_id)
+            merged = {
+                "thresholds": {**current["thresholds"], **(patch.get("thresholds") or {})},
+                "active": {**current["active"], **(patch.get("active") or {})},
+            }
+            self._risk_settings[class_id] = merged
+            return deepcopy(merged)
 
-    # log
-
-    def append_log(self, entry: LogEntry) -> LogEntry:
+    def get_risk_snapshot(self, class_id: str) -> dict | None:
         with self._lock:
-            return self._log_entry(entry)
+            snap = self._risk_snapshots.get(class_id)
+            return deepcopy(snap) if snap is not None else None
 
-    def list_log(self, student_id: str | None = None) -> list[LogEntry]:
+    def save_risk_snapshot(self, class_id: str, snapshot: dict) -> dict:
         with self._lock:
-            return [e for e in self._log if student_id is None or e.student_id == student_id]
+            self._risk_snapshots[class_id] = deepcopy(snapshot)
+            return deepcopy(snapshot)
 
-    # settings
+    # notes
 
-    def get_settings(self, class_id: str) -> Settings:
+    def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict:
+        from datetime import datetime, timezone
+
         with self._lock:
-            return self._settings.get(class_id, Settings())
+            self._note_seq += 1
+            note = {
+                "id": f"n{self._note_seq}",
+                "instructor_id": instructor_id,
+                "class_id": class_id,
+                "student_id": student_id,
+                "body": body,
+                "created_at": at or datetime.now(timezone.utc).isoformat(),
+            }
+            self._notes.append(note)
+            return deepcopy(note)
 
-    def save_settings(self, class_id: str, settings: Settings, entry: LogEntry | None = None) -> Settings:
+    def list_notes(self, class_id: str, student_id: str | None, instructor_id: str) -> list[dict]:
         with self._lock:
-            self._settings[class_id] = settings
-            if entry is not None:
-                self._log_entry(entry)
-            return settings
+            return deepcopy([
+                n for n in self._notes
+                if n["class_id"] == class_id and n["instructor_id"] == instructor_id
+                and (not student_id or n["student_id"] == student_id)
+            ])

@@ -2,12 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from factories import ADA, BEN, CY, INSTRUCTOR, build_test_db, build_test_store, signed_in
 
 
 class FakeClock:
-    """Injectable clock so cache and rate-limit behaviour can be tested without sleeping."""
-
     def __init__(self, start: float = 1_800_000_000.0):
         self.now = start
 
@@ -24,55 +21,32 @@ def clock():
 
 
 @pytest.fixture
-def db():
-    return build_test_db()
+def app(clock):
+    return create_app(clock=clock, frontend_dir=None)
 
 
-@pytest.fixture
-def store():
-    return build_test_store()
-
-
-@pytest.fixture
-def app(db, store, clock):
-    return create_app(db=db, store=store, clock=clock, instructor_passcode=INSTRUCTOR)
+def _client(app, token=None):
+    client = TestClient(app)
+    if token:
+        client.headers.update({"Authorization": f"Bearer {token}"})
+    return client
 
 
 @pytest.fixture
 def anon(app):
-    """A client with no session cookie."""
-    return TestClient(app)
+    return _client(app)
 
 
 @pytest.fixture
 def instructor(app):
-    return signed_in(app, INSTRUCTOR)
+    return _client(app, "i1")
 
 
 @pytest.fixture
 def ada(app):
-    """Student s01."""
-    return signed_in(app, ADA)
+    return _client(app, "s01")
 
 
 @pytest.fixture
 def ben(app):
-    """Student s02."""
-    return signed_in(app, BEN)
-
-
-@pytest.fixture
-def cy(app):
-    """Student s03."""
-    return signed_in(app, CY)
-
-
-@pytest.fixture
-def toy_app(clock):
-    """The app with its default seeded demo data."""
-    return create_app(clock=clock)
-
-
-@pytest.fixture
-def toy_instructor(toy_app):
-    return signed_in(toy_app, "demo-instructor")
+    return _client(app, "s02")

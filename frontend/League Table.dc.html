@@ -24,122 +24,56 @@
     --color-divider: color-mix(in srgb, #f2eee8 20%, transparent);
     --color-accent: #e1ad66;
     --color-accent-700: #f5cd96;
+    --color-accent-600: #efbe7e;
     --color-accent-100: #2b2521;
+    --color-accent-900: #fae0bb;
     --color-neutral-700: #bab6b6;
+    --color-neutral-800: #d8d4ce;
   }
   @keyframes lt-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) {
     * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
   }
   :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-
-  /* The ranked list: five columns on a screen, three on a phone. */
-  .lt-cols { display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 34%) 120px 130px; gap: var(--space-3); }
-  .lt-phone-only { display: none; }
-  .lt-input-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
-  .lt-table-scroll { overflow-x: auto; }
-  @media (max-width: 720px) {
-    .lt-cols { grid-template-columns: 44px minmax(0, 1fr) 72px; gap: var(--space-2); }
-    .lt-bar, .lt-move, .lt-podium { display: none !important; }
-    .lt-phone-only { display: inline; }
-    .lt-pad { padding-left: var(--space-3) !important; padding-right: var(--space-3) !important; }
-    .lt-input-row { grid-template-columns: 1fr; }
-  }
 </style>
 </helmet>
 
 <div data-theme="{{ theme }}" style="min-height: 100vh; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding-bottom: 64px;">
 
-  <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
-    <div style="min-height: calc(100vh - 64px); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: flex-end; padding: var(--space-4) var(--space-6);">
-        <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" style="min-height: 44px;">{{ themeLabel }}</button>
-      </div>
-      <main style="flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: var(--space-6) var(--space-4) var(--space-8);">
-        <div style="width: min(440px, 100%); display: grid; gap: var(--space-6);">
-          <div>
-            <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">League table</div>
-            <h1 style="margin: var(--space-1) 0 var(--space-2);">Sign in</h1>
-            <p style="font-size: 14px; opacity: 0.8; margin: 0;">Students enter the personal access code they were given. The instructor enters the class passcode. Keep your code private.</p>
-          </div>
-
-          <form onSubmit="{{ onSubmitLogin }}" class="card" style="padding: var(--space-6); gap: var(--space-4);">
-            <div class="field">
-              <label for="login-code">Access code or passcode</label>
-              <input id="login-code" name="code" type="password" class="input" autocomplete="current-password" autocapitalize="off" spellcheck="false" required value="{{ code }}" onInput="{{ onCode }}" style="min-height: 44px;">
-            </div>
-            <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
-              <div role="alert" style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ loginError }}</div>
-            </sc-if>
-            <button type="submit" class="btn btn-primary btn-block" disabled="{{ signingIn }}" style="min-height: 44px;">{{ signInLabel }}</button>
-          </form>
-
-          <sc-if value="{{ hasDemoAccounts }}" hint-placeholder-val="{{ true }}">
-            <section aria-label="Demo accounts" style="display: grid; gap: var(--space-3);">
-              <div style="display: flex; align-items: center; gap: var(--space-2);">
-                <span class="tag tag-outline">Demo data</span>
-                <span style="font-size: 13px; opacity: 0.75;">Pick an account to fill in its code.</span>
-              </div>
-              <div style="display: grid; gap: var(--space-2);">
-                <sc-for list="{{ demoAccounts }}" as="d" hint-placeholder-count="6">
-                  <button type="button" class="btn btn-secondary" onClick="{{ d.onClick }}" style="min-height: 44px; justify-content: space-between; gap: var(--space-3); text-align: left;">
-                    <span>
-                      <span style="font-family: var(--font-heading); font-size: 16px; display: block;">{{ d.label }}</span>
-                      <span style="font-size: 11px; opacity: 0.7; display: block;">{{ d.note }}</span>
-                    </span>
-                    <span style="font-size: 12px; opacity: 0.7;">{{ d.code }}</span>
-                  </button>
-                </sc-for>
-              </div>
-            </section>
-          </sc-if>
-        </div>
-      </main>
-    </div>
-  </sc-if>
-
-  <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ true }}">
-  <div>
-
-  <header class="lt-pad" style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-divider);">
-    <div style="margin-right: auto; display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;">
+  <header style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6) var(--space-3);">
+    <div style="margin-right: auto; display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; min-width: 0;">
       <span style="font-family: var(--font-heading); font-size: clamp(22px, 2vw, 30px); letter-spacing: -0.015em;">{{ klassName }}</span>
-      <span style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">League table</span>
+      <span style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ termLabel }}</span>
     </div>
     <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
       <sc-if value="{{ demo }}" hint-placeholder-val="{{ true }}">
         <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">Demo data</span>
       </sc-if>
       <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
-      <sc-if value="{{ showRefresh }}" hint-placeholder-val="{{ true }}">
-        <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
-      </sc-if>
+      <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
       <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" style="min-height: 44px;">{{ themeLabel }}</button>
-      <button class="btn btn-secondary" onClick="{{ onTogglePresent }}" style="min-height: 44px;">{{ presentLabel }}</button>
-      <sc-if value="{{ showAccount }}" hint-placeholder-val="{{ true }}">
-        <span class="tag tag-outline">{{ roleLabel }}</span>
-        <button class="btn btn-ghost" onClick="{{ onSignOut }}" style="min-height: 44px;">Sign out</button>
-      </sc-if>
     </div>
   </header>
 
-  <sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
-    <nav aria-label="Sections" class="lt-pad" style="display: flex; gap: var(--space-2); flex-wrap: wrap; padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider);">
-      <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
-        <button onClick="{{ tab.onClick }}" aria-current="{{ tab.current }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 16px; background: {{ tab.bg }}; border: 1px solid {{ tab.border }}; color: {{ tab.color }};">{{ tab.label }}</button>
+  <div style="display: flex; align-items: flex-end; gap: var(--space-6); flex-wrap: wrap; padding: 0 var(--space-6); border-bottom: 1px solid var(--color-divider);">
+    <nav style="display: flex; gap: var(--space-2);" aria-label="Screens">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" aria-pressed="{{ t.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ t.rule }}; font-family: var(--font-heading); font-size: 17px; color: {{ t.color }};" style-hover="border-bottom-color: var(--color-accent-600);">{{ t.label }}</button>
       </sc-for>
     </nav>
-  </sc-if>
-
-  <!-- ================================================================ the table -->
-  <sc-if value="{{ isTable }}" hint-placeholder-val="{{ true }}">
-  <div>
+    <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto; padding-bottom: var(--space-2);">
+      <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Class</span>
+      <sc-for list="{{ classChips }}" as="k" hint-placeholder-count="2">
+        <button onClick="{{ k.onClick }}" aria-pressed="{{ k.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ k.bg }}; border: 1px solid {{ k.border }}; color: {{ k.color }};">{{ k.label }}</button>
+      </sc-for>
+    </div>
+  </div>
 
   <sc-if value="{{ errorMsg }}" hint-placeholder-val="{{ false }}">
     <div style="margin: var(--space-8) auto; max-width: 620px; padding: var(--space-6); border: 1px solid var(--color-divider); border-radius: var(--radius-md); text-align: center;">
       <h3 style="margin-bottom: var(--space-2);">The table could not load</h3>
       <p style="font-size: 14px; opacity: 0.8;">{{ errorMsg }}</p>
-      <button class="btn btn-primary" onClick="{{ onRetry }}" style="min-height: 44px;">Try again</button>
+      <button class="btn btn-primary" onClick="{{ onRefresh }}" style="min-height: 44px;">Try again</button>
     </div>
   </sc-if>
 
@@ -154,33 +88,34 @@
   </sc-if>
 
   <sc-if value="{{ showControls }}" hint-placeholder-val="{{ true }}">
-    <div class="lt-pad" style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
+    <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
 
       <div style="display: flex; align-items: center; gap: var(--space-2);">
         <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
-        <div style="min-width: 150px; text-align: center;">
+        <div style="min-width: 210px; text-align: center;">
           <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
           <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" style="width: 100%; accent-color: var(--color-accent);">
         </div>
         <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
       </div>
 
-      <div class="seg" role="group" aria-label="Window" style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
-        <sc-for list="{{ windows }}" as="w" hint-placeholder-count="3">
-          <button onClick="{{ w.onClick }}" aria-pressed="{{ w.active }}" style="min-height: 44px; padding: 0 var(--space-4); font-family: var(--font-heading); font-size: 14px; cursor: pointer; border: 0; border-left: {{ w.divider }}; background: {{ w.bg }}; color: var(--color-text);">{{ w.label }}</button>
+      <div style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
+        <sc-for list="{{ windowOpts }}" as="wo" hint-placeholder-count="3">
+          <button onClick="{{ wo.onClick }}" aria-pressed="{{ wo.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); font-family: var(--font-heading); font-size: 14px; background: {{ wo.bg }}; color: var(--color-text);">{{ wo.label }}</button>
         </sc-for>
       </div>
 
-      <sc-if value="{{ isInstructor }}" hint-placeholder-val="{{ true }}">
-        <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
-          <sc-for list="{{ criteriaChips }}" as="chip" hint-placeholder-count="5">
-            <button onClick="{{ chip.onClick }}" aria-pressed="{{ chip.active }}" title="{{ chip.hint }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ chip.bg }}; border: 1px solid {{ chip.border }}; color: {{ chip.color }};">{{ chip.label }}</button>
-          </sc-for>
-          <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights</button>
-        </div>
-      </sc-if>
+      <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+        <sc-for list="{{ criteriaChips }}" as="chip" hint-placeholder-count="5">
+          <button onClick="{{ chip.onClick }}" aria-pressed="{{ chip.active }}" title="{{ chip.hint }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ chip.bg }}; border: 1px solid {{ chip.border }}; color: {{ chip.color }};">{{ chip.label }}</button>
+        </sc-for>
+        <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights &amp; adjustment</button>
+        <button class="btn btn-ghost" onClick="{{ onOpenExplainer }}" style="min-height: 44px;">Formula</button>
+      </div>
 
       <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
+        <button onClick="{{ onToggleRaw }}" aria-pressed="{{ rawOn }}" title="Instructor only — compare the adjusted order with the raw order" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ rawBg }}; border: 1px solid {{ rawBorder }}; color: var(--color-text);">Raw view</button>
         <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Names</span>
         <sc-for list="{{ nameModes }}" as="nm" hint-placeholder-count="3">
           <button onClick="{{ nm.onClick }}" aria-pressed="{{ nm.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ nm.bg }}; border: 1px solid {{ nm.border }}; color: var(--color-text);">{{ nm.label }}</button>
@@ -189,71 +124,86 @@
     </div>
   </sc-if>
 
-  <sc-if value="{{ showIssues }}" hint-placeholder-val="{{ false }}">
-    <div class="lt-pad" style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">
+  <sc-if value="{{ showStudentControls }}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
+      <div style="display: flex; align-items: center; gap: var(--space-2);">
+        <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
+        <div style="min-width: 210px; text-align: center;">
+          <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
+          <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" style="width: 100%; accent-color: var(--color-accent);">
+        </div>
+        <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
+      </div>
+      <div style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
+        <sc-for list="{{ windowOpts }}" as="wo" hint-placeholder-count="3">
+          <button onClick="{{ wo.onClick }}" aria-pressed="{{ wo.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); font-family: var(--font-heading); font-size: 14px; background: {{ wo.bg }}; color: var(--color-text);">{{ wo.label }}</button>
+        </sc-for>
+      </div>
+      <button class="btn btn-ghost" onClick="{{ onOpenExplainer }}" style="min-height: 44px; margin-left: auto;">How the score works</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasIssues }}" hint-placeholder-val="{{ false }}">
+    <div style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">
       <span class="tag tag-outline">Data check</span>
       <span style="margin-left: var(--space-2);">{{ issuesText }}</span>
     </div>
   </sc-if>
 
   <sc-if value="{{ stale }}" hint-placeholder-val="{{ false }}">
-    <div class="lt-pad" style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">Showing the last good snapshot — the source did not respond.</div>
+    <div style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">Showing the last good snapshot — the source did not respond.</div>
   </sc-if>
 
-  <main class="lt-pad" style="padding: var(--space-6); max-width: 1680px; margin: 0 auto;">
-
-    <sc-if value="{{ pinned }}" hint-placeholder-val="{{ false }}">
-      <section aria-label="Your position" style="margin-bottom: var(--space-6); border: 1px solid var(--color-accent); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;">
-        <div style="font-family: var(--font-heading); font-size: 40px; line-height: 1; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ pinned.rank }}</div>
-        <div style="margin-right: auto;">
-          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Your position</div>
-          <div style="font-family: var(--font-heading); font-size: 22px;">{{ pinned.name }} · {{ pinned.score }}</div>
-          <div style="font-size: 12px; opacity: 0.75; font-variant-numeric: lining-nums tabular-nums;">{{ pinned.deltaText }} · {{ pinned.gapText }}</div>
-        </div>
-        <button class="btn btn-primary" onClick="{{ pinned.onClick }}" style="min-height: 44px;">How was this calculated?</button>
-      </section>
-    </sc-if>
+  <main style="padding: var(--space-6); max-width: 1680px; margin: 0 auto;">
 
     <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
-      <div class="lt-podium" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: end; margin-bottom: var(--space-8);">
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: end; margin-bottom: var(--space-8);">
         <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
-          <button onClick="{{ p.onClick }}" tabIndex="{{ p.tabIndex }}" style="text-align: center; cursor: {{ p.cursor }}; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
+          <button onClick="{{ p.onClick }}" style="text-align: center; cursor: pointer; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
             <div style="font-family: var(--font-heading); font-size: clamp(30px, 3.4vw, 56px); line-height: 1; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ p.rank }}</div>
             <div style="margin: var(--space-3) auto var(--space-2); width: {{ p.avatarSize }}; height: {{ p.avatarSize }}; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: {{ p.monogramSize }}; color: var(--color-text);">{{ p.monogram }}</div>
             <div style="font-family: var(--font-heading); font-size: clamp(20px, 1.9vw, 34px); line-height: 1.15; color: var(--color-text);">{{ p.name }}</div>
             <div style="font-family: var(--font-heading); font-size: clamp(24px, 2.2vw, 40px); font-variant-numeric: lining-nums tabular-nums; color: var(--color-text);">{{ p.score }}</div>
             <div style="font-size: 12px; color: var(--color-text); opacity: 0.75; font-variant-numeric: lining-nums tabular-nums;">{{ p.deltaText }}</div>
+            <div style="font-size: 11px; color: var(--color-accent); letter-spacing: 0.06em; text-transform: uppercase;">{{ p.flag }}</div>
           </button>
         </sc-for>
       </div>
 
       <div role="table" aria-label="Class ranking" style="border-top: 1px solid var(--color-divider);">
-        <div role="row" class="lt-cols" style="padding: var(--space-2) var(--space-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 60%, transparent); border-bottom: 1px solid var(--color-divider);">
+        <div role="row" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(110px, 26%) 120px 150px; gap: var(--space-3); padding: var(--space-2) var(--space-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 60%, transparent); border-bottom: 1px solid var(--color-divider);">
           <div role="columnheader">Rank</div>
           <div role="columnheader">Student</div>
-          <div role="columnheader" class="lt-bar">Score</div>
-          <div role="columnheader" style="text-align: right;">Points</div>
-          <div role="columnheader" class="lt-move" style="text-align: right;">Movement</div>
+          <div role="columnheader">Score</div>
+          <div role="columnheader" style="text-align: right;">Adjusted</div>
+          <div role="columnheader" style="text-align: right;">Movement &amp; gaps</div>
         </div>
 
         <sc-for list="{{ visibleRows }}" as="row" hint-placeholder-count="10">
-          <div role="row" class="lt-cols" onClick="{{ row.onClick }}" tabIndex="{{ row.tabIndex }}" onKeyDown="{{ row.onKeyDown }}" style="align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: {{ row.cursor }}; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="{{ row.hover }}">
+          <div role="row" onClick="{{ row.onClick }}" tabIndex="0" onKeyDown="{{ row.onKeyDown }}" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(110px, 26%) 120px 150px; gap: var(--space-3); align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: pointer; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
             <div role="cell" style="font-family: var(--font-heading); font-size: clamp(26px, 2.4vw, 48px); line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: {{ row.rankColor }};">{{ row.rank }}</div>
             <div role="cell" style="display: flex; align-items: center; gap: var(--space-3); min-width: 0;">
               <span style="flex: none; width: 40px; height: 40px; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 15px;">{{ row.monogram }}</span>
               <span style="min-width: 0;">
                 <span style="display: block; font-family: var(--font-heading); font-size: clamp(18px, 1.6vw, 32px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ row.name }}</span>
-                <span class="lt-phone-only" style="font-size: 11px; opacity: 0.7;">{{ row.deltaText }}</span>
+                <span style="display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent);">{{ row.flag }}</span>
               </span>
-              <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-accent); white-space: nowrap;">{{ row.flag }}</span>
             </div>
-            <div role="cell" class="lt-bar" style="height: 14px; border: 1px solid var(--color-divider); border-radius: 2px; overflow: hidden;">
-              <div style="height: 100%; width: {{ row.barWidth }}; background: {{ row.barFill }}; transition: width 520ms cubic-bezier(.2,.7,.3,1);"></div>
+            <div role="cell">
+              <div style="height: 14px; border: 1px solid var(--color-divider); border-radius: 2px; overflow: hidden;">
+                <div style="height: 100%; width: {{ row.barWidth }}; background: {{ row.barFill }}; transition: width 520ms cubic-bezier(.2,.7,.3,1);"></div>
+              </div>
+              <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums; margin-top: 3px;">{{ row.rawText }}</div>
             </div>
-            <div role="cell" style="text-align: right; font-family: var(--font-heading); font-size: clamp(20px, 1.7vw, 32px); font-variant-numeric: lining-nums tabular-nums;">{{ row.score }}</div>
-            <div role="cell" class="lt-move" style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">
+            <div role="cell" style="text-align: right;">
+              <div style="font-family: var(--font-heading); font-size: clamp(20px, 1.7vw, 32px); font-variant-numeric: lining-nums tabular-nums;">{{ row.score }}</div>
+              <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ row.factorText }}</div>
+            </div>
+            <div role="cell" style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">
               <div style="font-size: 15px; color: {{ row.deltaColor }};">{{ row.deltaText }}</div>
-              <div style="font-size: 11px; opacity: 0.6;">{{ row.gapText }}</div>
+              <div style="font-size: 11px; opacity: 0.6;">{{ row.gapUpText }}</div>
+              <div style="font-size: 11px; opacity: 0.6;">{{ row.gapDownText }}</div>
             </div>
           </div>
         </sc-for>
@@ -263,329 +213,171 @@
         <button class="btn btn-secondary" onClick="{{ onToggleShowAll }}" style="min-height: 44px;">{{ showAllLabel }}</button>
       </div>
 
-      <p style="text-align: center; font-size: 12px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ footnote }}</p>
+      <p style="text-align: center; font-size: 12px; opacity: 0.65; max-width: 720px; margin: 0 auto; text-wrap: pretty; font-variant-numeric: lining-nums tabular-nums;">{{ footnote }}</p>
     </sc-if>
 
     <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
       <div style="padding: var(--space-8); text-align: center; border: 1px solid var(--color-divider); border-radius: var(--radius-md);">
-        <h3>No scores for this window yet</h3>
-        <p style="font-size: 14px; opacity: 0.75;">Pick another week, or turn a criterion back on.</p>
+        <h3>No scores recorded for this week</h3>
+        <p style="font-size: 14px; opacity: 0.75;">{{ emptyHint }}</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ me }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 860px; margin: 0 auto; display: grid; gap: var(--space-6);">
+        <div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">{{ me.kicker }}</div>
+          <h2 style="margin: var(--space-1) 0 0;">{{ me.name }}</h2>
+          <p style="font-size: 13px; opacity: 0.75; text-align: justify; max-width: 62ch;">{{ me.privacyNote }}</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3);">
+          <sc-for list="{{ me.stats }}" as="st" hint-placeholder-count="4">
+            <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-3);">
+              <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6;">{{ st.label }}</div>
+              <div style="font-family: var(--font-heading); font-size: 30px; font-variant-numeric: lining-nums tabular-nums;">{{ st.value }}</div>
+              <div style="font-size: 11px; opacity: 0.65;">{{ st.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom: var(--space-2);">{{ me.partsTitle }}</h3>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Criterion</th>
+                <th style="text-align: right;">Earned</th>
+                <th style="text-align: right;">%</th>
+                <th style="text-align: right;">Weight</th>
+                <th style="text-align: right;">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ me.parts }}" as="part" hint-placeholder-count="5">
+                <tr>
+                  <td>{{ part.label }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.earnedText }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.pctText }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.weightText }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.pointsText }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom: var(--space-2);">Hours, factor and adjusted score</h3>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Week</th>
+                <th style="text-align: right;">Weighted hours</th>
+                <th style="text-align: right;">Factor</th>
+                <th style="text-align: right;">Raw</th>
+                <th style="text-align: right;">Adjusted</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ me.weeks }}" as="w" hint-placeholder-count="4">
+                <tr>
+                  <td style="font-variant-numeric: lining-nums tabular-nums;">{{ w.label }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.hoursText }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.factorText }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.rawText }}</td>
+                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.adjustedText }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <p style="font-size: 12px; opacity: 0.7; margin-top: var(--space-2);">{{ me.hoursNote }}</p>
+          <p style="font-size: 12px; opacity: 0.7;">{{ me.cappedNote }}</p>
+        </div>
+
+        <div style="border-top: 1px solid var(--color-divider); padding-top: var(--space-3); display: grid; gap: var(--space-1); font-size: 14px;">
+          <div>{{ me.gapUp }}</div>
+          <div>{{ me.gapDown }}</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ digest }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1100px; margin: 0 auto; display: grid; gap: var(--space-6);">
+        <div style="display: flex; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap;">
+          <div style="margin-right: auto;">
+            <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Instructor only · never projected</div>
+            <h2 style="margin: var(--space-1) 0 0;">Digest</h2>
+            <p style="font-size: 13px; opacity: 0.8; max-width: 66ch; text-align: justify;">{{ digest.note }}</p>
+            <p style="font-size: 12px; opacity: 0.7;">{{ digest.comparedText }}</p>
+          </div>
+          <button class="btn btn-ghost" onClick="{{ onOpenThresholds }}" style="min-height: 44px;">Signal thresholds</button>
+        </div>
+        <sc-for list="{{ digest.groups }}" as="g" hint-placeholder-count="2">
+          <div>
+            <h3 style="margin-bottom: var(--space-2); padding-bottom: var(--space-1); border-bottom: 1px solid var(--color-divider);">{{ g.className }}</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4);">
+              <sc-for list="{{ g.sections }}" as="sec" hint-placeholder-count="3">
+                <div>
+                  <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; margin-bottom: var(--space-2);">{{ sec.title }}</div>
+                  <div style="display: grid; gap: var(--space-2);">
+                    <sc-for list="{{ sec.rows }}" as="r" hint-placeholder-count="2">
+                      <button onClick="{{ r.onClick }}" style="display: block; width: 100%; text-align: left; cursor: pointer; background: transparent; color: var(--color-text); font-family: var(--font-body); border: 1px solid var(--color-divider); border-left: 3px solid {{ r.levelColor }}; border-radius: var(--radius-md); padding: var(--space-3);" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, transparent);">
+                        <span style="display: flex; align-items: baseline; gap: var(--space-2);">
+                          <span style="font-family: var(--font-heading); font-size: 18px; margin-right: auto;">{{ r.name }}</span>
+                          <span style="font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: {{ r.levelColor }};">{{ r.level }}</span>
+                        </span>
+                        <span style="display: block; font-size: 12px; opacity: 0.75; margin-top: 4px; text-wrap: pretty;">{{ r.signalsText }}</span>
+                        <span style="display: block; font-size: 11px; opacity: 0.6; margin-top: 4px;">{{ r.metaText }}</span>
+                      </button>
+                    </sc-for>
+                    <div style="font-size: 12px; opacity: 0.6;">{{ sec.emptyText }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ standing }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 760px; margin: 0 auto; display: grid; gap: var(--space-6);">
+        <div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">{{ standing.kicker }}</div>
+          <h2 style="margin: var(--space-1) 0 0;">{{ standing.headline }}</h2>
+          <p style="font-size: 14px; opacity: 0.85; max-width: 62ch; text-align: justify;">{{ standing.intro }}</p>
+        </div>
+
+        <div style="border: 1px solid var(--color-divider); border-left: 3px solid {{ standing.levelColor }}; border-radius: var(--radius-md); padding: var(--space-4);">
+          <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6;">Where you stand</div>
+          <div style="font-family: var(--font-heading); font-size: 30px; color: {{ standing.levelColor }};">{{ standing.levelText }}</div>
+          <p style="font-size: 14px; margin: var(--space-2) 0 0; text-align: justify;">{{ standing.levelNote }}</p>
+        </div>
+
+        <div style="display: grid; gap: var(--space-3);">
+          <sc-for list="{{ standing.signals }}" as="sg" hint-placeholder-count="2">
+            <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-3);">
+              <div style="font-family: var(--font-heading); font-size: 18px;">{{ sg.label }}</div>
+              <p style="font-size: 14px; margin: var(--space-1) 0 0; text-align: justify;">{{ sg.summary }}</p>
+            </div>
+          </sc-for>
+          <div style="font-size: 13px; opacity: 0.75;">{{ standing.emptyText }}</div>
+        </div>
+
+        <div style="border-top: 1px solid var(--color-divider); padding-top: var(--space-3);">
+          <h3 style="margin: 0 0 var(--space-1); font-size: 17px;">Where to get help</h3>
+          <p style="font-size: 14px; text-align: justify;">{{ standing.help }}</p>
+          <p style="font-size: 12px; opacity: 0.7;">{{ standing.privacy }}</p>
+        </div>
       </div>
     </sc-if>
   </main>
 
-  </div>
-  </sc-if>
-
-  <!-- ====================================================== my commitments -->
-  <sc-if value="{{ isCommitments }}" hint-placeholder-val="{{ false }}">
-    <main class="lt-pad" style="padding: var(--space-6); max-width: 780px; margin: 0 auto; display: grid; gap: var(--space-6);">
-      <div>
-        <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Only you and your instructor can see this</div>
-        <h1 style="margin: var(--space-1) 0 var(--space-2);">My commitments</h1>
-        <p style="font-size: 14px; opacity: 0.85; margin: 0; text-align: justify;">Work, child care and elder care take time away from study. If you tell us the weekly hours, your score is multiplied by a small capped factor so a strong result alongside those hours is recognised. It is optional, and there is nothing to type but hours.</p>
-      </div>
-
-      <sc-if value="{{ cmShowNotice }}" hint-placeholder-val="{{ false }}">
-        <section aria-label="Notice" class="card" style="padding: var(--space-4); gap: var(--space-2);">
-          <div class="card-kicker">Before you start</div>
-          <p class="card-body" style="opacity: 1;">Your hours are seen only by you and your instructor. Classmates see your final adjusted score and rank, never your hours, your factor or your raw score. The instructor approves your baseline before it counts. Everything you change is recorded in a log the instructor can review.</p>
-          <div><button class="btn btn-primary" onClick="{{ onDismissNotice }}" style="min-height: 44px;">I understand</button></div>
-        </section>
-      </sc-if>
-
-      <sc-if value="{{ cmError }}" hint-placeholder-val="{{ false }}">
-        <div role="alert" style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ cmError }}</div>
-      </sc-if>
-
-      <sc-if value="{{ cmLoaded }}" hint-placeholder-val="{{ true }}">
-      <div style="display: grid; gap: var(--space-6);">
-
-        <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
-          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7;">Baseline</span>
-          <span class="tag tag-accent">{{ cmStatusLabel }}</span>
-          <span style="font-size: 13px; opacity: 0.8;">{{ cmStatusDetail }}</span>
-        </div>
-
-        <div class="seg" role="group" aria-label="What to edit" style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden; width: fit-content; max-width: 100%; flex-wrap: wrap;">
-          <sc-for list="{{ cmModes }}" as="m" hint-placeholder-count="3">
-            <button onClick="{{ m.onClick }}" aria-pressed="{{ m.active }}" disabled="{{ m.disabled }}" style="min-height: 44px; padding: 0 var(--space-4); font-family: var(--font-heading); font-size: 15px; cursor: pointer; border: 0; border-left: {{ m.divider }}; background: {{ m.bg }}; color: var(--color-text);">{{ m.label }}</button>
-          </sc-for>
-        </div>
-
-        <p style="font-size: 13px; opacity: 0.8; margin: 0;">{{ cmModeHelp }}</p>
-
-        <div class="lt-input-row">
-          <sc-for list="{{ cmFields }}" as="f" hint-placeholder-count="3">
-            <div class="field">
-              <label for="{{ f.id }}" style="font-size: 14px;">{{ f.label }}</label>
-              <input id="{{ f.id }}" type="number" inputmode="decimal" min="0" max="80" step="0.5" class="input" value="{{ f.value }}" onInput="{{ f.onInput }}" style="min-height: 56px; font-size: 22px; font-family: var(--font-heading); font-variant-numeric: lining-nums tabular-nums;">
-              <div style="font-size: 12px; opacity: 0.65; margin-top: 4px;">hours a week</div>
-            </div>
-          </sc-for>
-        </div>
-
-        <section aria-label="Preview" class="card" style="padding: var(--space-4); gap: var(--space-2);">
-          <div class="card-kicker">Live preview · {{ cmPreviewWeek }}</div>
-          <sc-if value="{{ cmPreview }}" hint-placeholder-val="{{ true }}">
-            <div style="display: flex; gap: var(--space-6); flex-wrap: wrap; font-variant-numeric: lining-nums tabular-nums;">
-              <div><div style="font-size: 12px; opacity: 0.7;">Weighted hours</div><div style="font-family: var(--font-heading); font-size: 28px;">{{ cmPreview.weighted }}</div></div>
-              <div><div style="font-size: 12px; opacity: 0.7;">Your factor</div><div style="font-family: var(--font-heading); font-size: 28px;">{{ cmPreview.factor }}</div></div>
-              <div><div style="font-size: 12px; opacity: 0.7;">Raw score</div><div style="font-family: var(--font-heading); font-size: 28px;">{{ cmPreview.raw }}</div></div>
-              <div><div style="font-size: 12px; opacity: 0.7;">Adjusted score</div><div style="font-family: var(--font-heading); font-size: 28px; color: var(--color-accent-700);">{{ cmPreview.adjusted }}</div></div>
-            </div>
-            <div style="font-size: 12px; opacity: 0.8;">{{ cmPreview.note }}</div>
-          </sc-if>
-          <sc-if value="{{ cmPreviewError }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size: 13px;">{{ cmPreviewError }}</div>
-          </sc-if>
-          <div style="font-size: 12px; opacity: 0.65;">{{ cmTotalText }}</div>
-        </section>
-
-        <div style="display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: center;">
-          <button class="btn btn-primary" onClick="{{ onCmSave }}" disabled="{{ cmSaveDisabled }}" style="min-height: 48px;">{{ cmSaveLabel }}</button>
-          <sc-if value="{{ cmCanReset }}" hint-placeholder-val="{{ false }}">
-            <button class="btn btn-secondary" onClick="{{ onCmReset }}" disabled="{{ cmBusy }}" style="min-height: 48px;">Reset to baseline</button>
-          </sc-if>
-          <sc-if value="{{ cmNote }}" hint-placeholder-val="{{ false }}">
-            <span role="status" style="font-size: 13px;">{{ cmNote }}</span>
-          </sc-if>
-        </div>
-
-        <section aria-label="Factor by week">
-          <h2 style="font-size: 22px; margin-bottom: var(--space-2);">Your factor by week</h2>
-          <div class="lt-table-scroll">
-            <table class="table">
-              <thead><tr><th>Week</th><th>Hours from</th><th style="text-align: right;">Weighted hours</th><th style="text-align: right;">Factor</th></tr></thead>
-              <tbody>
-                <sc-for list="{{ cmWeeks }}" as="w" hint-placeholder-count="16">
-                  <tr>
-                    <td style="font-variant-numeric: lining-nums tabular-nums;">{{ w.label }}</td>
-                    <td>{{ w.source }}</td>
-                    <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.weighted }}</td>
-                    <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.factor }}</td>
-                  </tr>
-                </sc-for>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-      </sc-if>
-    </main>
-  </sc-if>
-
-  <!-- =============================================================== approvals -->
-  <sc-if value="{{ isApprovals }}" hint-placeholder-val="{{ false }}">
-    <main class="lt-pad" style="padding: var(--space-6); max-width: 1100px; margin: 0 auto; display: grid; gap: var(--space-8);">
-      <div>
-        <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Instructor only · never shown in Present mode</div>
-        <h1 style="margin: var(--space-1) 0 0;">Approvals</h1>
-      </div>
-
-      <sc-if value="{{ apError }}" hint-placeholder-val="{{ false }}">
-        <div role="alert" style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ apError }}</div>
-      </sc-if>
-
-      <section aria-label="Waiting for approval">
-        <h2 style="font-size: 24px; margin-bottom: var(--space-3);">Waiting for approval · {{ apPendingCount }}</h2>
-        <sc-if value="{{ apNoPending }}" hint-placeholder-val="{{ false }}">
-          <p style="font-size: 14px; opacity: 0.75;">Nothing is waiting. A new baseline or baseline change from a student appears here.</p>
-        </sc-if>
-        <div style="display: grid; gap: var(--space-3);">
-          <sc-for list="{{ apPending }}" as="p" hint-placeholder-count="2">
-            <div class="card" style="padding: var(--space-4); gap: var(--space-3);">
-              <div style="display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;">
-                <span style="font-family: var(--font-heading); font-size: 22px; margin-right: auto;">{{ p.name }}</span>
-                <span class="tag tag-outline">{{ p.kind }}</span>
-                <span style="font-size: 12px; opacity: 0.7;">{{ p.submitted }}</span>
-              </div>
-              <div class="lt-table-scroll">
-                <table class="table">
-                  <thead><tr><th></th><th style="text-align: right;">Work</th><th style="text-align: right;">Child care</th><th style="text-align: right;">Elder care</th><th style="text-align: right;">Total</th></tr></thead>
-                  <tbody>
-                    <tr><td>Requested</td><td style="text-align: right;">{{ p.requested.work }}</td><td style="text-align: right;">{{ p.requested.childcare }}</td><td style="text-align: right;">{{ p.requested.eldercare }}</td><td style="text-align: right;">{{ p.requested.total }}</td></tr>
-                    <sc-if value="{{ p.hasCurrent }}" hint-placeholder-val="{{ false }}">
-                      <tr><td>Approved now</td><td style="text-align: right;">{{ p.current.work }}</td><td style="text-align: right;">{{ p.current.childcare }}</td><td style="text-align: right;">{{ p.current.eldercare }}</td><td style="text-align: right;">{{ p.current.total }}</td></tr>
-                    </sc-if>
-                  </tbody>
-                </table>
-              </div>
-              <div style="display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end;">
-                <div class="field" style="width: 160px;">
-                  <label for="{{ p.weekId }}">Counts from week</label>
-                  <input id="{{ p.weekId }}" type="number" min="1" max="{{ p.maxWeek }}" step="1" class="input" value="{{ p.effective }}" onInput="{{ p.onEffective }}" style="min-height: 44px;">
-                </div>
-                <button class="btn btn-primary" onClick="{{ p.onApprove }}" disabled="{{ apBusy }}" style="min-height: 44px;">Approve</button>
-                <button class="btn btn-secondary" onClick="{{ p.onReject }}" disabled="{{ apBusy }}" style="min-height: 44px;">Reject</button>
-              </div>
-            </div>
-          </sc-for>
-        </div>
-      </section>
-
-      <section aria-label="All students">
-        <h2 style="font-size: 24px; margin-bottom: var(--space-3);">Every student</h2>
-        <div class="lt-table-scroll">
-          <table class="table">
-            <thead><tr><th>Student</th><th>Baseline</th><th>Hours a week</th><th style="text-align: right;">From week</th><th style="text-align: right;">Factor now</th></tr></thead>
-            <tbody>
-              <sc-for list="{{ apStudents }}" as="r" hint-placeholder-count="10">
-                <tr>
-                  <td>{{ r.name }}</td>
-                  <td>{{ r.status }}</td>
-                  <td style="font-variant-numeric: lining-nums tabular-nums;">{{ r.hours }}</td>
-                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ r.from }}</td>
-                  <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ r.factor }}</td>
-                </tr>
-              </sc-for>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-label="Change log">
-        <h2 style="font-size: 24px; margin-bottom: var(--space-1);">Change log</h2>
-        <p style="font-size: 13px; opacity: 0.75; margin-top: 0;">Every submission, decision, weekly update and reversal, newest first. A flag marks a weekly entry that differs from the baseline by more than {{ apFlagHours }} hours.</p>
-        <div class="lt-table-scroll">
-          <table class="table">
-            <thead><tr><th>When</th><th>Who</th><th>What</th><th>Student · week</th><th>Change</th><th></th></tr></thead>
-            <tbody>
-              <sc-for list="{{ apLog }}" as="e" hint-placeholder-count="10">
-                <tr>
-                  <td style="font-size: 12px; white-space: nowrap;">{{ e.when }}</td>
-                  <td>{{ e.actor }}</td>
-                  <td>{{ e.action }} <span style="color: var(--color-accent-700);">{{ e.flag }}</span></td>
-                  <td>{{ e.subject }}</td>
-                  <td style="font-size: 13px;">{{ e.change }}</td>
-                  <td style="text-align: right;"><sc-if value="{{ e.reversible }}" hint-placeholder-val="{{ false }}"><button class="btn btn-secondary" onClick="{{ e.onReverse }}" disabled="{{ apBusy }}" style="min-height: 44px;">Reverse</button></sc-if></td>
-                </tr>
-              </sc-for>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-  </sc-if>
-
-  <!-- ========================================================= adjustment settings -->
-  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
-    <main class="lt-pad" style="padding: var(--space-6); max-width: 780px; margin: 0 auto; display: grid; gap: var(--space-6);">
-      <div>
-        <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Instructor only</div>
-        <h1 style="margin: var(--space-1) 0 var(--space-2);">Adjustment settings</h1>
-        <p style="font-size: 14px; opacity: 0.85; margin: 0; text-align: justify;">The factor is the smaller of 1 + rate × weighted hours and the cap, and weighted hours count each type by its weight. A change re-ranks every week and appears in the change log. Students can read the current values in “How scores work”.</p>
-      </div>
-      <sc-if value="{{ stError }}" hint-placeholder-val="{{ false }}">
-        <div role="alert" style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ stError }}</div>
-      </sc-if>
-      <sc-if value="{{ stLoaded }}" hint-placeholder-val="{{ true }}">
-        <div style="display: grid; gap: var(--space-6);">
-          <section aria-label="Type weights">
-            <h2 style="font-size: 22px; margin-bottom: var(--space-2);">How much an hour counts</h2>
-            <div class="lt-input-row">
-              <sc-for list="{{ stTypeFields }}" as="f" hint-placeholder-count="3">
-                <div class="field">
-                  <label for="{{ f.id }}">{{ f.label }}</label>
-                  <input id="{{ f.id }}" type="number" min="0" step="0.1" class="input" value="{{ f.value }}" onInput="{{ f.onInput }}" style="min-height: 44px;">
-                </div>
-              </sc-for>
-            </div>
-          </section>
-          <section aria-label="Rate and cap">
-            <h2 style="font-size: 22px; margin-bottom: var(--space-2);">Rate, cap and review</h2>
-            <div class="lt-input-row">
-              <sc-for list="{{ stParamFields }}" as="f" hint-placeholder-count="3">
-                <div class="field">
-                  <label for="{{ f.id }}">{{ f.label }}</label>
-                  <input id="{{ f.id }}" type="number" min="0" step="{{ f.step }}" class="input" value="{{ f.value }}" onInput="{{ f.onInput }}" style="min-height: 44px;">
-                  <div style="font-size: 12px; opacity: 0.65; margin-top: 4px;">{{ f.help }}</div>
-                </div>
-              </sc-for>
-            </div>
-          </section>
-          <div style="display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-primary" onClick="{{ onStSave }}" disabled="{{ stBusy }}" style="min-height: 48px;">Save settings</button>
-            <sc-if value="{{ stNote }}" hint-placeholder-val="{{ false }}"><span role="status" style="font-size: 13px;">{{ stNote }}</span></sc-if>
-          </div>
-        </div>
-      </sc-if>
-    </main>
-  </sc-if>
-
-  <!-- ================================================================ explainer -->
-  <sc-if value="{{ isExplainer }}" hint-placeholder-val="{{ false }}">
-    <main class="lt-pad" style="padding: var(--space-6); max-width: 780px; margin: 0 auto; display: grid; gap: var(--space-6);">
-      <div>
-        <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Everyone can read this · it holds no one's hours</div>
-        <h1 style="margin: var(--space-1) 0 0;">How scores work</h1>
-      </div>
-      <sc-if value="{{ exError }}" hint-placeholder-val="{{ false }}">
-        <div role="alert" style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ exError }}</div>
-      </sc-if>
-      <sc-if value="{{ exLoaded }}" hint-placeholder-val="{{ true }}">
-        <div style="display: grid; gap: var(--space-6);">
-          <section aria-label="The formula">
-            <h2 style="font-size: 22px;">The formula</h2>
-            <ol style="padding-left: var(--space-6); display: grid; gap: var(--space-2); font-size: 15px;">
-              <sc-for list="{{ exFormula }}" as="line" hint-placeholder-count="4"><li>{{ line.text }}</li></sc-for>
-            </ol>
-          </section>
-          <section aria-label="Current parameters">
-            <h2 style="font-size: 22px;">The current numbers</h2>
-            <div class="lt-table-scroll">
-              <table class="table">
-                <tbody>
-                  <sc-for list="{{ exParams }}" as="p" hint-placeholder-count="6">
-                    <tr><td>{{ p.label }}</td><td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ p.value }}</td></tr>
-                  </sc-for>
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <section aria-label="Factor table">
-            <h2 style="font-size: 22px;">Weighted hours and the factor</h2>
-            <div class="lt-table-scroll">
-              <table class="table">
-                <thead><tr><th>Weighted hours</th><th style="text-align: right;">Factor</th></tr></thead>
-                <tbody>
-                  <sc-for list="{{ exFactors }}" as="r" hint-placeholder-count="4">
-                    <tr><td style="font-variant-numeric: lining-nums tabular-nums;">{{ r.hours }}</td><td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ r.factor }}</td></tr>
-                  </sc-for>
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <section aria-label="Worked examples">
-            <h2 style="font-size: 22px;">Worked examples</h2>
-            <div style="display: grid; gap: var(--space-3);">
-              <sc-for list="{{ exExamples }}" as="x" hint-placeholder-count="3">
-                <div class="card" style="padding: var(--space-4);">
-                  <div class="card-title">{{ x.title }}</div>
-                  <div style="font-size: 13px; opacity: 0.8;">{{ x.setup }}</div>
-                  <ol style="padding-left: var(--space-6); margin: var(--space-2) 0 0; font-size: 14px; display: grid; gap: 4px;">
-                    <sc-for list="{{ x.steps }}" as="step" hint-placeholder-count="3"><li>{{ step.text }}</li></sc-for>
-                  </ol>
-                </div>
-              </sc-for>
-            </div>
-          </section>
-          <section aria-label="Rules">
-            <h2 style="font-size: 22px;">Rules</h2>
-            <ul style="padding-left: var(--space-6); display: grid; gap: var(--space-2); font-size: 15px;">
-              <sc-for list="{{ exRules }}" as="line" hint-placeholder-count="7"><li>{{ line.text }}</li></sc-for>
-            </ul>
-          </section>
-        </div>
-      </sc-if>
-    </main>
-  </sc-if>
-
-  <!-- =================================================================== drawer -->
   <sc-if value="{{ drawer }}" hint-placeholder-val="{{ false }}">
     <div style="position: fixed; inset: 0; z-index: 40;">
       <div onClick="{{ onCloseDrawer }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
-      <aside role="dialog" aria-label="Score breakdown" style="position: absolute; top: 0; right: 0; bottom: 0; width: min(580px, 100%); overflow-y: auto; background: var(--color-bg); border-left: 1px solid var(--color-divider); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+      <aside role="dialog" aria-label="Score breakdown" style="position: absolute; top: 0; right: 0; bottom: 0; width: min(600px, 100%); overflow-y: auto; background: var(--color-bg); border-left: 1px solid var(--color-divider); box-shadow: var(--shadow-lg); padding: var(--space-6);">
         <div style="display: flex; align-items: baseline; gap: var(--space-3);">
           <div style="margin-right: auto;">
             <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Rank {{ drawer.rank }} · {{ drawer.windowLabel }}</div>
@@ -596,8 +388,8 @@
 
         <p style="font-size: 13px; opacity: 0.8; margin-top: var(--space-3); text-align: justify;">{{ drawer.intro }}</p>
 
-        <div class="lt-table-scroll">
-        <table class="table" style="margin-top: var(--space-3);">
+        <h3 style="margin: var(--space-4) 0 var(--space-2); font-size: 17px;">{{ drawer.partsTitle }}</h3>
+        <table class="table">
           <thead>
             <tr>
               <th>Criterion</th>
@@ -610,7 +402,7 @@
           <tbody>
             <sc-for list="{{ drawer.parts }}" as="part" hint-placeholder-count="5">
               <tr>
-                <td style="font-variant-numeric: lining-nums tabular-nums;">{{ part.label }}</td>
+                <td>{{ part.label }}</td>
                 <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.earnedText }}</td>
                 <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.pctText }}</td>
                 <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ part.weightText }}</td>
@@ -618,44 +410,65 @@
               </tr>
             </sc-for>
             <tr>
-              <td style="font-family: var(--font-heading);">Raw score</td>
+              <td style="font-family: var(--font-heading);">{{ drawer.rawLabel }}</td>
               <td></td>
               <td></td>
               <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">100</td>
-              <td style="text-align: right; font-family: var(--font-heading); font-size: 18px; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.raw }}</td>
+              <td style="text-align: right; font-family: var(--font-heading); font-size: 18px; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.rawText }}</td>
             </tr>
           </tbody>
         </table>
-        </div>
 
-        <section aria-label="Adjustment" style="margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider); display: grid; gap: var(--space-2);">
-          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Adjustment for time commitments</div>
-          <sc-if value="{{ drawer.single }}" hint-placeholder-val="{{ true }}">
-            <div style="font-size: 14px; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.hoursText }}</div>
-            <div style="font-size: 14px; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.factorText }}</div>
-          </sc-if>
-          <sc-if value="{{ drawer.multi }}" hint-placeholder-val="{{ false }}">
-            <div class="lt-table-scroll">
-              <table class="table">
-                <thead><tr><th>Week</th><th style="text-align: right;">Raw</th><th style="text-align: right;">Factor</th><th style="text-align: right;">Adjusted</th></tr></thead>
-                <tbody>
-                  <sc-for list="{{ drawer.weeks }}" as="w" hint-placeholder-count="4">
-                    <tr>
-                      <td style="font-variant-numeric: lining-nums tabular-nums;">{{ w.label }}</td>
-                      <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.raw }}</td>
-                      <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.factor }}</td>
-                      <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.adjusted }}</td>
-                    </tr>
-                  </sc-for>
-                </tbody>
-              </table>
+        <div style="margin-top: var(--space-4); display: grid; gap: var(--space-2); font-size: 14px;">
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-1);">
+            <span>Weighted commitment hours</span>
+            <span style="font-variant-numeric: lining-nums tabular-nums;">{{ drawer.hoursText }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-1);">
+            <span>Adjustment factor</span>
+            <span style="font-variant-numeric: lining-nums tabular-nums;">{{ drawer.factorText }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-family: var(--font-heading); font-size: 20px;">
+            <span>{{ drawer.adjustedLabel }}</span>
+            <span style="font-variant-numeric: lining-nums tabular-nums;">{{ drawer.adjustedText }}</span>
+          </div>
+          <sc-if value="{{ drawer.multiWeek }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; justify-content: space-between; font-family: var(--font-heading); font-size: 20px; color: var(--color-accent-700);">
+              <span>{{ drawer.windowLabelRow }}</span>
+              <span style="font-variant-numeric: lining-nums tabular-nums;">{{ drawer.windowScoreText }}</span>
             </div>
           </sc-if>
-          <div style="font-family: var(--font-heading); font-size: 22px; font-variant-numeric: lining-nums tabular-nums;">{{ drawer.adjustedText }}</div>
-          <sc-if value="{{ drawer.capNote }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-md);">{{ drawer.capNote }}</div>
-          </sc-if>
-        </section>
+          <div style="font-size: 12px; opacity: 0.7;">{{ drawer.hoursBreakdown }}</div>
+          <div style="font-size: 12px; opacity: 0.7;">{{ drawer.cappedNote }}</div>
+        </div>
+
+        <sc-if value="{{ drawer.multiWeek }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top: var(--space-4);">
+            <h3 style="font-size: 17px; margin-bottom: var(--space-2);">Week by week in this window</h3>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Week</th>
+                  <th style="text-align: right;">Raw</th>
+                  <th style="text-align: right;">Hours</th>
+                  <th style="text-align: right;">Factor</th>
+                  <th style="text-align: right;">Adjusted</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ drawer.weeks }}" as="w" hint-placeholder-count="4">
+                  <tr>
+                    <td style="font-variant-numeric: lining-nums tabular-nums;">{{ w.label }}</td>
+                    <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.rawText }}</td>
+                    <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.hoursText }}</td>
+                    <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.factorText }}</td>
+                    <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ w.adjustedText }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
 
         <div style="margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider); display: grid; gap: var(--space-2); font-size: 14px;">
           <div>{{ drawer.gapUp }}</div>
@@ -669,9 +482,10 @@
   <sc-if value="{{ weightsOpen }}" hint-placeholder-val="{{ false }}">
     <div style="position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;">
       <div onClick="{{ onCloseWeights }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
-      <div role="dialog" aria-label="Criterion weights" style="position: relative; width: min(560px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-6);">
-        <h2 style="margin-bottom: var(--space-1);">Criterion weights</h2>
-        <p style="font-size: 13px; opacity: 0.8;">Weights are rescaled to total 100 when applied. A criterion with no entry for a student is excluded and the rest are rescaled for that student only. The time-commitments adjustment is set under “Adjustment”.</p>
+      <div role="dialog" aria-label="Weights and adjustment" style="position: relative; width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+        <h2 style="margin-bottom: var(--space-1);">Weights &amp; adjustment</h2>
+        <p style="font-size: 13px; opacity: 0.8; text-align: justify;">Weights are rescaled to total 100 when applied. A criterion with no entry for a student is excluded and the rest are rescaled for that student only. Changing a parameter re-ranks every affected week.</p>
+
         <div style="display: grid; gap: var(--space-3); margin-top: var(--space-4);">
           <sc-for list="{{ weightRows }}" as="wr" hint-placeholder-count="5">
             <div>
@@ -683,7 +497,22 @@
             </div>
           </sc-for>
         </div>
-        <div style="display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider);">
+
+        <h3 style="margin: var(--space-6) 0 var(--space-1); font-size: 17px;">Commitment adjustment</h3>
+        <p style="font-size: 12px; opacity: 0.75;">{{ paramsSummary }}</p>
+        <div style="display: grid; gap: var(--space-3); margin-top: var(--space-3);">
+          <sc-for list="{{ paramRows }}" as="pr" hint-placeholder-count="5">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 14px; font-variant-numeric: lining-nums tabular-nums;">
+                <span>{{ pr.label }}</span>
+                <span>{{ pr.valueText }}</span>
+              </div>
+              <input type="range" min="{{ pr.min }}" max="{{ pr.max }}" step="{{ pr.step }}" value="{{ pr.value }}" onChange="{{ pr.onChange }}" style="width: 100%; accent-color: var(--color-accent); min-height: 44px;">
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider); flex-wrap: wrap;">
           <span style="font-size: 13px; font-variant-numeric: lining-nums tabular-nums; margin-right: auto;">{{ weightTotalText }}</span>
           <button class="btn btn-ghost" onClick="{{ onResetWeights }}" style="min-height: 44px;">Reset</button>
           <button class="btn btn-primary" onClick="{{ onApplyWeights }}" style="min-height: 44px;">Apply</button>
@@ -692,254 +521,282 @@
     </div>
   </sc-if>
 
-  <footer class="lt-pad" style="padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-divider); display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; opacity: 0.7;">
+  <sc-if value="{{ explainer }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;">
+      <div onClick="{{ onCloseExplainer }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
+      <div role="dialog" aria-label="How the score is worked out" style="position: relative; width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+        <div style="display: flex; align-items: baseline; gap: var(--space-3);">
+          <h2 style="margin: 0 auto 0 0;">How the score is worked out</h2>
+          <button class="btn btn-ghost" onClick="{{ onCloseExplainer }}" style="min-height: 44px;">Close</button>
+        </div>
+        <p style="font-size: 14px; text-align: justify; margin-top: var(--space-3);">{{ explainer.step1 }}</p>
+        <p style="font-size: 14px; text-align: justify;">{{ explainer.step2 }}</p>
+        <p style="font-size: 14px; text-align: justify;">{{ explainer.step3 }}</p>
+        <table class="table" style="margin-top: var(--space-3);">
+          <thead>
+            <tr>
+              <th>Weighted hours</th>
+              <th style="text-align: right;">Factor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ explainer.table }}" as="t" hint-placeholder-count="4">
+              <tr>
+                <td style="font-variant-numeric: lining-nums tabular-nums;">{{ t.hours }}</td>
+                <td style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">{{ t.factor }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <p style="font-size: 13px; text-align: justify; margin-top: var(--space-3);">{{ explainer.example }}</p>
+        <p style="font-size: 12px; opacity: 0.7;">{{ explainer.privacy }}</p>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ record }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; z-index: 45;">
+      <div onClick="{{ onCloseRecord }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
+      <aside role="dialog" aria-label="Risk record" style="position: absolute; top: 0; right: 0; bottom: 0; width: min(640px, 100%); overflow-y: auto; background: var(--color-bg); border-left: 1px solid var(--color-divider); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+        <div style="display: flex; align-items: baseline; gap: var(--space-3);">
+          <div style="margin-right: auto;">
+            <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">{{ record.kicker }}</div>
+            <h2 style="margin: 0;">{{ record.name }}</h2>
+          </div>
+          <button class="btn btn-ghost" onClick="{{ onCloseRecord }}" aria-label="Close" style="min-height: 44px;">Close</button>
+        </div>
+
+        <div style="display: flex; align-items: baseline; gap: var(--space-3); margin-top: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-divider);">
+          <span style="font-family: var(--font-heading); font-size: 26px; color: {{ record.levelColor }};">{{ record.level }}</span>
+          <span style="font-size: 13px; opacity: 0.75;">{{ record.levelNote }}</span>
+        </div>
+        <p style="font-size: 13px; opacity: 0.8; text-align: justify; margin-top: var(--space-3);">{{ record.framing }}</p>
+
+        <h3 style="margin: var(--space-4) 0 var(--space-2); font-size: 17px;">Signals</h3>
+        <div style="display: grid; gap: var(--space-2);">
+          <sc-for list="{{ record.signals }}" as="sg" hint-placeholder-count="5">
+            <div style="border: 1px solid {{ sg.border }}; border-radius: var(--radius-md); padding: var(--space-3);">
+              <div style="display: flex; align-items: baseline; gap: var(--space-2);">
+                <span style="font-family: var(--font-heading); font-size: 17px; margin-right: auto; color: {{ sg.color }};">{{ sg.label }}</span>
+                <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: {{ sg.color }};">{{ sg.state }}</span>
+              </div>
+              <p style="font-size: 13px; margin: var(--space-1) 0 var(--space-2); text-align: justify;">{{ sg.summary }}</p>
+              <div style="display: grid; gap: 2px;">
+                <sc-for list="{{ sg.evidence }}" as="ev" hint-placeholder-count="3">
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid var(--color-divider); padding-bottom: 2px;">
+                    <span style="opacity: 0.7;">{{ ev.label }}</span>
+                    <span style="font-variant-numeric: lining-nums tabular-nums;">{{ ev.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <h3 style="margin: var(--space-4) 0 var(--space-2); font-size: 17px;">Level over the semester</h3>
+        <div style="display: flex; align-items: flex-end; gap: 3px;">
+          <sc-for list="{{ record.history }}" as="h" hint-placeholder-count="10">
+            <div title="{{ h.title }}" style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="width: 100%; height: {{ h.height }}; background: {{ h.color }}; border-radius: 2px;"></div>
+              <span style="font-size: 9px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ h.week }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="font-size: 12px; opacity: 0.7; margin-top: var(--space-2);">{{ record.historyNote }}</p>
+
+        <h3 style="margin: var(--space-4) 0 var(--space-2); font-size: 17px;">Notes and outreach</h3>
+        <div style="display: grid; gap: var(--space-2);">
+          <sc-for list="{{ record.notes }}" as="n" hint-placeholder-count="2">
+            <div style="border-left: 2px solid var(--color-divider); padding-left: var(--space-3);">
+              <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ n.when }}</div>
+              <div style="font-size: 14px; text-align: justify;">{{ n.body }}</div>
+            </div>
+          </sc-for>
+          <div style="font-size: 13px; opacity: 0.7;">{{ record.notesEmpty }}</div>
+        </div>
+        <div class="field" style="margin-top: var(--space-3);">
+          <label for="risk-note">Log outreach</label>
+          <textarea id="risk-note" class="input" rows="3" value="{{ noteDraft }}" onChange="{{ onNoteChange }}" placeholder="Emailed 22 Sep, suggested office hours" style="width: 100%; font-family: var(--font-body); resize: vertical;"></textarea>
+        </div>
+        <div style="display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-2);">
+          <span style="font-size: 12px; opacity: 0.7; margin-right: auto;">Private to you. The student never sees notes.</span>
+          <button class="btn btn-primary" onClick="{{ onSaveNote }}" style="min-height: 44px;">Save note</button>
+        </div>
+      </aside>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ thresholds }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;">
+      <div onClick="{{ onCloseThresholds }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
+      <div role="dialog" aria-label="Signal thresholds" style="position: relative; width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+        <h2 style="margin-bottom: var(--space-1);">Signal thresholds</h2>
+        <p style="font-size: 13px; opacity: 0.8; text-align: justify;">{{ thresholds.note }}</p>
+        <div style="display: grid; gap: var(--space-3); margin-top: var(--space-4);">
+          <sc-for list="{{ thresholds.rows }}" as="sig" hint-placeholder-count="5">
+            <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-3);">
+              <label style="display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-heading); font-size: 17px;">
+                <input type="checkbox" checked="{{ sig.active }}" onChange="{{ sig.onToggle }}" style="accent-color: var(--color-accent); width: 18px; height: 18px;">
+                <span>{{ sig.label }}</span>
+              </label>
+              <div style="display: grid; gap: var(--space-2); margin-top: var(--space-2);">
+                <sc-for list="{{ sig.sliders }}" as="sl" hint-placeholder-count="1">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); font-size: 13px;">
+                      <span style="opacity: 0.8;">{{ sl.label }}</span>
+                      <span style="font-variant-numeric: lining-nums tabular-nums;">{{ sl.valueText }}</span>
+                    </div>
+                    <input type="range" min="{{ sl.min }}" max="{{ sl.max }}" step="{{ sl.step }}" value="{{ sl.value }}" onChange="{{ sl.onChange }}" style="width: 100%; accent-color: var(--color-accent); min-height: 44px;">
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-divider);">
+          <span style="font-size: 12px; opacity: 0.7; margin-right: auto; text-wrap: pretty;">{{ thresholds.historyNote }}</span>
+          <button class="btn btn-ghost" onClick="{{ onResetThresholds }}" style="min-height: 44px;">Reset</button>
+          <button class="btn btn-primary" onClick="{{ onApplyThresholds }}" style="min-height: 44px;">Apply</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <footer style="padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-divider); display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; opacity: 0.7;">
     <span>{{ shortcutHint }}</span>
     <span style="margin-left: auto;"><a href="Tests.dc.html">Service &amp; scoring tests</a></span>
   </footer>
-  </div>
-  </sc-if>
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:35,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:24,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;week&quot;,&quot;rolling&quot;,&quot;cumulative&quot;],&quot;default&quot;:&quot;rolling&quot;,&quot;tsType&quot;:&quot;'week' | 'rolling' | 'cumulative'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;rollingN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;showRaw&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
 class Component extends DCLogic {
   state = {
-    account: null,
-    authChecked: false,
-    code: '',
-    loginError: null,
-    signingIn: false,
-    demoAccounts: [],
-    view: 'table',
     loading: true,
     errorMsg: null,
+    tab: 'league',
+    classId: 'c1',
     boot: null,
     rows: [],
+    weekCount: 1,
     weekIdx: 0,
-    windowMode: 'week',
-    rollingWeeks: 4,
+    windowMode: this.props.defaultWindow || 'rolling',
     criteriaKeys: [],
     nameMode: this.props.nameMode || 'full',
     theme: this.props.startTheme || 'light',
-    presenting: false,
+    rawOn: this.props.showRaw ?? false,
     showAll: false,
     drawer: null,
     weightsOpen: false,
+    explainer: null,
+    me: null,
+    digest: null,
+    standing: null,
+    record: null,
+    noteDraft: '',
+    thresholdsOpen: false,
+    draftThresholds: null,
     draftWeights: {},
+    draftParams: null,
     weights: {},
     lastUpdated: null,
     stale: false,
     issues: [],
-    // The explainer doubles as the source of the commitment type labels.
-    ex: null,
-    exError: null,
-    // My commitments (student)
-    cm: null,
-    cmMode: 'baseline',
-    cmWeek: null,
-    cmInputs: {},
-    cmPreview: null,
-    cmPreviewError: null,
-    cmBusy: false,
-    cmError: null,
-    cmNote: null,
-    cmNoticeSeen: true,
-    // Approvals (instructor)
-    ap: null,
-    apStudents: [],
-    apLog: [],
-    apEffective: {},
-    apBusy: false,
-    apError: null,
-    // Adjustment settings (instructor)
-    st: null,
-    stDraft: {},
-    stBusy: false,
-    stError: null,
-    stNote: null,
   };
 
-  componentDidMount() {
+  async componentDidMount() {
     document.addEventListener('keydown', this.onKey);
-    this.init();
+    try {
+      const base = document.baseURI;
+      const [{ createApi }, { createToySource, createToyAppStore }] = await Promise.all([
+        import(new URL('services/api.js', base).href),
+        import(new URL('services/mockSource.js', base).href),
+      ]);
+      this.api = createApi({ source: createToySource(), store: createToyAppStore(), latency: 'realistic' });
+      await this.loadClass('c1');
+    } catch (err) {
+      this.setState({ loading: false, errorMsg: err.message });
+    }
   }
 
   componentWillUnmount() {
     document.removeEventListener('keydown', this.onKey);
-    clearTimeout(this.previewTimer);
   }
 
-  /* ---------------------------------------------------------------- session */
-
-  /** Find out whether there is already a session; if not, show the sign-in screen. */
-  init = async () => {
-    try {
-      if (!this.api) {
-        const { createHttpApi } = await import(new URL('services/httpApi.js', document.baseURI).href);
-        // The backend serves this page, so the API is on the same origin. If the server
-        // restarts and forgets the session, the next request lands back on sign-in.
-        this.api = createHttpApi({
-          baseUrl: '/api',
-          onUnauthorized: async () => {
-            await this.showLogin('Your session ended. Please sign in again.');
-            throw Object.assign(new Error('Please sign in.'), { status: 401 });
-          },
-        });
-      }
-      let account = null;
-      try {
-        account = await this.api.getCurrentAccount();
-      } catch (err) {
-        if (err.status !== 401) throw err;
-      }
-      if (account) await this.enter(account);
-      else await this.showLogin();
-    } catch (err) {
-      this.setState({ authChecked: true, loading: false, loginError: err.message });
-    }
-  };
-
-  /** Everything that belongs to one person's session, so nothing leaks into the next. */
-  cleared() {
-    return {
-      boot: null,
-      rows: [],
-      drawer: null,
-      weightsOpen: false,
-      presenting: false,
-      showAll: false,
-      windowMode: 'week',
-      criteriaKeys: [],
-      stale: false,
-      issues: [],
-      errorMsg: null,
-      view: 'table',
-      ex: null,
-      exError: null,
-      cm: null,
-      cmInputs: {},
-      cmPreview: null,
-      cmPreviewError: null,
-      cmError: null,
-      cmNote: null,
-      ap: null,
-      apStudents: [],
-      apLog: [],
-      apEffective: {},
-      apError: null,
-      st: null,
-      stDraft: {},
-      stError: null,
-      stNote: null,
-    };
+  /** The demo student account for a class, used by the "My breakdown" screen. */
+  selfId(classId) {
+    return classId === 'c1' ? 's01' : 't03';
   }
 
-  showLogin = async (message = null) => {
-    clearTimeout(this.previewTimer);
-    this.setState({
-      ...this.cleared(),
-      account: null,
-      authChecked: true,
-      loginError: message,
-      code: '',
-      signingIn: false,
-    });
-    // Demo accounts exist only with demo data; any other source answers 404.
-    try {
-      this.setState({ demoAccounts: await this.api.listDemoAccounts() });
-    } catch {
-      this.setState({ demoAccounts: [] });
-    }
+  caller() {
+    return this.state.tab === 'me'
+      ? { role: 'student', studentId: this.selfId(this.state.classId), classId: this.state.classId }
+      : { role: 'instructor' };
+  }
+
+  async loadClass(classId) {
+    this.setState({ loading: true, classId, drawer: null, me: null, showAll: false });
+    const boot = await this.api.getBootstrap(classId);
+    const idx = Math.max(0, boot.weeks.findIndex((w) => w.id === boot.latestCompleteWeekId));
+    this.setState(
+      {
+        boot,
+        weekIdx: idx,
+        criteriaKeys: boot.criteria.map((c) => c.key),
+        weights: boot.weights,
+        draftWeights: boot.weights,
+        draftParams: boot.settings,
+        lastUpdated: boot.lastUpdated,
+        issues: boot.issues,
+      },
+      this.loadTab,
+    );
+  }
+
+  loadTab = () => {
+    const { tab } = this.state;
+    if (tab === 'league') return this.loadRanking();
+    if (tab === 'me') return this.loadMe();
+    if (tab === 'standing') return this.loadStanding();
+    return this.loadDigest();
   };
 
-  /** Start the app for a signed-in account. */
-  enter = async (account) => {
-    let seen = false;
+  loadStanding = async () => {
+    const s = this.state;
+    const studentId = this.selfId(s.classId);
     try {
-      seen = window.localStorage.getItem('lt-commitments-notice') === '1';
-    } catch {
-      // No storage (private window): the notice simply shows each visit.
-    }
-    this.setState({
-      ...this.cleared(),
-      account,
-      authChecked: true,
-      loading: true,
-      loginError: null,
-      code: '',
-      cmNoticeSeen: seen,
-    });
-    this.loadExplainer();
-    if (account.role === 'instructor') {
-      this.loadApprovals(true);
-      this.loadSettings();
-    }
-    try {
-      const boot = await this.api.getBootstrap('c1');
-      this.setState(
-        {
-          boot,
-          weekIdx: boot.weeks.length - 1,
-          criteriaKeys: boot.criteria.map((c) => c.key),
-          weights: boot.weights,
-          draftWeights: boot.weights,
-          lastUpdated: boot.last_updated,
-          issues: boot.issues,
-        },
-        this.loadRanking,
-      );
+      const standing = await this.api.getMyStanding({
+        classId: s.classId,
+        studentId,
+        caller: { role: 'student', studentId, classId: s.classId },
+      });
+      this.setState({ loading: false, errorMsg: null, rows: [], me: null, digest: null, standing });
     } catch (err) {
-      if (err.status !== 401) this.setState({ loading: false, errorMsg: err.message });
+      this.setState({ loading: false, errorMsg: err.message });
     }
   };
 
-  submitLogin = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    const { code, signingIn } = this.state;
-    if (signingIn) return;
-    this.setState({ signingIn: true, loginError: null });
+  openRecord = async (classId, studentId) => {
     try {
-      const account = await this.api.login({ code: code.trim() });
-      this.setState({ signingIn: false });
-      await this.enter(account);
+      const record = await this.api.getRiskRecord({ classId, studentId, caller: { role: 'instructor' } });
+      this.setState({ record, noteDraft: '' });
     } catch (err) {
-      this.setState({ signingIn: false, code: '', loginError: err.message });
+      this.setState({ errorMsg: err.message });
     }
-  };
-
-  signOut = async () => {
-    try {
-      await this.api.logout();
-    } catch {
-      // The session is already gone on the server; either way the person is signed out.
-    }
-    await this.showLogin();
-  };
-
-  /* ------------------------------------------------------------------ views */
-
-  setView = (view) => {
-    this.setState({ view, drawer: null, weightsOpen: false, presenting: false }, () => {
-      if (view === 'table') this.loadRanking(); // pick up anything approved or edited meanwhile
-      else if (view === 'commitments') this.loadCommitments();
-      else if (view === 'approvals') this.loadApprovals();
-      else if (view === 'settings') this.loadSettings();
-      else if (view === 'explainer') this.loadExplainer();
-    });
   };
 
   onKey = (e) => {
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
-    const { boot, view, account } = this.state;
-    if (!boot || view !== 'table') return;
-    if (e.key === 'ArrowLeft') this.stepWeek(-1);
-    else if (e.key === 'ArrowRight') this.stepWeek(1);
-    else if (e.key.toLowerCase() === 'p') this.setState((s) => ({ presenting: !s.presenting, drawer: null }));
-    else if (e.key === 'Escape') this.setState({ drawer: null, weightsOpen: false });
-    else if (account && account.role === 'instructor' && /^[1-9]$/.test(e.key)) {
+    const { boot, tab } = this.state;
+    if (e.key === 'Escape') return this.setState({ drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false });
+    if (!boot || tab === 'risk') return;
+    if (e.key === 'ArrowLeft') return this.stepWeek(-1);
+    if (e.key === 'ArrowRight') return this.stepWeek(1);
+    if (tab !== 'league') return;
+    if (/^[1-9]$/.test(e.key)) {
       const c = boot.criteria[Number(e.key) - 1];
       if (c) this.setState({ criteriaKeys: [c.key] }, this.loadRanking);
-    } else if (account && account.role === 'instructor' && e.key === '0') {
+    } else if (e.key === '0') {
       this.setState({ criteriaKeys: boot.criteria.map((c) => c.key) }, this.loadRanking);
     }
   };
@@ -947,294 +804,68 @@ class Component extends DCLogic {
   stepWeek(d) {
     const { boot, weekIdx } = this.state;
     const next = Math.min(boot.weeks.length - 1, Math.max(0, weekIdx + d));
-    if (next !== weekIdx) this.setState({ weekIdx: next, drawer: null }, this.loadRanking);
+    if (next !== weekIdx) this.setState({ weekIdx: next, drawer: null }, this.loadTab);
   }
 
-  /* -------------------------------------------------------------- the table */
+  query() {
+    const s = this.state;
+    return {
+      classId: s.classId,
+      weekId: s.boot.weeks[s.weekIdx].id,
+      windowMode: s.windowMode,
+      rollingN: this.props.rollingN ?? 4,
+      criteriaKeys: s.criteriaKeys,
+      weights: s.weights,
+      nameMode: s.nameMode,
+    };
+  }
 
   loadRanking = async () => {
-    const { boot, weekIdx, windowMode, rollingWeeks, criteriaKeys, weights, nameMode } = this.state;
-    if (!boot) return;
+    if (!this.state.boot) return;
     try {
-      const res = await this.api.getRanking({
-        classId: 'c1',
-        weekId: boot.weeks[weekIdx].id,
-        windowMode,
-        rollingWeeks,
-        criteriaKeys,
-        weights,
-        nameMode,
+      const res = await this.api.getRanking({ ...this.query(), caller: { role: 'instructor' } });
+      this.setState({
+        loading: false, errorMsg: null, rows: res.rows, weekCount: res.weekCount,
+        lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues, me: null, digest: null, standing: null,
       });
-      this.setState({ loading: false, errorMsg: null, rows: res.rows, lastUpdated: res.last_updated, stale: res.stale, issues: res.issues });
     } catch (err) {
-      if (err.status !== 401) this.setState({ loading: false, errorMsg: err.message });
+      this.setState({ loading: false, errorMsg: err.message });
     }
   };
 
-  /** The instructor may open anyone's breakdown; a student only their own (the server enforces it too).
-   *  Nothing personal opens while presenting. */
-  canOpen(studentId) {
-    const { account, presenting } = this.state;
-    return !!account && !presenting && (account.role === 'instructor' || account.student_id === studentId);
-  }
+  loadMe = async () => {
+    const s = this.state;
+    if (!s.boot) return;
+    const studentId = this.selfId(s.classId);
+    const caller = { role: 'student', studentId, classId: s.classId };
+    try {
+      const [ex, commitments] = await Promise.all([
+        this.api.getExplanation({ ...this.query(), studentId, caller }),
+        this.api.getCommitments({ classId: s.classId, studentId, caller }),
+      ]);
+      this.setState({ loading: false, errorMsg: null, rows: [], digest: null, standing: null, me: { ex, commitments } });
+    } catch (err) {
+      this.setState({ loading: false, errorMsg: err.message, me: null });
+    }
+  };
+
+  loadDigest = async () => {
+    try {
+      const digest = await this.api.getDigest('i1');
+      this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest });
+    } catch (err) {
+      this.setState({ loading: false, errorMsg: err.message });
+    }
+  };
 
   openDrawer = async (studentId) => {
-    if (!this.canOpen(studentId)) return;
-    const { boot, weekIdx, windowMode, rollingWeeks, criteriaKeys, weights, nameMode } = this.state;
     try {
-      const ex = await this.api.getExplanation({
-        classId: 'c1',
-        studentId,
-        weekId: boot.weeks[weekIdx].id,
-        windowMode,
-        rollingWeeks,
-        criteriaKeys,
-        weights,
-        nameMode,
-      });
+      const ex = await this.api.getExplanation({ ...this.query(), studentId, caller: { role: 'instructor' } });
       this.setState({ drawer: ex });
     } catch (err) {
-      if (err.status !== 401) this.setState({ errorMsg: err.message });
+      this.setState({ errorMsg: err.message });
     }
   };
-
-  /* ------------------------------------------------------------ explainer */
-
-  loadExplainer = async () => {
-    try {
-      const ex = await this.api.getExplainer('c1');
-      this.setState({ ex, exError: null });
-    } catch (err) {
-      if (err.status !== 401) this.setState({ exError: err.message });
-    }
-  };
-
-  typeLabel(key) {
-    const type = ((this.state.ex && this.state.ex.types) || []).find((t) => t.key === key);
-    return type ? type.label : key;
-  }
-
-  num(n) {
-    return String(Math.round(Number(n) * 100) / 100);
-  }
-
-  /** "Work 12 · Child care 6", leaving out types with no hours. */
-  hoursShort(hours) {
-    const parts = Object.entries(hours || {})
-      .filter(([, h]) => h > 0)
-      .map(([key, h]) => `${this.typeLabel(key)} ${this.num(h)}`);
-    return parts.length ? parts.join(' · ') : 'no hours';
-  }
-
-  /* ------------------------------------------------------ my commitments */
-
-  loadCommitments = async () => {
-    try {
-      const cm = await this.api.getMyCommitments();
-      this.setState({ cm, cmError: null }, () => this.resetCmForm(cm, this.state.cmMode, this.state.cmWeek, null));
-    } catch (err) {
-      if (err.status !== 401) this.setState({ cmError: err.message });
-    }
-  };
-
-  editableWeeks(cm) {
-    const ids = new Set(cm.edit_window.editable_week_ids);
-    return cm.weeks.filter((w) => ids.has(w.week_id));
-  }
-
-  /** Load the form for the baseline, or for one editable week. */
-  resetCmForm(cm, mode, weekNumber, note) {
-    const editable = this.editableWeeks(cm);
-    let nextMode = mode;
-    let week = null;
-    if (mode === 'weekly' && editable.length) {
-      week = editable.find((w) => w.week_number === weekNumber) || editable[editable.length - 1];
-    } else {
-      nextMode = 'baseline';
-    }
-    const source = nextMode === 'weekly' ? week.hours || (cm.in_effect && cm.in_effect.hours) : cm.baseline && cm.baseline.hours;
-    const inputs = {};
-    cm.types.forEach((t) => {
-      inputs[t.key] = String((source && source[t.key]) ?? 0);
-    });
-    this.setState(
-      { cmMode: nextMode, cmWeek: week ? week.week_number : null, cmInputs: inputs, cmNote: note, cmPreview: null, cmPreviewError: null },
-      this.schedulePreview,
-    );
-  }
-
-  parseHours(inputs) {
-    const hours = {};
-    for (const [key, raw] of Object.entries(inputs)) {
-      const value = raw === '' ? 0 : Number(raw);
-      if (Number.isNaN(value)) return null;
-      hours[key] = value;
-    }
-    return hours;
-  }
-
-  schedulePreview = () => {
-    clearTimeout(this.previewTimer);
-    this.previewTimer = setTimeout(this.runPreview, 250);
-  };
-
-  /** The server works out the factor and adjusted score, so the rules live in one place. */
-  runPreview = async () => {
-    const { cm, cmInputs, cmMode, cmWeek } = this.state;
-    if (!cm) return;
-    const hours = this.parseHours(cmInputs);
-    if (!hours) {
-      this.setState({ cmPreview: null, cmPreviewError: 'Enter the hours as numbers.' });
-      return;
-    }
-    const token = (this.previewToken = (this.previewToken || 0) + 1);
-    const week = cmMode === 'weekly' ? cm.weeks.find((w) => w.week_number === cmWeek) : null;
-    try {
-      const preview = await this.api.previewMyAdjustment({ hours, weekId: week ? week.week_id : null });
-      if (token === this.previewToken) this.setState({ cmPreview: preview, cmPreviewError: null });
-    } catch (err) {
-      if (token === this.previewToken && err.status !== 401) this.setState({ cmPreview: null, cmPreviewError: err.message });
-    }
-  };
-
-  saveCommitments = async () => {
-    const { cm, cmInputs, cmMode, cmWeek } = this.state;
-    const hours = this.parseHours(cmInputs);
-    if (!hours) {
-      this.setState({ cmError: 'Enter the hours as numbers.' });
-      return;
-    }
-    this.setState({ cmBusy: true, cmError: null, cmNote: null });
-    try {
-      let note;
-      if (cmMode === 'baseline') {
-        await this.api.saveMyBaseline(hours);
-        note = 'Sent to your instructor. It counts once it is approved.';
-      } else {
-        await this.api.saveMyWeek(cmWeek, hours);
-        note = `Saved for week ${cmWeek}.`;
-      }
-      const fresh = await this.api.getMyCommitments();
-      this.setState({ cm: fresh, cmBusy: false }, () => this.resetCmForm(fresh, cmMode, cmWeek, note));
-    } catch (err) {
-      if (err.status !== 401) this.setState({ cmBusy: false, cmError: err.message });
-    }
-  };
-
-  resetCmWeek = async () => {
-    const { cmWeek } = this.state;
-    this.setState({ cmBusy: true, cmError: null, cmNote: null });
-    try {
-      await this.api.resetMyWeek(cmWeek);
-      const fresh = await this.api.getMyCommitments();
-      this.setState({ cm: fresh, cmBusy: false }, () => this.resetCmForm(fresh, 'weekly', cmWeek, `Week ${cmWeek} follows your baseline again.`));
-    } catch (err) {
-      if (err.status !== 401) this.setState({ cmBusy: false, cmError: err.message });
-    }
-  };
-
-  dismissNotice = () => {
-    try {
-      window.localStorage.setItem('lt-commitments-notice', '1');
-    } catch {
-      // Not remembered, which is fine.
-    }
-    this.setState({ cmNoticeSeen: true });
-  };
-
-  /* ------------------------------------------------------------ approvals */
-
-  loadApprovals = async (quiet = false) => {
-    try {
-      if (quiet) {
-        this.setState({ ap: await this.api.listApprovals('c1') });
-        return;
-      }
-      const [ap, apStudents, apLog] = await Promise.all([
-        this.api.listApprovals('c1'),
-        this.api.listStudentCommitments('c1'),
-        this.api.getChangeLog('c1', { limit: 100 }),
-      ]);
-      this.setState({ ap, apStudents, apLog, apError: null });
-    } catch (err) {
-      if (err.status !== 401 && !quiet) this.setState({ apError: err.message });
-    }
-  };
-
-  decide = async (pending, decision) => {
-    const raw = this.state.apEffective[pending.id];
-    const effective = raw === undefined || raw === '' ? pending.suggested_effective_week : Number(raw);
-    this.setState({ apBusy: true, apError: null });
-    try {
-      await this.api.decideApproval('c1', pending.id, {
-        decision,
-        effectiveWeek: decision === 'approve' ? effective : undefined,
-      });
-      await this.loadApprovals();
-    } catch (err) {
-      if (err.status !== 401) this.setState({ apError: err.message });
-    } finally {
-      this.setState({ apBusy: false });
-    }
-  };
-
-  reverse = async (entry) => {
-    this.setState({ apBusy: true, apError: null });
-    try {
-      await this.api.reverseWeeklyUpdate('c1', entry.student_id, entry.week_number);
-      await this.loadApprovals();
-    } catch (err) {
-      if (err.status !== 401) this.setState({ apError: err.message });
-    } finally {
-      this.setState({ apBusy: false });
-    }
-  };
-
-  /* ------------------------------------------------------------- settings */
-
-  loadSettings = async () => {
-    try {
-      const st = await this.api.getSettings('c1');
-      this.setState({ st, stDraft: this.draftFrom(st), stError: null, stNote: null });
-    } catch (err) {
-      if (err.status !== 401) this.setState({ stError: err.message });
-    }
-  };
-
-  draftFrom(st) {
-    const a = st.adjustment;
-    const draft = { rate: String(a.rate), cap: String(a.cap), flag_hours: String(a.flag_hours) };
-    Object.entries(a.type_weights).forEach(([key, value]) => {
-      draft[`type:${key}`] = String(value);
-    });
-    return draft;
-  }
-
-  saveSettings = async () => {
-    const { st, stDraft } = this.state;
-    const numbers = {};
-    for (const [key, raw] of Object.entries(stDraft)) numbers[key] = Number(raw);
-    if (Object.values(numbers).some((n) => Number.isNaN(n))) {
-      this.setState({ stError: 'Every field needs a number.' });
-      return;
-    }
-    const type_weights = {};
-    Object.keys(st.adjustment.type_weights).forEach((key) => {
-      type_weights[key] = numbers[`type:${key}`];
-    });
-    this.setState({ stBusy: true, stError: null, stNote: null });
-    try {
-      const saved = await this.api.saveSettings('c1', {
-        adjustment: { type_weights, rate: numbers.rate, cap: numbers.cap, flag_hours: numbers.flag_hours },
-      });
-      this.setState({ st: saved, stDraft: this.draftFrom(saved), stBusy: false, stNote: 'Saved. Every week has been re-ranked.' });
-      this.loadExplainer();
-    } catch (err) {
-      if (err.status !== 401) this.setState({ stBusy: false, stError: err.message });
-    }
-  };
-
-  /* ---------------------------------------------------------------- render */
 
   monogram(name) {
     const bits = String(name).replace(/[^\w\s.]/g, '').split(/\s+/).filter(Boolean);
@@ -1245,16 +876,23 @@ class Component extends DCLogic {
     return n == null ? '—' : Number(n).toFixed(d);
   }
 
-  describeValues(values) {
-    if (!values) return '';
-    const parts = [];
-    if (values.status) parts.push(`${values.status}${values.effective_from_week ? ` from week ${values.effective_from_week}` : ''}`);
-    if (values.hours) parts.push(this.hoursShort(values.hours));
-    if (values.adjustment) {
-      const a = values.adjustment;
-      parts.push(`rate ${a.rate} · cap ${a.cap} · review over ${a.flag_hours} h · weights ${Object.values(a.type_weights).join('/')}`);
-    }
-    return parts.join(' · ');
+  hoursPhrase(hours) {
+    if (!hours) return '';
+    const parts = [
+      hours.work ? `${hours.work} work` : null,
+      hours.childcare ? `${hours.childcare} child care` : null,
+      hours.eldercare ? `${hours.eldercare} elder care` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(', ') : 'no hours reported';
+  }
+
+  windowLabel() {
+    const s = this.state;
+    const week = s.boot ? s.boot.weeks[s.weekIdx] : null;
+    const n = this.props.rollingN ?? 4;
+    if (s.windowMode === 'cumulative') return `Weeks 1–${week ? week.week_number : ''} cumulative`;
+    if (s.windowMode === 'rolling') return `Rolling ${s.weekCount || n} weeks to week ${week ? week.week_number : ''}`;
+    return `Week ${week ? week.week_number : ''}`;
   }
 
   renderVals() {
@@ -1263,18 +901,37 @@ class Component extends DCLogic {
     const week = boot ? boot.weeks[s.weekIdx] : null;
     const rows = s.rows;
     const best = rows.length ? Math.max(...rows.map((r) => r.score)) : 100;
-    const signedIn = !!s.account;
-    const isInstructor = s.account?.role === 'instructor';
-    const isStudent = s.account?.role === 'student';
-    const view = s.presenting ? 'table' : s.view;
+    const isLeague = s.tab === 'league';
 
     const deltaText = (d) => {
       if (d == null) return 'New';
       if (d === 0) return '— held';
       return d > 0 ? `▲ ${d} up` : `▼ ${Math.abs(d)} down`;
     };
-    const gapText = (r) =>
-      r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to ${r.rank - 1 > 0 ? 'the place above' : 'first'}`;
+
+    const tabs = [
+      { key: 'league', label: 'League table' },
+      { key: 'me', label: 'My breakdown' },
+      { key: 'standing', label: 'My standing' },
+      { key: 'risk', label: 'Risk digest' },
+    ].map((t) => ({
+      label: t.label,
+      active: s.tab === t.key,
+      rule: s.tab === t.key ? 'var(--color-accent)' : 'transparent',
+      color: s.tab === t.key ? 'var(--color-text)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
+      onClick: () => this.setState({ tab: t.key, loading: true, drawer: null }, this.loadTab),
+    }));
+
+    const classChips = (boot ? boot.classes : []).map((k) => ({
+      label: k.name.split(' · ')[0],
+      active: s.classId === k.id,
+      bg: s.classId === k.id ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+      border: s.classId === k.id ? 'var(--color-accent)' : 'var(--color-divider)',
+      color: s.classId === k.id ? 'var(--color-accent-700)' : 'var(--color-text)',
+      onClick: () => {
+        if (s.classId !== k.id) this.loadClass(k.id);
+      },
+    }));
 
     const podium = rows
       .slice(0, 3)
@@ -1286,20 +943,18 @@ class Component extends DCLogic {
         monogram: this.monogram(r.display_name),
         score: this.fmt(r.score),
         deltaText: deltaText(r.rank_delta),
+        flag: [r.tied ? 'tied' : null, r.capped ? 'capped at 100' : null].filter(Boolean).join(' · '),
         border: i === 0 ? 'var(--color-accent)' : 'var(--color-divider)',
         topRule: i === 0 ? '3px' : '1px',
         lift: i === 0 ? '-14px' : '0px',
         avatarSize: i === 0 ? '84px' : '64px',
         monogramSize: i === 0 ? '30px' : '22px',
         delay: `${i * 90}ms`,
-        cursor: this.canOpen(r.student_id) ? 'pointer' : 'default',
-        tabIndex: this.canOpen(r.student_id) ? 0 : -1,
         onClick: () => this.openDrawer(r.student_id),
       }));
 
     const topN = this.props.topN ?? 10;
     const visible = s.showAll ? rows : rows.slice(0, topN);
-    const mine = (r) => isStudent && r.student_id === s.account.student_id;
     const visibleRows = visible.map((r, i) => ({
       rank: r.rank,
       name: r.display_name,
@@ -1308,14 +963,18 @@ class Component extends DCLogic {
       barWidth: `${Math.max(2, (r.score / (best || 100)) * 100)}%`,
       barFill: r.rank <= 3 ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-accent) 45%, transparent)',
       rankColor: r.rank <= 3 ? 'var(--color-accent)' : 'var(--color-text)',
-      bg: mine(r) || r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
+      bg: r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
+      rawText: s.rawOn ? `raw ${this.fmt(r.raw)}` : '',
+      factorText: s.rawOn ? `×${this.fmt(r.factor, 2)}` : '',
       deltaText: deltaText(r.rank_delta),
       deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
-      gapText: gapText(r),
-      flag: [mine(r) ? 'you' : null, r.tied ? 'tied' : null, r.missing && r.missing.length ? 'no entry' : null].filter(Boolean).join(' · '),
-      cursor: this.canOpen(r.student_id) ? 'pointer' : 'default',
-      tabIndex: this.canOpen(r.student_id) ? 0 : -1,
-      hover: this.canOpen(r.student_id) ? 'background: color-mix(in srgb, var(--color-accent) 8%, transparent);' : '',
+      gapUpText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to the place above`,
+      gapDownText: r.gap_to_below == null ? 'nobody below' : `${this.fmt(r.gap_to_below)} clear below`,
+      flag: [
+        r.tied ? 'tied' : null,
+        r.capped ? 'capped at 100' : null,
+        r.missing && r.missing.length ? 'no entry' : null,
+      ].filter(Boolean).join(' · '),
       delay: `${Math.min(i, 12) * 35}ms`,
       onClick: () => this.openDrawer(r.student_id),
       onKeyDown: (e) => {
@@ -1326,23 +985,9 @@ class Component extends DCLogic {
       },
     }));
 
-    // A student's own row stays in view however far down the list it is.
-    const own = isStudent && !s.presenting ? rows.find((r) => r.student_id === s.account.student_id) : null;
-    const pinned = own
-      ? {
-          rank: own.rank,
-          name: own.display_name,
-          score: this.fmt(own.score),
-          deltaText: deltaText(own.rank_delta),
-          gapText: gapText(own),
-          onClick: () => this.openDrawer(own.student_id),
-        }
-      : null;
-
     const criteriaChips = (boot ? boot.criteria : []).map((c, i) => {
       const active = s.criteriaKeys.includes(c.key);
       return {
-        key: c.key,
         label: c.label,
         active,
         hint: `Key ${i + 1} · weight ${Math.round(s.weights[c.key] || 0)}`,
@@ -1353,21 +998,20 @@ class Component extends DCLogic {
           const has = s.criteriaKeys.includes(c.key);
           const next = has ? s.criteriaKeys.filter((k) => k !== c.key) : [...s.criteriaKeys, c.key];
           if (!next.length) return;
-          this.setState({ criteriaKeys: next, drawer: null }, this.loadRanking);
+          this.setState({ criteriaKeys: next, drawer: null }, this.loadTab);
         },
       };
     });
 
-    const windows = [
+    const windowOpts = [
       { key: 'week', label: 'Week' },
+      { key: 'rolling', label: `Rolling ${this.props.rollingN ?? 4}` },
       { key: 'cumulative', label: 'Cumulative' },
-      { key: 'rolling', label: `Rolling ${s.rollingWeeks}` },
-    ].map((w, i) => ({
-      label: w.label,
-      active: s.windowMode === w.key,
-      bg: s.windowMode === w.key ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent',
-      divider: i ? '1px solid var(--color-divider)' : '0',
-      onClick: () => this.setState({ windowMode: w.key, drawer: null }, this.loadRanking),
+    ].map((o) => ({
+      label: o.label,
+      active: s.windowMode === o.key,
+      bg: s.windowMode === o.key ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent',
+      onClick: () => this.setState({ windowMode: o.key, drawer: null }, this.loadTab),
     }));
 
     const nameModes = [
@@ -1379,7 +1023,7 @@ class Component extends DCLogic {
       active: s.nameMode === m.key,
       bg: s.nameMode === m.key ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
       border: s.nameMode === m.key ? 'var(--color-accent)' : 'var(--color-divider)',
-      onClick: () => this.setState({ nameMode: m.key }, this.loadRanking),
+      onClick: () => this.setState({ nameMode: m.key }, this.loadTab),
     }));
 
     const weightRows = (boot ? boot.criteria : []).map((c) => ({
@@ -1393,430 +1037,372 @@ class Component extends DCLogic {
     }));
     const draftTotal = Object.values(s.draftWeights).reduce((a, b) => a + b, 0);
 
-    /* ---- the breakdown drawer */
-    let drawer = null;
-    if (s.drawer) {
-      const d = s.drawer;
-      const single = d.weeks.length === 1;
-      const windowLabel =
-        s.windowMode === 'cumulative'
-          ? `Weeks 1–${s.weekIdx + 1} cumulative`
-          : s.windowMode === 'rolling'
-            ? `Last ${s.rollingWeeks} weeks to week ${week ? week.week_number : ''}`
-            : `Week ${week ? week.week_number : ''}`;
-      const wouldBe = single ? d.raw_score * d.factor : null;
-      drawer = {
-        name: d.display_name,
-        rank: d.rank,
-        windowLabel,
-        single,
-        multi: !single,
-        intro: single
-          ? 'Every criterion is converted to a percentage, weighted and added to give the raw score. The raw score is then multiplied by a factor for the hours of work and care, and stops at 100. Weights shown are rescaled across the criteria that have an entry, so a missing entry is never counted as zero.'
-          : 'Each week is scored on its own: criteria are weighted into a raw score, multiplied by that week’s factor and stopped at 100. The weekly adjusted scores are then averaged, and a week with no entries is left out. The criteria below show the average of the weekly points.',
-        parts: d.parts.map((p) => ({
-          label: p.label,
-          earnedText: p.missing ? '—' : `${this.num(p.earned)} / ${this.num(p.possible)}`,
-          pctText: p.missing ? '—' : `${this.fmt(p.normalised)}`,
-          weightText: p.missing ? '—' : `${this.fmt(p.effective_weight, 0)}`,
-          pointsText: p.missing ? '—' : this.fmt(p.points),
-        })),
-        raw: this.fmt(d.raw_score),
-        hoursText: single
-          ? d.weighted_hours > 0
-            ? `Weighted hours: ${Object.entries(d.hours)
-                .filter(([, h]) => h > 0)
-                .map(([key, h]) => `${this.typeLabel(key)} ${this.num(h)}`)
-                .join(' + ')} = ${this.num(d.weighted_hours)}`
-            : 'No approved hours count for this week.'
-          : '',
-        factorText: single ? `Factor: ×${this.fmt(d.factor, 2)}` : '',
-        weeks: d.weeks.map((w) => ({
-          label: `Week ${w.week_number}`,
-          raw: this.fmt(w.raw_score),
-          factor: `×${this.fmt(w.factor, 2)}`,
-          adjusted: `${this.fmt(w.adjusted_score)}${w.capped ? ' (capped)' : ''}`,
-        })),
-        adjustedText: single ? `Adjusted score: ${this.fmt(d.score)}` : `Adjusted score (average): ${this.fmt(d.score)}`,
-        capNote: !d.capped
-          ? ''
-          : single
-            ? `Capped at 100: ${this.fmt(d.raw_score)} × ${this.fmt(d.factor, 2)} would be ${this.fmt(wouldBe)}, so it is shown as 100.`
-            : 'One or more weeks were capped at 100 before the average was taken.',
-        gapUp:
-          d.gap_to_next == null
-            ? 'Top of the table — nobody above.'
-            : `${this.fmt(d.gap_to_next)} points would reach the place above${d.above ? ` (${d.above})` : ''}.`,
-        gapDown:
-          d.gap_to_below == null ? 'Nobody below on this table.' : `${this.fmt(d.gap_to_below)} points clear of the place below.`,
-        missingNote: d.parts.some((p) => p.missing)
-          ? 'Criteria marked — have no entry this window and were excluded from the weighting.'
-          : 'Every criterion has an entry this window.',
-      };
-    }
+    const dp = s.draftParams;
+    const setParam = (patch) => this.setState((st) => ({ draftParams: { ...st.draftParams, ...patch } }));
+    const setTypeWeight = (k, v) => setParam({ typeWeights: { ...dp.typeWeights, [k]: v } });
+    const paramRows = dp
+      ? [
+          { label: 'Rate per weighted hour (r)', value: dp.rate, valueText: `+${(dp.rate * 100).toFixed(1)} points per hour`, min: 0, max: 0.03, step: 0.001, onChange: (e) => setParam({ rate: Number(e.target.value) }) },
+          { label: 'Cap on the factor (f max)', value: dp.cap, valueText: `×${dp.cap.toFixed(2)}`, min: 1, max: 1.6, step: 0.01, onChange: (e) => setParam({ cap: Number(e.target.value) }) },
+          { label: 'An hour of work counts', value: dp.typeWeights.work, valueText: `×${dp.typeWeights.work.toFixed(2)}`, min: 0, max: 2, step: 0.05, onChange: (e) => setTypeWeight('work', Number(e.target.value)) },
+          { label: 'An hour of child care counts', value: dp.typeWeights.childcare, valueText: `×${dp.typeWeights.childcare.toFixed(2)}`, min: 0, max: 2, step: 0.05, onChange: (e) => setTypeWeight('childcare', Number(e.target.value)) },
+          { label: 'An hour of elder care counts', value: dp.typeWeights.eldercare, valueText: `×${dp.typeWeights.eldercare.toFixed(2)}`, min: 0, max: 2, step: 0.05, onChange: (e) => setTypeWeight('eldercare', Number(e.target.value)) },
+        ]
+      : [];
+
+    const partRow = (p) => ({
+      label: p.label,
+      earnedText: p.missing ? '—' : `${p.earned} / ${p.possible}`,
+      pctText: p.missing ? '—' : this.fmt(p.normalised),
+      weightText: p.missing ? '—' : this.fmt(p.effectiveWeight, 0),
+      pointsText: p.missing ? '—' : this.fmt(p.points),
+    });
+
+    const d = s.drawer;
+    const drawer = d
+      ? {
+          name: d.display_name,
+          rank: d.rank,
+          windowLabel: this.windowLabel(),
+          intro: 'Each criterion is converted to a percentage, weighted and added to give the raw score. The hours the student reports become a factor, and the raw score multiplied by that factor — capped at 100 — is the adjusted score the table ranks on.',
+          partsTitle: d.weeks.length > 1 ? `Criteria in week ${d.focusWeek}, the latest in this window` : `Criteria in week ${d.focusWeek}`,
+          parts: d.parts.map(partRow),
+          rawLabel: `Raw score, week ${d.focusWeek}`,
+          rawText: this.fmt(d.focusRaw),
+          hoursText: `${this.fmt(d.weighted_hours)} h`,
+          factorText: `×${this.fmt(d.factor, 2)}`,
+          adjustedLabel: `Adjusted, week ${d.focusWeek}`,
+          adjustedText: `${this.fmt(d.focusAdjusted)}${d.focusCapped ? ' (capped)' : ''}`,
+          windowLabelRow: d.weeks.length > 1 ? `Ranked on: average of ${d.weeks.length} weeks` : '',
+          windowScoreText: this.fmt(d.score),
+          hoursBreakdown: `Week ${d.focusWeek} hours: ${this.hoursPhrase(d.hours)}${d.hours_source === 'weekly' ? ' (a weekly update)' : d.hours_source === 'baseline' ? ' (the approved baseline)' : ''}.`,
+          cappedNote: d.capped
+            ? 'At least one week in this window was clipped at 100, so the factor did not raise it further.'
+            : 'No week in this window hit the 100 ceiling.',
+          multiWeek: d.weeks.length > 1,
+          weeks: d.weeks.map((w) => ({
+            label: `Week ${w.week_number}`,
+            rawText: this.fmt(w.raw),
+            hoursText: this.fmt(w.weighted_hours),
+            factorText: `×${this.fmt(w.factor, 2)}`,
+            adjustedText: `${this.fmt(w.adjusted)}${w.capped ? ' (capped)' : ''}`,
+          })),
+          gapUp: d.gap_to_next == null ? 'Top of the table — nobody above.' : `${this.fmt(d.gap_to_next)} points would reach ${d.above || 'the place above'}.`,
+          gapDown: d.gap_to_below == null ? 'Nobody below on this table.' : `${this.fmt(d.gap_to_below)} points clear of the place below.`,
+          missingNote: d.parts.some((p) => p.missing)
+            ? 'Criteria marked — have no entry in that week and were excluded from the weighting, not scored as zero.'
+            : 'Every criterion has an entry in that week.',
+        }
+      : null;
+
+    const m = s.me;
+    const me = m
+      ? (() => {
+          const ex = m.ex;
+          const baseline = m.commitments.baseline;
+          const statusText = !baseline
+            ? 'You have not entered a semester baseline, so your factor stays at ×1.00.'
+            : baseline.status === 'approved'
+              ? `Baseline approved from week ${baseline.effective_from_week}.`
+              : baseline.status === 'pending'
+                ? 'Baseline pending — it has no effect on your score until it is approved.'
+                : 'Baseline rejected — your factor stays at ×1.00.';
+          return {
+            kicker: `Only you can see this · ${this.windowLabel()}`,
+            name: ex.display_name,
+            privacyNote: 'Your hours, your raw score and your factor are visible to you and your instructor only. Classmates see your adjusted score and rank, nothing else. Entering commitments is optional and never carries free text.',
+            stats: [
+              { label: 'Rank', value: `${ex.rank}${ex.tied ? ' (tied)' : ''}`, note: 'in this class' },
+              { label: 'Ranked on', value: this.fmt(ex.score), note: ex.weeks.length > 1 ? `average of ${ex.weeks.length} weeks` : 'adjusted, out of 100' },
+              { label: `Raw, week ${ex.focusWeek}`, value: this.fmt(ex.focusRaw), note: 'before the factor' },
+              { label: `Adjusted, week ${ex.focusWeek}`, value: `×${this.fmt(ex.factor, 2)} → ${this.fmt(ex.focusAdjusted)}`, note: `${this.fmt(ex.weighted_hours)} weighted hours` },
+            ],
+            partsTitle: `Criteria in week ${ex.focusWeek} — these add up to the raw score of ${this.fmt(ex.focusRaw)}`,
+            parts: ex.parts.map(partRow),
+            weeks: ex.weeks.map((scored) => {
+              const w = m.commitments.byWeek.find((x) => x.week_number === scored.week_number) || {};
+              return {
+                label: `Week ${scored.week_number}`,
+                hoursText: this.fmt(w.weighted_hours ?? scored.weighted_hours, 1),
+                factorText: `×${this.fmt(scored.factor, 2)}`,
+                rawText: this.fmt(scored.raw),
+                adjustedText: `${this.fmt(scored.adjusted)}${scored.capped ? ' (capped)' : ''}`,
+              };
+            }),
+            hoursNote: statusText,
+            cappedNote: ex.capped
+              ? 'A week in this window reached 100, so the factor could not raise it further.'
+              : `A factor of ×${this.fmt(ex.factor, 2)} comes from ${this.hoursPhrase(ex.hours)} in week ${ex.focusWeek}.`,
+            gapUp: ex.gap_to_next == null ? 'You lead the class.' : `${this.fmt(ex.gap_to_next)} points would reach the place above.`,
+            gapDown: ex.gap_to_below == null ? 'Nobody below you on this table.' : `You are ${this.fmt(ex.gap_to_below)} points clear of the place below.`,
+          };
+        })()
+      : null;
+
+    // Levels are carried by colour and text together, each at AA contrast.
+    const levelColor = (level) =>
+      level === 'High risk' ? 'var(--color-accent-900)'
+        : level === 'At risk' ? 'var(--color-accent-700)'
+          : level === 'Watch' ? 'var(--color-neutral-800)'
+            : 'var(--color-neutral-700)';
+
+    const g0 = s.digest ? s.digest.groups[0] : null;
+    const digest = s.digest
+      ? {
+          note: 'Which students across your classes are worth checking in on, and what changed since you last looked. Every flag traces back to data you already have. A flag is a prompt for a conversation, not a verdict, and nothing here is ever shown to the class.',
+          comparedText: g0
+            ? `Evaluated at week ${g0.week}, compared with ${g0.comparedWithStored ? 'what you saw last time' : `week ${g0.comparedWith}`}. Open a student to see the signals and the data behind them.`
+            : '',
+          groups: s.digest.groups.map((g) => ({
+            className: g.className,
+            sections: [
+              { key: 'new', title: 'Newly flagged' },
+              { key: 'still', title: 'Still flagged' },
+              { key: 'cleared', title: 'Recently cleared' },
+            ].map((sec) => {
+              const list = g.rows.filter((r) => r.status === sec.key);
+              return {
+                title: sec.title,
+                emptyText: list.length ? '' : 'Nobody in this group.',
+                rows: list.map((r) => ({
+                  name: r.display_name,
+                  level: r.level,
+                  levelColor: levelColor(r.level),
+                  signalsText: r.signals.length ? r.signals.join(' · ') : 'No signals on any more.',
+                  metaText: [
+                    r.priorLevel ? `was ${r.priorLevel}` : 'no prior reading',
+                    r.notes ? `${r.notes} note${r.notes === 1 ? '' : 's'}` : null,
+                  ].filter(Boolean).join(' · '),
+                  onClick: () => this.openRecord(g.classId, r.student_id),
+                })),
+              };
+            }),
+          })),
+        }
+      : null;
+
+    const rec = s.record;
+    const record = rec
+      ? {
+          kicker: `${rec.className} · week ${rec.week} · instructor only`,
+          name: rec.display_name,
+          level: rec.level,
+          levelColor: levelColor(rec.level),
+          levelNote: rec.oneAway
+            ? `${rec.signals.filter((x) => x.on).length} signal${rec.signals.filter((x) => x.on).length === 1 ? '' : 's'} on — one more would make this ${rec.oneAway}.`
+            : 'Three or more signals are on.',
+          framing: 'This is worth checking in on. Each signal below is on or off against a threshold you set, and shows the data that triggered it. The level is simply how many are on.',
+          signals: [...rec.signals].sort((a, b) => Number(b.on) - Number(a.on)).map((sg) => ({
+            label: sg.label,
+            state: sg.active ? (sg.on ? 'On' : 'Off') : 'Turned off',
+            color: sg.on ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
+            border: sg.on ? 'var(--color-accent)' : 'var(--color-divider)',
+            summary: sg.summary,
+            evidence: sg.evidence,
+          })),
+          history: rec.history.map((h) => ({
+            week: String(h.week_number),
+            title: `Week ${h.week_number}: ${h.level}`,
+            height: `${8 + h.count * 16}px`,
+            color: levelColor(h.level),
+          })),
+          historyNote: 'Levels are recomputed from the data as it stood each week. Changing a threshold does not rewrite this history.',
+          notes: rec.notes.map((n) => ({
+            when: new Date(n.created_at).toLocaleString(),
+            body: n.body,
+          })),
+          notesEmpty: rec.notes.length ? '' : 'No notes yet. Notes stay even if the flags later clear.',
+        }
+      : null;
+
+    const st = s.standing;
+    const standing = st
+      ? {
+          kicker: `Only you can see this · week ${st.week}`,
+          headline: st.signals.length ? 'A couple of things worth a look' : 'Nothing needs your attention right now',
+          intro: 'This is your own picture, drawn from your own work and the hours you have told us about. It is not a comparison with anyone else, and your classmates never see it.',
+          levelText: st.level === 'Not flagged' ? 'On track' : st.level,
+          levelColor: levelColor(st.level),
+          levelNote: st.signals.length
+            ? `${st.signals.length} thing${st.signals.length === 1 ? '' : 's'} stood out this week. Each one is listed below with what it is based on.`
+            : 'Nothing stood out this week. Keep going as you are.',
+          signals: st.signals.map((sg) => ({ label: sg.label, summary: sg.summary })),
+          emptyText: st.signals.length ? '' : 'There is nothing to list this week.',
+          help: st.help,
+          privacy: 'Your instructor can see this and may get in touch. Your classmates cannot see it, and it never appears on the league table.',
+        }
+      : null;
+
+    const dt = s.draftThresholds;
+    const setT = (patch) => this.setState((prev) => ({ draftThresholds: { ...prev.draftThresholds, thresholds: { ...prev.draftThresholds.thresholds, ...patch } } }));
+    const toggleSig = (key) => this.setState((prev) => ({ draftThresholds: { ...prev.draftThresholds, active: { ...prev.draftThresholds.active, [key]: !prev.draftThresholds.active[key] } } }));
+    const slider = (label, key, valueText, min, max, step) => ({
+      label, valueText, min, max, step,
+      value: dt.thresholds[key],
+      onChange: (e) => setT({ [key]: Number(e.target.value) }),
+    });
+    const thresholds = s.thresholdsOpen && dt
+      ? {
+          note: `These apply to ${boot ? boot.klass.name : 'this class'} only — switch class at the top to set another. Each signal is on or off against the value you set here, and a student’s level is the count of signals on: one is Watch, two is At risk, three or more is High risk.`,
+          historyNote: 'Applies from now on. A student’s level history keeps the thresholds that were in force at the time.',
+          rows: [
+            { key: 'downward_trend', label: 'Downward trend', sliders: [slider('Consecutive weeks of decline', 'declineWeeks', `${dt.thresholds.declineWeeks} weeks`, 2, 6, 1)] },
+            {
+              key: 'missed_engagement',
+              label: 'Missed or low engagement',
+              sliders: [
+                slider('Homework not submitted', 'missedAssignments', `${dt.thresholds.missedAssignments} or more`, 1, 8, 1),
+                slider('Attendance below', 'attendancePct', `${dt.thresholds.attendancePct}%`, 40, 95, 5),
+                slider('Participation below', 'participationPct', `${dt.thresholds.participationPct}%`, 20, 90, 5),
+              ],
+            },
+            { key: 'low_projected_grade', label: 'Low projected grade', sliders: [slider('Projected grade below', 'projectedGrade', String(dt.thresholds.projectedGrade), 40, 80, 1)] },
+            { key: 'heavy_commitments', label: 'Heavy outside commitments', sliders: [slider('Weighted hours a week', 'commitmentHours', `${dt.thresholds.commitmentHours} or more`, 5, 50, 1)] },
+            { key: 'missing_data', label: 'Missing data', sliders: [slider('Consecutive weeks with no entries', 'missingWeeks', `${dt.thresholds.missingWeeks} or more`, 1, 6, 1)] },
+          ].map((r) => ({
+            label: r.label,
+            sliders: r.sliders,
+            active: dt.active[r.key] !== false,
+            onToggle: () => toggleSig(r.key),
+          })),
+        }
+      : null;
+
+    const ex = s.explainer;
+    const explainer = ex
+      ? {
+          step1: 'Each criterion is converted to a percentage of what was possible, multiplied by its weight, and added together. A criterion with no entry is left out and the remaining weights are rescaled, so missing data is never counted as zero. That total is the raw score.',
+          step2: `The hours a student reports for work, child care and elder care are combined into weighted hours, counting an hour of work ×${ex.typeWeights.work}, child care ×${ex.typeWeights.childcare} and elder care ×${ex.typeWeights.eldercare}. Each weighted hour adds ${(ex.rate * 100).toFixed(1)} of a point to the factor, which stops at ×${ex.cap.toFixed(2)}.`,
+          step3: 'The adjusted score is the raw score multiplied by the factor, stopping at 100. Cumulative and rolling views average the weekly adjusted scores, so each week’s factor and ceiling apply to that week only.',
+          table: ex.table.map((t) => ({ hours: String(t.hours), factor: `×${t.factor.toFixed(2)}` })),
+          example: `Worked example: a raw score of ${ex.example.raw} with ${this.hoursPhrase(ex.example.hours)} gives ${ex.example.weighted_hours} weighted hours, a factor of ×${ex.example.factor.toFixed(2)} and an adjusted score of ${ex.example.adjusted.toFixed(1)}.`,
+          privacy: 'Nobody’s hours appear here. Entering commitments is optional, and a baseline has no effect until your instructor approves it.',
+        }
+      : null;
 
     const issues = s.issues || [];
-
-    /* ---- navigation */
-    const tabsDef = [{ key: 'table', label: 'Table' }];
-    if (isStudent) tabsDef.push({ key: 'commitments', label: 'My commitments' });
-    if (isInstructor) {
-      const waiting = s.ap ? s.ap.pending.length : 0;
-      tabsDef.push({ key: 'approvals', label: waiting ? `Approvals (${waiting})` : 'Approvals' });
-      tabsDef.push({ key: 'settings', label: 'Adjustment' });
-    }
-    tabsDef.push({ key: 'explainer', label: 'How scores work' });
-    const tabs = tabsDef.map((t) => ({
-      label: t.label,
-      current: view === t.key ? 'page' : 'false',
-      bg: view === t.key ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
-      border: view === t.key ? 'var(--color-accent)' : 'var(--color-divider)',
-      color: view === t.key ? 'var(--color-accent-700)' : 'var(--color-text)',
-      onClick: () => this.setView(t.key),
-    }));
-
-    /* ---- my commitments */
-    const cm = s.cm;
-    const editable = cm ? this.editableWeeks(cm) : [];
-    const cmModes = cm
-      ? [
-          { key: 'baseline', label: 'All weeks (baseline)', week: null },
-          ...editable.map((w, i) => ({
-            key: `week${w.week_number}`,
-            label: `${i === editable.length - 1 && cm.edit_window.current_week_id === w.week_id ? 'This week' : 'Last week'} · Week ${w.week_number}`,
-            week: w.week_number,
-          })),
-        ].map((m, i) => {
-          const active = m.week === null ? s.cmMode === 'baseline' : s.cmMode === 'weekly' && s.cmWeek === m.week;
-          return {
-            label: m.label,
-            active,
-            disabled: s.cmBusy,
-            divider: i ? '1px solid var(--color-divider)' : '0',
-            bg: active ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent',
-            onClick: () => this.resetCmForm(cm, m.week === null ? 'baseline' : 'weekly', m.week, null),
-          };
-        })
-      : [];
-
-    const baseline = cm ? cm.baseline : null;
-    const inEffect = cm ? cm.in_effect : null;
-    let cmStatusLabel = 'Not entered';
-    let cmStatusDetail = 'Optional. Until a baseline is approved your factor is ×1.00.';
-    if (baseline) {
-      if (baseline.status === 'pending') {
-        cmStatusLabel = 'Pending approval';
-        cmStatusDetail = inEffect
-          ? `Your approved baseline from week ${inEffect.effective_from_week} stays in force until your instructor decides.`
-          : 'Waiting for your instructor. Until then your factor is ×1.00.';
-      } else if (baseline.status === 'rejected') {
-        cmStatusLabel = 'Rejected';
-        cmStatusDetail = inEffect
-          ? `Your approved baseline from week ${inEffect.effective_from_week} is still in force. You can submit a new one.`
-          : 'Your instructor did not approve this. You can submit a new baseline.';
-      } else {
-        cmStatusLabel = `Approved from week ${baseline.effective_from_week}`;
-        cmStatusDetail = 'Earlier weeks keep the factor they had.';
-      }
-    }
-    const inputTotal = Object.values(s.cmInputs).reduce((a, v) => a + (Number(v) || 0), 0);
-    const limits = cm ? cm.limits : { per_type_max: 80, total_max: 120, step: 0.5 };
-    const cmFields = cm
-      ? cm.types.map((t) => ({
-          id: `cm-${t.key}`,
-          label: t.label,
-          value: s.cmInputs[t.key] ?? '',
-          onInput: (e) => {
-            const value = e.target.value;
-            this.setState((st) => ({ cmInputs: { ...st.cmInputs, [t.key]: value }, cmNote: null }), this.schedulePreview);
-          },
-        }))
-      : [];
-    const weekNumberOf = (id) => (cm ? (cm.weeks.find((w) => w.week_id === id) || {}).week_number : null);
-    const preview = s.cmPreview;
-    const cmPreview = preview
-      ? {
-          weighted: this.num(preview.weighted_hours),
-          factor: `×${this.fmt(preview.factor, 2)}`,
-          raw: this.fmt(preview.raw_score),
-          adjusted: `${this.fmt(preview.adjusted_score)}${preview.capped ? ' (capped)' : ''}`,
-          note: inEffect
-            ? 'This is what these hours would give in that week, if they were your hours.'
-            : 'This is what these hours would give once a baseline is approved. Right now your factor is ×1.00.',
-        }
-      : null;
-    const weeklyEntry = cm && s.cmMode === 'weekly' ? cm.weekly_updates.find((u) => u.week_number === s.cmWeek) : null;
-    const sourceText = { none: '—', baseline: 'Baseline', weekly: 'Your weekly update' };
-
-    /* ---- approvals */
-    const ap = s.ap;
-    const flagHours = s.st ? s.st.adjustment.flag_hours : 10;
-    const total = (h) => this.num(Object.values(h).reduce((a, b) => a + b, 0));
-    const hoursCells = (h) => ({
-      work: this.num(h.work ?? 0),
-      childcare: this.num(h.childcare ?? 0),
-      eldercare: this.num(h.eldercare ?? 0),
-      total: total(h),
-    });
-    const apPending = ap
-      ? ap.pending.map((p) => ({
-          name: p.display_name,
-          kind: p.is_change ? 'Baseline change' : 'New baseline',
-          submitted: new Date(p.submitted_at).toLocaleString(),
-          requested: hoursCells(p.hours),
-          hasCurrent: !!p.current,
-          current: p.current ? hoursCells(p.current) : hoursCells({}),
-          weekId: `effective-${p.id}`,
-          maxWeek: boot ? boot.weeks.length : 16,
-          effective: s.apEffective[p.id] ?? String(p.suggested_effective_week ?? ''),
-          onEffective: (e) => {
-            const value = e.target.value;
-            this.setState((st) => ({ apEffective: { ...st.apEffective, [p.id]: value } }));
-          },
-          onApprove: () => this.decide(p, 'approve'),
-          onReject: () => this.decide(p, 'reject'),
-        }))
-      : [];
-    const statusText = { none: 'Not entered', pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
-    const actionText = {
-      baseline_submitted: 'Submitted a baseline',
-      baseline_approved: 'Approved a baseline',
-      baseline_rejected: 'Rejected a baseline',
-      weekly_update: 'Weekly update',
-      weekly_reset: 'Reset a week to the baseline',
-      weekly_reversed: 'Reversed a weekly update',
-      settings_changed: 'Changed the adjustment settings',
-    };
-    const apLog = s.apLog.map((e) => {
-      const before = this.describeValues(e.old_values);
-      const after = e.action === 'weekly_reset' ? 'back to the baseline' : this.describeValues(e.new_values);
-      return {
-        when: new Date(e.at).toLocaleString(),
-        actor: e.actor_name,
-        action: actionText[e.action] || e.action,
-        flag: e.flagged ? '⚑ review' : '',
-        subject: [e.student_name, e.week_number ? `week ${e.week_number}` : null].filter(Boolean).join(' · ') || '—',
-        change: before && after ? `${before} → ${after}` : after || before || '—',
-        reversible: e.reversible,
-        onReverse: () => this.reverse(e),
-      };
-    });
-
-    /* ---- adjustment settings */
-    const st = s.st;
-    const stTypeFields = st
-      ? Object.keys(st.adjustment.type_weights).map((key) => ({
-          id: `st-type-${key}`,
-          label: this.typeLabel(key),
-          value: s.stDraft[`type:${key}`] ?? '',
-          onInput: (e) => {
-            const value = e.target.value;
-            this.setState((x) => ({ stDraft: { ...x.stDraft, [`type:${key}`]: value }, stNote: null }));
-          },
-        }))
-      : [];
-    const paramDefs = [
-      { key: 'rate', label: 'Rate', step: '0.001', help: 'Factor added per weighted hour: 0.01 is one point per hour.' },
-      { key: 'cap', label: 'Cap', step: '0.05', help: 'The most the factor can reach, between 1 and 3.' },
-      { key: 'flag_hours', label: 'Review threshold (hours)', step: '1', help: 'Flag a weekly entry that differs from the baseline by more than this.' },
-    ];
-    const stParamFields = paramDefs.map((p) => ({
-      id: `st-${p.key}`,
-      label: p.label,
-      step: p.step,
-      help: p.help,
-      value: s.stDraft[p.key] ?? '',
-      onInput: (e) => {
-        const value = e.target.value;
-        this.setState((x) => ({ stDraft: { ...x.stDraft, [p.key]: value }, stNote: null }));
-      },
-    }));
-
-    /* ---- explainer */
-    const ex = s.ex;
-    const exView = ex
-      ? {
-          formula: ex.formula.map((text) => ({ text })),
-          params: [
-            ...Object.entries(ex.type_weights).map(([key, w]) => ({ label: `An hour of ${this.typeLabel(key).toLowerCase()} counts as`, value: `${this.num(w)} hour${w === 1 ? '' : 's'}` })),
-            { label: 'Rate', value: `${this.num(ex.rate)} per weighted hour` },
-            { label: 'Cap on the factor', value: `×${this.fmt(ex.cap, 2)}` },
-            { label: 'Most hours a week', value: `${ex.limits.per_type_max} per type, ${ex.limits.total_max} in total, in steps of ${ex.limits.step}` },
-          ],
-          factors: ex.factor_table.map((r, i) => ({
-            hours: `${this.num(r.weighted_hours)}${i === ex.factor_table.length - 1 && i > 0 ? ' or more' : ''}`,
-            factor: `×${this.fmt(r.factor, 2)}${i === ex.factor_table.length - 1 && i > 0 ? ' (cap)' : ''}`,
-          })),
-          examples: ex.examples.map((x) => ({
-            title: x.title,
-            setup: `Raw score ${this.num(x.raw_score)} with ${this.hoursShort(x.hours)} a week.`,
-            steps: x.steps.map((text) => ({ text })),
-          })),
-          rules: ex.rules.map((text) => ({ text })),
-        }
-      : null;
+    const weeksWithData = boot ? boot.weeksWithData : [];
+    const weekHasData = week ? weeksWithData.includes(week.id) : true;
 
     return {
       theme: s.theme,
       themeLabel: s.theme === 'light' ? 'Dark' : 'Light',
-      // sign-in
-      showLogin: s.authChecked && !signedIn,
-      signedIn,
-      code: s.code,
-      loginError: s.loginError,
-      signingIn: s.signingIn,
-      signInLabel: s.signingIn ? 'Signing in…' : 'Sign in',
-      hasDemoAccounts: s.demoAccounts.length > 0,
-      demoAccounts: s.demoAccounts.map((a) => ({
-        label: a.name,
-        note: a.role === 'instructor' ? 'Instructor · sees and approves everything' : 'Student',
-        code: a.code,
-        onClick: () => this.setState({ code: a.code, loginError: null }),
-      })),
-      onCode: (e) => this.setState({ code: e.target.value }),
-      onSubmitLogin: this.submitLogin,
-      onSignOut: this.signOut,
-      // header and navigation
-      klassName: boot ? boot.class.name : 'Loading…',
-      demo: boot ? boot.source.demo : false,
-      lastUpdatedText: s.lastUpdated && view === 'table' ? `Updated ${new Date(s.lastUpdated).toLocaleTimeString()}` : '',
-      isInstructor,
-      showRefresh: isInstructor && view === 'table' && !s.presenting,
-      showAccount: !s.presenting,
-      roleLabel: isInstructor ? 'Instructor' : 'Student',
-      showNav: !s.presenting,
-      tabs,
-      presentLabel: s.presenting ? 'Exit present' : 'Present',
-      // which screen
-      isTable: view === 'table',
-      isCommitments: view === 'commitments' && isStudent,
-      isApprovals: view === 'approvals' && isInstructor,
-      isSettings: view === 'settings' && isInstructor,
-      isExplainer: view === 'explainer',
-      // the table
       loading: s.loading && !s.errorMsg,
       errorMsg: s.errorMsg,
+      klassName: boot ? boot.klass.name : 'Loading…',
+      termLabel: boot ? `16-week semester · ${boot.klass.external_id}` : '',
+      demo: boot ? boot.source.demo : false,
+      lastUpdatedText: s.lastUpdated ? `Updated ${new Date(s.lastUpdated).toLocaleTimeString()}` : '',
       stale: s.stale,
-      showIssues: issues.length > 0 && isInstructor,
-      issuesText: issues.length ? `${issues.length} cell${issues.length === 1 ? '' : 's'} need checking in the source` : '',
-      showControls: !!boot && !s.presenting && !s.loading,
+      hasIssues: issues.length > 0,
+      issuesText: issues.length ? `${issues.length} cell${issues.length === 1 ? '' : 's'} need checking in the sheet` : '',
+      tabs,
+      classChips,
+      showControls: !!boot && !s.loading && s.tab === 'league',
+      showStudentControls: !!boot && !s.loading && s.tab === 'me',
       weekLabel: week ? `Week ${week.week_number}` : '',
-      weekRange: week ? `${week.start_date} – ${week.end_date}` : '',
-      windows,
+      weekNumber: week ? week.week_number : 1,
+      weekRange: week ? `${week.start_date} – ${week.end_date}${weekHasData ? '' : ' · nothing recorded yet'}` : '',
+      windowOpts,
       criteriaChips,
       nameModes,
-      pinned,
+      rawOn: s.rawOn,
+      rawBg: s.rawOn ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+      rawBorder: s.rawOn ? 'var(--color-accent)' : 'var(--color-divider)',
       podium,
       visibleRows,
-      hasRows: rows.length > 0 && !s.loading,
-      isEmpty: !!boot && !s.loading && rows.length === 0 && !s.errorMsg,
+      hasRows: isLeague && rows.length > 0 && !s.loading,
+      isEmpty: isLeague && !!boot && !s.loading && rows.length === 0 && !s.errorMsg,
+      emptyHint: weekHasData ? 'Turn a criterion back on, or pick another week.' : 'Scores for this week have not been entered in the sheet yet. Weeks 1 to 11 are complete; week 12 is in progress.',
       showAllLabel: s.showAll ? `Show top ${topN}` : `Show all ${rows.length}`,
       footnote: boot
-        ? `${rows.length} students · ${s.criteriaKeys.length} of ${boot.criteria.length} criteria · level scores are ordered by raw score, then ${boot.tie_breakers.join(', then ')}`
+        ? `${rows.length} students · ${s.criteriaKeys.length} of ${boot.criteria.length} criteria · ${this.windowLabel()}. Ranked on the adjusted score; students level on it are shown side by side and ordered by the higher raw score, then ${boot.tieBreakers.join(', then ')}. Any still level share a rank.`
         : '',
-      shortcutHint: isInstructor
-        ? '← → week · 1–5 single criterion · 0 all criteria · P present · Esc close'
-        : '← → week · P present · Esc close',
+      shortcutHint: isLeague
+        ? '← → week · 1–5 single criterion · 0 all criteria · Esc close'
+        : s.tab === 'me' ? '← → week · Esc close'
+          : s.tab === 'standing' ? 'Your own view — classmates never see this screen'
+            : 'Instructor only — never projected',
+      me,
+      digest,
+      standing,
+      record,
+      thresholds,
+      noteDraft: s.noteDraft,
       drawer,
       weightsOpen: s.weightsOpen,
       weightRows,
-      weightTotalText: `Draft total ${Math.round(draftTotal)} — rescaled to 100 on apply`,
-      // my commitments
-      cmShowNotice: !s.cmNoticeSeen,
-      cmError: s.cmError,
-      cmLoaded: !!cm,
-      cmStatusLabel,
-      cmStatusDetail,
-      cmModes,
-      cmModeHelp:
-        s.cmMode === 'baseline'
-          ? 'The hours you usually have each week across the whole semester. Your instructor approves them before they count, and a new baseline counts from the week they choose.'
-          : 'Change just this week if it was different. It replaces your baseline hours for this week only and takes effect straight away, once a baseline has been approved. Older weeks are locked.',
-      cmFields,
-      cmPreview,
-      cmPreviewError: s.cmPreviewError,
-      cmPreviewWeek: s.cmMode === 'weekly' ? `Week ${s.cmWeek}` : s.cmPreview ? `Week ${weekNumberOf(s.cmPreview.week_id)}, your latest scores` : 'your latest scores',
-      cmTotalText: `Total ${this.num(inputTotal)} of ${limits.total_max} hours a week · up to ${limits.per_type_max} for each type · in steps of ${limits.step}`,
-      cmSaveLabel: s.cmBusy ? 'Saving…' : s.cmMode === 'baseline' ? 'Submit for approval' : `Save week ${s.cmWeek}`,
-      cmSaveDisabled: s.cmBusy,
-      cmBusy: s.cmBusy,
-      cmCanReset: !!weeklyEntry && weeklyEntry.hours != null,
-      cmNote: s.cmNote,
-      cmWeeks: cm
-        ? cm.weeks.map((w) => ({
-            label: `Week ${w.week_number}`,
-            source: sourceText[w.source],
-            weighted: w.source === 'none' ? '—' : this.num(w.weighted_hours),
-            factor: `×${this.fmt(w.factor, 2)}`,
-          }))
-        : [],
-      onDismissNotice: this.dismissNotice,
-      onCmSave: this.saveCommitments,
-      onCmReset: this.resetCmWeek,
-      // approvals
-      apError: s.apError,
-      apPending,
-      apPendingCount: apPending.length,
-      apNoPending: !!ap && apPending.length === 0,
-      apStudents: s.apStudents.map((r) => ({
-        name: r.display_name,
-        status: statusText[r.status],
-        hours: r.hours ? this.hoursShort(r.hours) : '—',
-        from: r.effective_from_week ?? '—',
-        factor: `×${this.fmt(r.factor, 2)}`,
-      })),
-      apLog,
-      apBusy: s.apBusy,
-      apFlagHours: flagHours,
-      // settings
-      stError: s.stError,
-      stLoaded: !!st,
-      stTypeFields,
-      stParamFields,
-      stBusy: s.stBusy,
-      stNote: s.stNote,
-      onStSave: this.saveSettings,
-      // explainer
-      exError: s.exError,
-      exLoaded: !!ex,
-      exFormula: exView ? exView.formula : [],
-      exParams: exView ? exView.params : [],
-      exFactors: exView ? exView.factors : [],
-      exExamples: exView ? exView.examples : [],
-      exRules: exView ? exView.rules : [],
-      // actions
-      onToggleTheme: () => this.setState((x) => ({ theme: x.theme === 'light' ? 'dark' : 'light' })),
-      onTogglePresent: () => this.setState((x) => ({ presenting: !x.presenting, drawer: null, weightsOpen: false })),
+      paramRows,
+      paramsSummary: dp ? `A student with 20 weighted hours scores ×${Math.min(1 + dp.rate * 20, dp.cap).toFixed(2)}; the cap bites at ${((dp.cap - 1) / (dp.rate || 1)).toFixed(0)} hours.` : '',
+      weightTotalText: `Draft weight total ${Math.round(draftTotal)} — rescaled to 100 on apply`,
+      explainer,
+      onToggleTheme: () => this.setState((st) => ({ theme: st.theme === 'light' ? 'dark' : 'light' })),
+      onToggleRaw: () => this.setState((st) => ({ rawOn: !st.rawOn })),
       onPrevWeek: () => this.stepWeek(-1),
       onNextWeek: () => this.stepWeek(1),
-      onToggleShowAll: () => this.setState((x) => ({ showAll: !x.showAll })),
+      onScrubWeek: (e) => {
+        const idx = Math.max(0, Math.min(boot.weeks.length - 1, Number(e.target.value) - 1));
+        if (idx !== s.weekIdx) this.setState({ weekIdx: idx, drawer: null }, this.loadTab);
+      },
+      onToggleShowAll: () => this.setState((st) => ({ showAll: !st.showAll })),
       onCloseDrawer: () => this.setState({ drawer: null }),
-      onToggleWeights: () => this.setState((x) => ({ weightsOpen: !x.weightsOpen, draftWeights: x.weights })),
+      onCloseRecord: () => this.setState({ record: null, noteDraft: '' }),
+      onNoteChange: (e) => this.setState({ noteDraft: e.target.value }),
+      onSaveNote: async () => {
+        const body = s.noteDraft;
+        if (!body || !body.trim() || !s.record) return;
+        try {
+          await this.api.addNote({ classId: s.record.classId, studentId: s.record.student_id, body, caller: { role: 'instructor' } });
+          const fresh = await this.api.getRiskRecord({ classId: s.record.classId, studentId: s.record.student_id, caller: { role: 'instructor' } });
+          this.setState({ record: fresh, noteDraft: '' }, this.loadDigest);
+        } catch (err) {
+          this.setState({ errorMsg: err.message });
+        }
+      },
+      onOpenThresholds: async () => {
+        const rs = await this.api.getRiskSettings(s.classId);
+        this.setState({ thresholdsOpen: true, draftThresholds: { thresholds: { ...rs.thresholds }, active: { ...rs.active } } });
+      },
+      onCloseThresholds: () => this.setState({ thresholdsOpen: false }),
+      onResetThresholds: () => this.setState({
+        draftThresholds: {
+          thresholds: { declineWeeks: 3, missedAssignments: 2, attendancePct: 70, participationPct: 50, projectedGrade: 60, commitmentHours: 20, missingWeeks: 2 },
+          active: { downward_trend: true, missed_engagement: true, low_projected_grade: true, heavy_commitments: true, missing_data: true },
+        },
+      }),
+      onApplyThresholds: async () => {
+        await this.api.saveRiskSettings(s.classId, s.draftThresholds);
+        this.setState({ thresholdsOpen: false, record: null }, this.loadDigest);
+      },
+      onToggleWeights: () => this.setState((st) => ({ weightsOpen: !st.weightsOpen, draftWeights: st.weights, draftParams: st.boot.settings })),
       onCloseWeights: () => this.setState({ weightsOpen: false }),
+      onOpenExplainer: async () => {
+        const data = await this.api.getExplainer(s.classId);
+        this.setState({ explainer: data });
+      },
+      onCloseExplainer: () => this.setState({ explainer: null }),
       onResetWeights: () => {
-        const defaults = Object.fromEntries(boot.criteria.map((c) => [c.key, c.default_weight]));
-        this.setState({ draftWeights: defaults });
+        this.setState({ draftWeights: boot.defaultWeights, draftParams: { typeWeights: { work: 1, childcare: 1, eldercare: 1 }, rate: 0.01, cap: 1.25 } });
       },
       onApplyWeights: async () => {
-        try {
-          const saved = await this.api.saveWeights('c1', s.draftWeights);
-          this.setState({ weights: saved.weights, draftWeights: saved.weights, weightsOpen: false, errorMsg: null }, this.loadRanking);
-        } catch (err) {
-          if (err.status !== 401) this.setState({ errorMsg: err.message });
-        }
+        const saved = await this.api.saveSettings(s.classId, { weights: s.draftWeights, ...s.draftParams });
+        this.setState(
+          (st) => ({
+            weights: saved.weights,
+            draftWeights: saved.weights,
+            boot: { ...st.boot, weights: saved.weights, settings: { typeWeights: saved.typeWeights, rate: saved.rate, cap: saved.cap } },
+            weightsOpen: false,
+          }),
+          this.loadTab,
+        );
       },
       onRefresh: async () => {
         try {
-          const r = await this.api.refresh();
-          this.setState({ lastUpdated: r.last_updated, stale: r.stale, issues: r.issues, errorMsg: null }, this.loadRanking);
+          const r = await this.api.refresh(s.classId);
+          this.setState({ lastUpdated: r.lastUpdated, stale: r.stale, issues: r.issues, errorMsg: null }, this.loadTab);
         } catch (err) {
-          if (err.status !== 401) this.setState({ errorMsg: err.message });
+          this.setState({ errorMsg: err.message });
         }
-      },
-      onRetry: () => {
-        this.setState({ errorMsg: null, loading: true });
-        if (s.boot) this.loadRanking();
-        else this.enter(s.account);
       },
     };
   }
