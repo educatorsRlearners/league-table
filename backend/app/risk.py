@@ -133,12 +133,12 @@ def evaluate_signals(*, weekly, hours: float = 0, thresholds: dict | None = None
         projected = (sum(nums) / len(nums)) if nums else None
     gap = _missing_run(weekly)
 
-    reasons = [
+    maybe_reasons = [
         f"attendance {_round1(attendance_pct)}% is under {t['attendancePct']}%" if attendance_pct is not None and attendance_pct < t["attendancePct"] else None,
         f"{missed} assignments not handed in" if missed >= t["missedAssignments"] else None,
         f"participation {_round1(participation_pct)}% is under {t['participationPct']}%" if participation_pct is not None and participation_pct < t["participationPct"] else None,
     ]
-    reasons = [r for r in reasons if r]
+    reasons: list[str] = [r for r in maybe_reasons if r]
 
     plural = lambda n: "" if n == 1 else "s"  # noqa: E731
     defs = {

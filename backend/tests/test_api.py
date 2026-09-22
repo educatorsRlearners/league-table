@@ -1,6 +1,7 @@
 """Functional tests for the spec endpoints (mirrors frontend/services/tests.js)."""
 
 import json
+from itertools import pairwise
 
 
 def approx(a, b, eps=1e-6):
@@ -44,7 +45,7 @@ def test_ranking_shape_and_order(instructor):
     assert len(res["rows"]) == 24
     assert res["rows"][0]["rank"] == 1
     scores = [r["score"] for r in res["rows"]]
-    assert all(b <= a + 1e-9 for a, b in zip(scores, scores[1:]))
+    assert all(b <= a + 1e-9 for a, b in pairwise(scores))
     assert all(0 <= r["score"] <= 100 + 1e-9 for r in res["rows"])
     assert res["weekCount"] == 1
 
@@ -107,7 +108,7 @@ def test_weights_override_rescaled(instructor):
 def test_criteria_filter(instructor):
     res = instructor.get("/classes/c1/ranking", params={"week": "w5", "criteria": "attendance"}).json()
     assert res["criteriaKeys"] == ["attendance"]
-    ex = instructor.get("/classes/c1/students/%s/explanation" % res["rows"][0]["student_id"],
+    ex = instructor.get(f"/classes/c1/students/{res['rows'][0]['student_id']}/explanation",
                         params={"week": "w5", "criteria": "attendance"}).json()
     assert len(ex["parts"]) == 1 and ex["parts"][0]["key"] == "attendance"
 

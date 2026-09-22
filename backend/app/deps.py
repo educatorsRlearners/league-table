@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import HTTPException
 from pydantic import TypeAdapter, ValidationError
 
-from app.auth import Caller, get_caller, instructor_id_of
+from app.auth import Caller
 from app.datasource import Snapshot
 from app.service import LeagueService
 
@@ -48,7 +49,7 @@ def need_class(ctx: AppContext, class_id: str) -> Snapshot:
 
 
 def student_class_ids(ctx: AppContext, student_id: str) -> list[str]:
-    out = []
+    out: list[str] = []
     try:
         classes = ctx.db.list_classes()
     except Exception:

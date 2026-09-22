@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import Caller, get_caller, instructor_id_of, require_instructor
-from app.deps import ensure_student_in_class, get_ctx, need_class, student_class_ids
+from app.deps import get_ctx, need_class, student_class_ids
 from app.models import Bootstrap, Class, Explainer, LeagueSettings, LeagueSettingsPatch
 from app.scoring import commitment_factor, normalise_weights, weighted_hours
 from app.service import DEFAULT_ROLLING_N, latest_complete_week_id

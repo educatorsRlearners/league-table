@@ -8,8 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app.auth import Caller, get_caller
-from app.deps import ensure_student_in_class, get_ctx, need_class, parse_criteria, parse_weights
-from app.models import Explanation, RankingResponse
+from app.deps import (
+    ensure_student_in_class,
+    get_ctx,
+    need_class,
+    parse_criteria,
+    parse_weights,
+)
+from app.models import Explanation
 from app.service import DEFAULT_ROLLING_N, build_rows, resolved_weights, window_weeks
 
 router = APIRouter(tags=["ranking"])

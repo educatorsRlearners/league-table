@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import threading
 from copy import deepcopy
+from datetime import UTC
 from typing import Protocol
 
 from app.risk import DEFAULT_ACTIVE, DEFAULT_THRESHOLDS
@@ -151,7 +152,7 @@ class MemoryStore:
     # notes
 
     def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         with self._lock:
             self._note_seq += 1
@@ -161,7 +162,7 @@ class MemoryStore:
                 "class_id": class_id,
                 "student_id": student_id,
                 "body": body,
-                "created_at": at or datetime.now(timezone.utc).isoformat(),
+                "created_at": at or datetime.now(UTC).isoformat(),
             }
             self._notes.append(note)
             return deepcopy(note)

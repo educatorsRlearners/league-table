@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from app.datasource import Entry, Student
 from app.mock_db import MockDatabase
@@ -45,7 +46,7 @@ NICKNAMES = {
     "Zoltan Varga": "Zolt", "Wren Abbott": "Wrennie",
 }
 
-CRITERIA = {
+CRITERIA: dict[str, list[dict[str, Any]]] = {
     "c1": [
         {"key": "homework", "label": "Homework", "unit": "tasks on time", "default_weight": 25, "possible": 5, "everyWeek": True},
         {"key": "attendance", "label": "Attendance", "unit": "sessions", "default_weight": 20, "possible": 3, "everyWeek": True},
@@ -91,12 +92,11 @@ def _js_round(v: float) -> int:
 def build_weeks() -> list[Week]:
     weeks = []
     for i in range(WEEK_COUNT):
-        from datetime import date
 
         start_ms = TERM_START_MS + i * 7 * 86400000
         end_ms = TERM_START_MS + (i * 7 + 4) * 86400000
-        start = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc).date()
-        end = datetime.fromtimestamp(end_ms / 1000, tz=timezone.utc).date()
+        start = datetime.fromtimestamp(start_ms / 1000, tz=UTC).date()
+        end = datetime.fromtimestamp(end_ms / 1000, tz=UTC).date()
         weeks.append(Week(id=f"w{i + 1}", term_id="t1", week_number=i + 1,
                           start_date=start.isoformat(), end_date=end.isoformat()))
     return weeks
@@ -131,7 +131,6 @@ def build_entries(class_id: str, students: list[Student], weeks) -> list[Entry]:
             ability[s.id][c["key"]] = min(0.99, max(0.12, base + (rng() - 0.5) * 0.28))
     entries = []
     n = 0
-    week_by_id = {w.id: w for w in weeks}
     for w in weeks:
         if w.week_number > DATA_THROUGH:
             continue
@@ -230,7 +229,7 @@ def build_toy() -> Toy:
         b, u = seed_commitments(cid)
         baselines[cid] = b
         updates[cid] = u
-    accounts = [
+    accounts: list[dict[str, Any]] = [
         {"id": "a1", "role": "instructor", "student_id": None, "class_ids": ["c1", "c2"], "external_id": "demo:instructor"},
         {"id": "a2", "role": "student", "student_id": "s01", "class_ids": ["c1"], "external_id": "demo:amara"},
         {"id": "a3", "role": "student", "student_id": "s18", "class_ids": ["c1"], "external_id": "demo:rosa"},

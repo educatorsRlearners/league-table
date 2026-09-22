@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from app.datasource import DataSource, Snapshot, SourceUnavailable
 from app.errors import ClassNotFound, RefreshTooSoon

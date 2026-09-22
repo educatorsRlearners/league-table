@@ -2,17 +2,29 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import Caller, get_caller, instructor_id_of, require_instructor
 from app.deps import get_ctx, need_class
-from app.models import Commitments, Digest, Note, NoteRequest, RiskRecord, RiskSettings, RiskSettingsPatch, Standing
-from app.risk import LEVELS as LEVEL_ORDER, diff_state, evaluate_signals
+from app.models import (
+    Commitments,
+    Digest,
+    Note,
+    NoteRequest,
+    RiskRecord,
+    RiskSettings,
+    RiskSettingsPatch,
+    Standing,
+)
+from app.risk import LEVELS as LEVEL_ORDER
+from app.risk import diff_state, evaluate_signals
 from app.scoring import commitment_factor, resolve_hours, weighted_hours
 from app.service import evaluation_week_number, hours_at, risk_weekly
 
 router = APIRouter()
-HELP_TEXT = "Office hours are Tuesdays 2–4pm, and the advising team can be reached at advising@example.edu."
+HELP_TEXT = "Office hours are Tuesdays 2–4pm, and the advising team can be reached at advising@example.edu."  # noqa: RUF001
 
 
 @router.get("/me/commitments", response_model=Commitments, tags=["commitments"],
@@ -44,8 +56,7 @@ def get_digest(instructorId: str | None = Query(default=None, alias="instructorI
     iid = instructorId or instructor_id_of(caller)
     if iid != instructor_id_of(caller):
         raise HTTPException(status_code=403, detail="Forbidden.")
-    import time
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     groups = []
     for klass in ctx.db.list_classes(iid):
@@ -81,7 +92,7 @@ def get_digest(instructorId: str | None = Query(default=None, alias="instructorI
                        "comparedWith": prior.get("week"), "comparedWithStored": stored_flag, "rows": rows})
         ctx.store.save_risk_snapshot(klass.id, current)
     return {"instructorId": iid, "groups": groups,
-            "computedAt": datetime.fromtimestamp(ctx.clock(), tz=timezone.utc).isoformat()}
+            "computedAt": datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat()}
 
 
 def _risk_record(ctx, classId: str, studentId: str, caller: Caller) -> dict:
@@ -126,10 +137,10 @@ def add_note(classId: str, studentId: str, body: NoteRequest,
     text = (body.body or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="A note needs some text.")
-    from datetime import datetime, timezone
+    from datetime import datetime
     return ctx.store.add_note(class_id=classId, student_id=studentId,
                               instructor_id=instructor_id_of(caller), body=text,
-                              at=datetime.fromtimestamp(ctx.clock(), tz=timezone.utc).isoformat())
+                              at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
 
 
 @router.get("/classes/{classId}/risk-settings", response_model=RiskSettings, tags=["risk"],
