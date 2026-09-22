@@ -715,7 +715,7 @@ class Component extends DCLogic {
       this.api = createApi({ source: createToySource(), store: createToyAppStore(), latency: 'realistic' });
       await this.loadClass('c1');
     } catch (err) {
-      this.setState({ loading: false, errorMsg: err.message });
+      this.handleApiError(err);
     }
   }
 
@@ -772,7 +772,7 @@ class Component extends DCLogic {
       });
       this.setState({ loading: false, errorMsg: null, rows: [], me: null, digest: null, standing });
     } catch (err) {
-      this.setState({ loading: false, errorMsg: err.message });
+      this.handleApiError(err);
     }
   };
 
@@ -781,7 +781,7 @@ class Component extends DCLogic {
       const record = await this.api.getRiskRecord({ classId, studentId, caller: { role: 'instructor' } });
       this.setState({ record, noteDraft: '' });
     } catch (err) {
-      this.setState({ errorMsg: err.message });
+      this.handleApiError(err, { loading: this.state.loading });
     }
   };
 
@@ -829,7 +829,7 @@ class Component extends DCLogic {
         lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues, me: null, digest: null, standing: null,
       });
     } catch (err) {
-      this.setState({ loading: false, errorMsg: err.message });
+      this.handleApiError(err);
     }
   };
 
@@ -845,7 +845,7 @@ class Component extends DCLogic {
       ]);
       this.setState({ loading: false, errorMsg: null, rows: [], digest: null, standing: null, me: { ex, commitments } });
     } catch (err) {
-      this.setState({ loading: false, errorMsg: err.message, me: null });
+      this.handleApiError(err, { me: null });
     }
   };
 
@@ -854,7 +854,7 @@ class Component extends DCLogic {
       const digest = await this.api.getDigest('i1');
       this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest });
     } catch (err) {
-      this.setState({ loading: false, errorMsg: err.message });
+      this.handleApiError(err);
     }
   };
 
@@ -863,7 +863,7 @@ class Component extends DCLogic {
       const ex = await this.api.getExplanation({ ...this.query(), studentId, caller: { role: 'instructor' } });
       this.setState({ drawer: ex });
     } catch (err) {
-      this.setState({ errorMsg: err.message });
+      this.handleApiError(err, { loading: this.state.loading });
     }
   };
 
@@ -874,6 +874,10 @@ class Component extends DCLogic {
 
   fmt(n, d = 1) {
     return n == null ? '—' : Number(n).toFixed(d);
+  }
+
+  handleApiError(err, patch = {}) {
+    this.setState({ loading: false, errorMsg: err && err.message ? err.message : String(err), ...patch });
   }
 
   hoursPhrase(hours) {
@@ -1356,7 +1360,7 @@ class Component extends DCLogic {
           const fresh = await this.api.getRiskRecord({ classId: s.record.classId, studentId: s.record.student_id, caller: { role: 'instructor' } });
           this.setState({ record: fresh, noteDraft: '' }, this.loadDigest);
         } catch (err) {
-          this.setState({ errorMsg: err.message });
+          this.handleApiError(err, { loading: this.state.loading });
         }
       },
       onOpenThresholds: async () => {
@@ -1401,7 +1405,7 @@ class Component extends DCLogic {
           const r = await this.api.refresh(s.classId);
           this.setState({ lastUpdated: r.lastUpdated, stale: r.stale, issues: r.issues, errorMsg: null }, this.loadTab);
         } catch (err) {
-          this.setState({ errorMsg: err.message });
+          this.handleApiError(err, { loading: this.state.loading });
         }
       },
     };
