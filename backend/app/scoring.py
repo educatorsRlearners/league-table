@@ -157,16 +157,12 @@ def mean(values) -> float | None:
     return sum(nums) / len(nums)
 
 
-def _round1(n):
-    return None if n is None else round(n * 10) / 10
-
-
 def rank_rows(rows: list[dict], tie_breakers: list[str] | None = None) -> list[dict]:
     """Competition ranks (1,1,3) on rounded adjusted score; raw + tie-breakers order."""
     tie_breakers = tie_breakers or []
     keyed = [
-        {**r, "scoreRounded": -1 if r.get("score") is None else _round1(r["score"]),
-         "rawRounded": -1 if r.get("raw") is None else _round1(r["raw"])}
+        {**r, "scoreRounded": -1 if r.get("score") is None else round1(r["score"]),
+         "rawRounded": -1 if r.get("raw") is None else round1(r["raw"])}
         for r in rows
     ]
 
@@ -203,13 +199,13 @@ def rank_rows(rows: list[dict], tie_breakers: list[str] | None = None) -> list[d
 def _rounded(row: dict) -> float | None:
     if "scoreRounded" in row and row["scoreRounded"] is not None and row["scoreRounded"] >= 0:
         return float(row["scoreRounded"])
-    return _round1(row.get("score"))
+    return round1(row.get("score"))
 
 
 def _gap(a: float | None, b: float | None) -> float | None:
     if a is None or b is None:
         return None
-    diff = _round1(a - b)
+    diff = round1(a - b)
     assert diff is not None
     return max(0.0, diff)
 

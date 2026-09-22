@@ -141,8 +141,8 @@ paths:
           description: Student asked for another class
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /classes/{classId}/students/{studentId}/explanation:
     get:
@@ -197,14 +197,14 @@ paths:
           description: Student asked for another student's breakdown
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: No entries for that student in this window
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /classes/{classId}/explainer:
     get:
@@ -256,8 +256,8 @@ paths:
           description: Student read another student's hours
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /instructor/digest:
     get:
@@ -312,14 +312,14 @@ paths:
           description: Student opened another student's standing
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: No such student in this class
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /classes/{classId}/students/{studentId}/notes:
     post:
@@ -352,16 +352,16 @@ paths:
           description: Empty note body
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': 
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: Only an instructor can log outreach
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /classes/{classId}/risk-settings:
     get:
@@ -442,8 +442,8 @@ paths:
           description: Student asked for another student's standing
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /classes/{classId}/settings:
     put:
@@ -502,14 +502,14 @@ paths:
           description: Refresh rate limit (one per 10s)
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           description: Source unreachable and nothing cached
           content:
             application/json:
-              schema: 
-          $ref: '#/components/schemas/Error'
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /classes/{classId}/status:
     get:
@@ -571,20 +571,20 @@ components:
       description: Missing/invalid Bearer token
       content:
         application/json:
-          schema: 
-          $ref: '#/components/schemas/Error'
+          schema:
+            $ref: '#/components/schemas/Error'
     Forbidden:
       description: Authenticated but not allowed (role/class ownership)
       content:
         application/json:
-          schema: 
-          $ref: '#/components/schemas/Error'
+          schema:
+            $ref: '#/components/schemas/Error'
     NotFound:
       description: Unknown class/week/student
       content:
         application/json:
-          schema: 
-          $ref: '#/components/schemas/Error'
+          schema:
+            $ref: '#/components/schemas/Error'
 
   schemas:
     Error:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 SIGNAL_KEYS = [
     "downward_trend",
     "missed_engagement",
@@ -39,7 +41,9 @@ def level_for(count: int) -> str:
 
 
 def _round1(n):
-    return None if n is None else round(n * 10) / 10
+    """Round half up (away from zero), matching frontend/services/risk.js's
+    `Math.round`-based round1 — not Python's banker's-rounding `round()`."""
+    return None if n is None else math.floor(n * 10 + 0.5) / 10
 
 
 def _pct(earned, possible):

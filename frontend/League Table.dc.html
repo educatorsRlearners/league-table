@@ -708,11 +708,8 @@ class Component extends DCLogic {
     document.addEventListener('keydown', this.onKey);
     try {
       const base = document.baseURI;
-      const [{ createApi }, { createToySource, createToyAppStore }] = await Promise.all([
-        import(new URL('services/api.js', base).href),
-        import(new URL('services/mockSource.js', base).href),
-      ]);
-      this.api = createApi({ source: createToySource(), store: createToyAppStore(), latency: 'realistic' });
+      const { createHttpApi } = await import(new URL('services/httpApi.js', base).href);
+      this.api = createHttpApi({});
       await this.loadClass('c1');
     } catch (err) {
       this.handleApiError(err);
