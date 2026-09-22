@@ -899,21 +899,32 @@ class Component extends DCLogic {
     return `Week ${week ? week.week_number : ''}`;
   }
 
-  renderVals() {
-    const s = this.state;
-    const boot = s.boot;
-    const week = boot ? boot.weeks[s.weekIdx] : null;
-    const rows = s.rows;
-    const best = rows.length ? Math.max(...rows.map((r) => r.score)) : 100;
-    const isLeague = s.tab === 'league';
+  rankDeltaText(d) {
+    if (d == null) return 'New';
+    if (d === 0) return '— held';
+    return d > 0 ? `▲ ${d} up` : `▼ ${Math.abs(d)} down`;
+  }
 
-    const deltaText = (d) => {
-      if (d == null) return 'New';
-      if (d === 0) return '— held';
-      return d > 0 ? `▲ ${d} up` : `▼ ${Math.abs(d)} down`;
+  levelColor(level) {
+    // Levels are carried by colour and text together, each at AA contrast.
+    return level === 'High risk' ? 'var(--color-accent-900)'
+      : level === 'At risk' ? 'var(--color-accent-700)'
+        : level === 'Watch' ? 'var(--color-neutral-800)'
+          : 'var(--color-neutral-700)';
+  }
+
+  partRow(p) {
+    return {
+      label: p.label,
+      earnedText: p.missing ? '—' : `${p.earned} / ${p.possible}`,
+      pctText: p.missing ? '—' : this.fmt(p.normalised),
+      weightText: p.missing ? '—' : this.fmt(p.effectiveWeight, 0),
+      pointsText: p.missing ? '—' : this.fmt(p.points),
     };
+  }
 
-    const tabs = [
+  buildTabs(s) {
+    return [
       { key: 'league', label: 'League table' },
       { key: 'me', label: 'My breakdown' },
       { key: 'standing', label: 'My standing' },
@@ -925,8 +936,10 @@ class Component extends DCLogic {
       color: s.tab === t.key ? 'var(--color-text)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
       onClick: () => this.setState({ tab: t.key, loading: true, drawer: null }, this.loadTab),
     }));
+  }
 
-    const classChips = (boot ? boot.classes : []).map((k) => ({
+  buildClassChips(s, boot) {
+    return (boot ? boot.classes : []).map((k) => ({
       label: k.name.split(' · ')[0],
       active: s.classId === k.id,
       bg: s.classId === k.id ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
@@ -936,8 +949,10 @@ class Component extends DCLogic {
         if (s.classId !== k.id) this.loadClass(k.id);
       },
     }));
+  }
 
-    const podium = rows
+  buildPodium(rows) {
+    return rows
       .slice(0, 3)
       .map((r, i) => ({ r, i }))
       .sort((a, b) => [1, 0, 2][a.i] - [1, 0, 2][b.i])
@@ -946,7 +961,7 @@ class Component extends DCLogic {
         name: r.display_name,
         monogram: this.monogram(r.display_name),
         score: this.fmt(r.score),
-        deltaText: deltaText(r.rank_delta),
+        deltaText: this.rankDeltaText(r.rank_delta),
         flag: [r.tied ? 'tied' : null, r.capped ? 'capped at 100' : null].filter(Boolean).join(' · '),
         border: i === 0 ? 'var(--color-accent)' : 'var(--color-divider)',
         topRule: i === 0 ? '3px' : '1px',
@@ -956,10 +971,11 @@ class Component extends DCLogic {
         delay: `${i * 90}ms`,
         onClick: () => this.openDrawer(r.student_id),
       }));
+  }
 
-    const topN = this.props.topN ?? 10;
+  buildVisibleRows(rows, best, s, topN) {
     const visible = s.showAll ? rows : rows.slice(0, topN);
-    const visibleRows = visible.map((r, i) => ({
+    return visible.map((r, i) => ({
       rank: r.rank,
       name: r.display_name,
       monogram: this.monogram(r.display_name),
@@ -970,7 +986,7 @@ class Component extends DCLogic {
       bg: r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
       rawText: s.rawOn ? `raw ${this.fmt(r.raw)}` : '',
       factorText: s.rawOn ? `×${this.fmt(r.factor, 2)}` : '',
-      deltaText: deltaText(r.rank_delta),
+      deltaText: this.rankDeltaText(r.rank_delta),
       deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
       gapUpText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to the place above`,
       gapDownText: r.gap_to_below == null ? 'nobody below' : `${this.fmt(r.gap_to_below)} clear below`,
@@ -988,8 +1004,10 @@ class Component extends DCLogic {
         }
       },
     }));
+  }
 
-    const criteriaChips = (boot ? boot.criteria : []).map((c, i) => {
+  buildCriteriaChips(s, boot) {
+    return (boot ? boot.criteria : []).map((c, i) => {
       const active = s.criteriaKeys.includes(c.key);
       return {
         label: c.label,
@@ -1006,8 +1024,10 @@ class Component extends DCLogic {
         },
       };
     });
+  }
 
-    const windowOpts = [
+  buildWindowOpts(s) {
+    return [
       { key: 'week', label: 'Week' },
       { key: 'rolling', label: `Rolling ${this.props.rollingN ?? 4}` },
       { key: 'cumulative', label: 'Cumulative' },
@@ -1017,8 +1037,10 @@ class Component extends DCLogic {
       bg: s.windowMode === o.key ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent',
       onClick: () => this.setState({ windowMode: o.key, drawer: null }, this.loadTab),
     }));
+  }
 
-    const nameModes = [
+  buildNameModes(s) {
+    return [
       { key: 'full', label: 'Full' },
       { key: 'initials', label: 'Initial' },
       { key: 'nickname', label: 'Nickname' },
@@ -1029,7 +1051,9 @@ class Component extends DCLogic {
       border: s.nameMode === m.key ? 'var(--color-accent)' : 'var(--color-divider)',
       onClick: () => this.setState({ nameMode: m.key }, this.loadTab),
     }));
+  }
 
+  buildWeightRows(s, boot) {
     const weightRows = (boot ? boot.criteria : []).map((c) => ({
       label: c.label,
       value: Math.round(s.draftWeights[c.key] ?? 0),
@@ -1040,7 +1064,10 @@ class Component extends DCLogic {
       },
     }));
     const draftTotal = Object.values(s.draftWeights).reduce((a, b) => a + b, 0);
+    return { weightRows, draftTotal };
+  }
 
+  buildParamRows(s) {
     const dp = s.draftParams;
     const setParam = (patch) => this.setState((st) => ({ draftParams: { ...st.draftParams, ...patch } }));
     const setTypeWeight = (k, v) => setParam({ typeWeights: { ...dp.typeWeights, [k]: v } });
@@ -1053,191 +1080,181 @@ class Component extends DCLogic {
           { label: 'An hour of elder care counts', value: dp.typeWeights.eldercare, valueText: `×${dp.typeWeights.eldercare.toFixed(2)}`, min: 0, max: 2, step: 0.05, onChange: (e) => setTypeWeight('eldercare', Number(e.target.value)) },
         ]
       : [];
+    return { paramRows, dp };
+  }
 
-    const partRow = (p) => ({
-      label: p.label,
-      earnedText: p.missing ? '—' : `${p.earned} / ${p.possible}`,
-      pctText: p.missing ? '—' : this.fmt(p.normalised),
-      weightText: p.missing ? '—' : this.fmt(p.effectiveWeight, 0),
-      pointsText: p.missing ? '—' : this.fmt(p.points),
-    });
+  buildDrawer(d) {
+    if (!d) return null;
+    const partRow = (p) => this.partRow(p);
+    return {
+      name: d.display_name,
+      rank: d.rank,
+      windowLabel: this.windowLabel(),
+      intro: 'Each criterion is converted to a percentage, weighted and added to give the raw score. The hours the student reports become a factor, and the raw score multiplied by that factor — capped at 100 — is the adjusted score the table ranks on.',
+      partsTitle: d.weeks.length > 1 ? `Criteria in week ${d.focusWeek}, the latest in this window` : `Criteria in week ${d.focusWeek}`,
+      parts: d.parts.map(partRow),
+      rawLabel: `Raw score, week ${d.focusWeek}`,
+      rawText: this.fmt(d.focusRaw),
+      hoursText: `${this.fmt(d.weighted_hours)} h`,
+      factorText: `×${this.fmt(d.factor, 2)}`,
+      adjustedLabel: `Adjusted, week ${d.focusWeek}`,
+      adjustedText: `${this.fmt(d.focusAdjusted)}${d.focusCapped ? ' (capped)' : ''}`,
+      windowLabelRow: d.weeks.length > 1 ? `Ranked on: average of ${d.weeks.length} weeks` : '',
+      windowScoreText: this.fmt(d.score),
+      hoursBreakdown: `Week ${d.focusWeek} hours: ${this.hoursPhrase(d.hours)}${d.hours_source === 'weekly' ? ' (a weekly update)' : d.hours_source === 'baseline' ? ' (the approved baseline)' : ''}.`,
+      cappedNote: d.capped
+        ? 'At least one week in this window was clipped at 100, so the factor did not raise it further.'
+        : 'No week in this window hit the 100 ceiling.',
+      multiWeek: d.weeks.length > 1,
+      weeks: d.weeks.map((w) => ({
+        label: `Week ${w.week_number}`,
+        rawText: this.fmt(w.raw),
+        hoursText: this.fmt(w.weighted_hours),
+        factorText: `×${this.fmt(w.factor, 2)}`,
+        adjustedText: `${this.fmt(w.adjusted)}${w.capped ? ' (capped)' : ''}`,
+      })),
+      gapUp: d.gap_to_next == null ? 'Top of the table — nobody above.' : `${this.fmt(d.gap_to_next)} points would reach ${d.above || 'the place above'}.`,
+      gapDown: d.gap_to_below == null ? 'Nobody below on this table.' : `${this.fmt(d.gap_to_below)} points clear of the place below.`,
+      missingNote: d.parts.some((p) => p.missing)
+        ? 'Criteria marked — have no entry in that week and were excluded from the weighting, not scored as zero.'
+        : 'Every criterion has an entry in that week.',
+    };
+  }
 
-    const d = s.drawer;
-    const drawer = d
-      ? {
-          name: d.display_name,
-          rank: d.rank,
-          windowLabel: this.windowLabel(),
-          intro: 'Each criterion is converted to a percentage, weighted and added to give the raw score. The hours the student reports become a factor, and the raw score multiplied by that factor — capped at 100 — is the adjusted score the table ranks on.',
-          partsTitle: d.weeks.length > 1 ? `Criteria in week ${d.focusWeek}, the latest in this window` : `Criteria in week ${d.focusWeek}`,
-          parts: d.parts.map(partRow),
-          rawLabel: `Raw score, week ${d.focusWeek}`,
-          rawText: this.fmt(d.focusRaw),
-          hoursText: `${this.fmt(d.weighted_hours)} h`,
-          factorText: `×${this.fmt(d.factor, 2)}`,
-          adjustedLabel: `Adjusted, week ${d.focusWeek}`,
-          adjustedText: `${this.fmt(d.focusAdjusted)}${d.focusCapped ? ' (capped)' : ''}`,
-          windowLabelRow: d.weeks.length > 1 ? `Ranked on: average of ${d.weeks.length} weeks` : '',
-          windowScoreText: this.fmt(d.score),
-          hoursBreakdown: `Week ${d.focusWeek} hours: ${this.hoursPhrase(d.hours)}${d.hours_source === 'weekly' ? ' (a weekly update)' : d.hours_source === 'baseline' ? ' (the approved baseline)' : ''}.`,
-          cappedNote: d.capped
-            ? 'At least one week in this window was clipped at 100, so the factor did not raise it further.'
-            : 'No week in this window hit the 100 ceiling.',
-          multiWeek: d.weeks.length > 1,
-          weeks: d.weeks.map((w) => ({
-            label: `Week ${w.week_number}`,
-            rawText: this.fmt(w.raw),
-            hoursText: this.fmt(w.weighted_hours),
-            factorText: `×${this.fmt(w.factor, 2)}`,
-            adjustedText: `${this.fmt(w.adjusted)}${w.capped ? ' (capped)' : ''}`,
-          })),
-          gapUp: d.gap_to_next == null ? 'Top of the table — nobody above.' : `${this.fmt(d.gap_to_next)} points would reach ${d.above || 'the place above'}.`,
-          gapDown: d.gap_to_below == null ? 'Nobody below on this table.' : `${this.fmt(d.gap_to_below)} points clear of the place below.`,
-          missingNote: d.parts.some((p) => p.missing)
-            ? 'Criteria marked — have no entry in that week and were excluded from the weighting, not scored as zero.'
-            : 'Every criterion has an entry in that week.',
-        }
-      : null;
+  buildMeSection(m, s) {
+    if (!m) return null;
+    const partRow = (p) => this.partRow(p);
+    const ex = m.ex;
+    const baseline = m.commitments.baseline;
+    const statusText = !baseline
+      ? 'You have not entered a semester baseline, so your factor stays at ×1.00.'
+      : baseline.status === 'approved'
+        ? `Baseline approved from week ${baseline.effective_from_week}.`
+        : baseline.status === 'pending'
+          ? 'Baseline pending — it has no effect on your score until it is approved.'
+          : 'Baseline rejected — your factor stays at ×1.00.';
+    return {
+      kicker: `Only you can see this · ${this.windowLabel()}`,
+      name: ex.display_name,
+      privacyNote: 'Your hours, your raw score and your factor are visible to you and your instructor only. Classmates see your adjusted score and rank, nothing else. Entering commitments is optional and never carries free text.',
+      stats: [
+        { label: 'Rank', value: `${ex.rank}${ex.tied ? ' (tied)' : ''}`, note: 'in this class' },
+        { label: 'Ranked on', value: this.fmt(ex.score), note: ex.weeks.length > 1 ? `average of ${ex.weeks.length} weeks` : 'adjusted, out of 100' },
+        { label: `Raw, week ${ex.focusWeek}`, value: this.fmt(ex.focusRaw), note: 'before the factor' },
+        { label: `Adjusted, week ${ex.focusWeek}`, value: `×${this.fmt(ex.factor, 2)} → ${this.fmt(ex.focusAdjusted)}`, note: `${this.fmt(ex.weighted_hours)} weighted hours` },
+      ],
+      partsTitle: `Criteria in week ${ex.focusWeek} — these add up to the raw score of ${this.fmt(ex.focusRaw)}`,
+      parts: ex.parts.map(partRow),
+      weeks: ex.weeks.map((scored) => {
+        const w = m.commitments.byWeek.find((x) => x.week_number === scored.week_number) || {};
+        return {
+          label: `Week ${scored.week_number}`,
+          hoursText: this.fmt(w.weighted_hours ?? scored.weighted_hours, 1),
+          factorText: `×${this.fmt(scored.factor, 2)}`,
+          rawText: this.fmt(scored.raw),
+          adjustedText: `${this.fmt(scored.adjusted)}${scored.capped ? ' (capped)' : ''}`,
+        };
+      }),
+      hoursNote: statusText,
+      cappedNote: ex.capped
+        ? 'A week in this window reached 100, so the factor could not raise it further.'
+        : `A factor of ×${this.fmt(ex.factor, 2)} comes from ${this.hoursPhrase(ex.hours)} in week ${ex.focusWeek}.`,
+      gapUp: ex.gap_to_next == null ? 'You lead the class.' : `${this.fmt(ex.gap_to_next)} points would reach the place above.`,
+      gapDown: ex.gap_to_below == null ? 'Nobody below you on this table.' : `You are ${this.fmt(ex.gap_to_below)} points clear of the place below.`,
+    };
+  }
 
-    const m = s.me;
-    const me = m
-      ? (() => {
-          const ex = m.ex;
-          const baseline = m.commitments.baseline;
-          const statusText = !baseline
-            ? 'You have not entered a semester baseline, so your factor stays at ×1.00.'
-            : baseline.status === 'approved'
-              ? `Baseline approved from week ${baseline.effective_from_week}.`
-              : baseline.status === 'pending'
-                ? 'Baseline pending — it has no effect on your score until it is approved.'
-                : 'Baseline rejected — your factor stays at ×1.00.';
+  buildDigestSection(digestState) {
+    if (!digestState) return null;
+    const g0 = digestState.groups[0];
+    return {
+      note: 'Which students across your classes are worth checking in on, and what changed since you last looked. Every flag traces back to data you already have. A flag is a prompt for a conversation, not a verdict, and nothing here is ever shown to the class.',
+      comparedText: g0
+        ? `Evaluated at week ${g0.week}, compared with ${g0.comparedWithStored ? 'what you saw last time' : `week ${g0.comparedWith}`}. Open a student to see the signals and the data behind them.`
+        : '',
+      groups: digestState.groups.map((g) => ({
+        className: g.className,
+        sections: [
+          { key: 'new', title: 'Newly flagged' },
+          { key: 'still', title: 'Still flagged' },
+          { key: 'cleared', title: 'Recently cleared' },
+        ].map((sec) => {
+          const list = g.rows.filter((r) => r.status === sec.key);
           return {
-            kicker: `Only you can see this · ${this.windowLabel()}`,
-            name: ex.display_name,
-            privacyNote: 'Your hours, your raw score and your factor are visible to you and your instructor only. Classmates see your adjusted score and rank, nothing else. Entering commitments is optional and never carries free text.',
-            stats: [
-              { label: 'Rank', value: `${ex.rank}${ex.tied ? ' (tied)' : ''}`, note: 'in this class' },
-              { label: 'Ranked on', value: this.fmt(ex.score), note: ex.weeks.length > 1 ? `average of ${ex.weeks.length} weeks` : 'adjusted, out of 100' },
-              { label: `Raw, week ${ex.focusWeek}`, value: this.fmt(ex.focusRaw), note: 'before the factor' },
-              { label: `Adjusted, week ${ex.focusWeek}`, value: `×${this.fmt(ex.factor, 2)} → ${this.fmt(ex.focusAdjusted)}`, note: `${this.fmt(ex.weighted_hours)} weighted hours` },
-            ],
-            partsTitle: `Criteria in week ${ex.focusWeek} — these add up to the raw score of ${this.fmt(ex.focusRaw)}`,
-            parts: ex.parts.map(partRow),
-            weeks: ex.weeks.map((scored) => {
-              const w = m.commitments.byWeek.find((x) => x.week_number === scored.week_number) || {};
-              return {
-                label: `Week ${scored.week_number}`,
-                hoursText: this.fmt(w.weighted_hours ?? scored.weighted_hours, 1),
-                factorText: `×${this.fmt(scored.factor, 2)}`,
-                rawText: this.fmt(scored.raw),
-                adjustedText: `${this.fmt(scored.adjusted)}${scored.capped ? ' (capped)' : ''}`,
-              };
-            }),
-            hoursNote: statusText,
-            cappedNote: ex.capped
-              ? 'A week in this window reached 100, so the factor could not raise it further.'
-              : `A factor of ×${this.fmt(ex.factor, 2)} comes from ${this.hoursPhrase(ex.hours)} in week ${ex.focusWeek}.`,
-            gapUp: ex.gap_to_next == null ? 'You lead the class.' : `${this.fmt(ex.gap_to_next)} points would reach the place above.`,
-            gapDown: ex.gap_to_below == null ? 'Nobody below you on this table.' : `You are ${this.fmt(ex.gap_to_below)} points clear of the place below.`,
+            title: sec.title,
+            emptyText: list.length ? '' : 'Nobody in this group.',
+            rows: list.map((r) => ({
+              name: r.display_name,
+              level: r.level,
+              levelColor: this.levelColor(r.level),
+              signalsText: r.signals.length ? r.signals.join(' · ') : 'No signals on any more.',
+              metaText: [
+                r.priorLevel ? `was ${r.priorLevel}` : 'no prior reading',
+                r.notes ? `${r.notes} note${r.notes === 1 ? '' : 's'}` : null,
+              ].filter(Boolean).join(' · '),
+              onClick: () => this.openRecord(g.classId, r.student_id),
+            })),
           };
-        })()
-      : null;
+        }),
+      })),
+    };
+  }
 
-    // Levels are carried by colour and text together, each at AA contrast.
-    const levelColor = (level) =>
-      level === 'High risk' ? 'var(--color-accent-900)'
-        : level === 'At risk' ? 'var(--color-accent-700)'
-          : level === 'Watch' ? 'var(--color-neutral-800)'
-            : 'var(--color-neutral-700)';
+  buildRecordSection(rec) {
+    if (!rec) return null;
+    return {
+      kicker: `${rec.className} · week ${rec.week} · instructor only`,
+      name: rec.display_name,
+      level: rec.level,
+      levelColor: this.levelColor(rec.level),
+      levelNote: rec.oneAway
+        ? `${rec.signals.filter((x) => x.on).length} signal${rec.signals.filter((x) => x.on).length === 1 ? '' : 's'} on — one more would make this ${rec.oneAway}.`
+        : 'Three or more signals are on.',
+      framing: 'This is worth checking in on. Each signal below is on or off against a threshold you set, and shows the data that triggered it. The level is simply how many are on.',
+      signals: [...rec.signals].sort((a, b) => Number(b.on) - Number(a.on)).map((sg) => ({
+        label: sg.label,
+        state: sg.active ? (sg.on ? 'On' : 'Off') : 'Turned off',
+        color: sg.on ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
+        border: sg.on ? 'var(--color-accent)' : 'var(--color-divider)',
+        summary: sg.summary,
+        evidence: sg.evidence,
+      })),
+      history: rec.history.map((h) => ({
+        week: String(h.week_number),
+        title: `Week ${h.week_number}: ${h.level}`,
+        height: `${8 + h.count * 16}px`,
+        color: this.levelColor(h.level),
+      })),
+      historyNote: 'Levels are recomputed from the data as it stood each week. Changing a threshold does not rewrite this history.',
+      notes: rec.notes.map((n) => ({
+        when: new Date(n.created_at).toLocaleString(),
+        body: n.body,
+      })),
+      notesEmpty: rec.notes.length ? '' : 'No notes yet. Notes stay even if the flags later clear.',
+    };
+  }
 
-    const g0 = s.digest ? s.digest.groups[0] : null;
-    const digest = s.digest
-      ? {
-          note: 'Which students across your classes are worth checking in on, and what changed since you last looked. Every flag traces back to data you already have. A flag is a prompt for a conversation, not a verdict, and nothing here is ever shown to the class.',
-          comparedText: g0
-            ? `Evaluated at week ${g0.week}, compared with ${g0.comparedWithStored ? 'what you saw last time' : `week ${g0.comparedWith}`}. Open a student to see the signals and the data behind them.`
-            : '',
-          groups: s.digest.groups.map((g) => ({
-            className: g.className,
-            sections: [
-              { key: 'new', title: 'Newly flagged' },
-              { key: 'still', title: 'Still flagged' },
-              { key: 'cleared', title: 'Recently cleared' },
-            ].map((sec) => {
-              const list = g.rows.filter((r) => r.status === sec.key);
-              return {
-                title: sec.title,
-                emptyText: list.length ? '' : 'Nobody in this group.',
-                rows: list.map((r) => ({
-                  name: r.display_name,
-                  level: r.level,
-                  levelColor: levelColor(r.level),
-                  signalsText: r.signals.length ? r.signals.join(' · ') : 'No signals on any more.',
-                  metaText: [
-                    r.priorLevel ? `was ${r.priorLevel}` : 'no prior reading',
-                    r.notes ? `${r.notes} note${r.notes === 1 ? '' : 's'}` : null,
-                  ].filter(Boolean).join(' · '),
-                  onClick: () => this.openRecord(g.classId, r.student_id),
-                })),
-              };
-            }),
-          })),
-        }
-      : null;
+  buildStandingSection(st) {
+    if (!st) return null;
+    return {
+      kicker: `Only you can see this · week ${st.week}`,
+      headline: st.signals.length ? 'A couple of things worth a look' : 'Nothing needs your attention right now',
+      intro: 'This is your own picture, drawn from your own work and the hours you have told us about. It is not a comparison with anyone else, and your classmates never see it.',
+      levelText: st.level === 'Not flagged' ? 'On track' : st.level,
+      levelColor: this.levelColor(st.level),
+      levelNote: st.signals.length
+        ? `${st.signals.length} thing${st.signals.length === 1 ? '' : 's'} stood out this week. Each one is listed below with what it is based on.`
+        : 'Nothing stood out this week. Keep going as you are.',
+      signals: st.signals.map((sg) => ({ label: sg.label, summary: sg.summary })),
+      emptyText: st.signals.length ? '' : 'There is nothing to list this week.',
+      help: st.help,
+      privacy: 'Your instructor can see this and may get in touch. Your classmates cannot see it, and it never appears on the league table.',
+    };
+  }
 
-    const rec = s.record;
-    const record = rec
-      ? {
-          kicker: `${rec.className} · week ${rec.week} · instructor only`,
-          name: rec.display_name,
-          level: rec.level,
-          levelColor: levelColor(rec.level),
-          levelNote: rec.oneAway
-            ? `${rec.signals.filter((x) => x.on).length} signal${rec.signals.filter((x) => x.on).length === 1 ? '' : 's'} on — one more would make this ${rec.oneAway}.`
-            : 'Three or more signals are on.',
-          framing: 'This is worth checking in on. Each signal below is on or off against a threshold you set, and shows the data that triggered it. The level is simply how many are on.',
-          signals: [...rec.signals].sort((a, b) => Number(b.on) - Number(a.on)).map((sg) => ({
-            label: sg.label,
-            state: sg.active ? (sg.on ? 'On' : 'Off') : 'Turned off',
-            color: sg.on ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
-            border: sg.on ? 'var(--color-accent)' : 'var(--color-divider)',
-            summary: sg.summary,
-            evidence: sg.evidence,
-          })),
-          history: rec.history.map((h) => ({
-            week: String(h.week_number),
-            title: `Week ${h.week_number}: ${h.level}`,
-            height: `${8 + h.count * 16}px`,
-            color: levelColor(h.level),
-          })),
-          historyNote: 'Levels are recomputed from the data as it stood each week. Changing a threshold does not rewrite this history.',
-          notes: rec.notes.map((n) => ({
-            when: new Date(n.created_at).toLocaleString(),
-            body: n.body,
-          })),
-          notesEmpty: rec.notes.length ? '' : 'No notes yet. Notes stay even if the flags later clear.',
-        }
-      : null;
-
-    const st = s.standing;
-    const standing = st
-      ? {
-          kicker: `Only you can see this · week ${st.week}`,
-          headline: st.signals.length ? 'A couple of things worth a look' : 'Nothing needs your attention right now',
-          intro: 'This is your own picture, drawn from your own work and the hours you have told us about. It is not a comparison with anyone else, and your classmates never see it.',
-          levelText: st.level === 'Not flagged' ? 'On track' : st.level,
-          levelColor: levelColor(st.level),
-          levelNote: st.signals.length
-            ? `${st.signals.length} thing${st.signals.length === 1 ? '' : 's'} stood out this week. Each one is listed below with what it is based on.`
-            : 'Nothing stood out this week. Keep going as you are.',
-          signals: st.signals.map((sg) => ({ label: sg.label, summary: sg.summary })),
-          emptyText: st.signals.length ? '' : 'There is nothing to list this week.',
-          help: st.help,
-          privacy: 'Your instructor can see this and may get in touch. Your classmates cannot see it, and it never appears on the league table.',
-        }
-      : null;
-
+  buildThresholdsSection(s, boot) {
     const dt = s.draftThresholds;
+    if (!(s.thresholdsOpen && dt)) return null;
     const setT = (patch) => this.setState((prev) => ({ draftThresholds: { ...prev.draftThresholds, thresholds: { ...prev.draftThresholds.thresholds, ...patch } } }));
     const toggleSig = (key) => this.setState((prev) => ({ draftThresholds: { ...prev.draftThresholds, active: { ...prev.draftThresholds.active, [key]: !prev.draftThresholds.active[key] } } }));
     const slider = (label, key, valueText, min, max, step) => ({
@@ -1245,44 +1262,72 @@ class Component extends DCLogic {
       value: dt.thresholds[key],
       onChange: (e) => setT({ [key]: Number(e.target.value) }),
     });
-    const thresholds = s.thresholdsOpen && dt
-      ? {
-          note: `These apply to ${boot ? boot.klass.name : 'this class'} only — switch class at the top to set another. Each signal is on or off against the value you set here, and a student’s level is the count of signals on: one is Watch, two is At risk, three or more is High risk.`,
-          historyNote: 'Applies from now on. A student’s level history keeps the thresholds that were in force at the time.',
-          rows: [
-            { key: 'downward_trend', label: 'Downward trend', sliders: [slider('Consecutive weeks of decline', 'declineWeeks', `${dt.thresholds.declineWeeks} weeks`, 2, 6, 1)] },
-            {
-              key: 'missed_engagement',
-              label: 'Missed or low engagement',
-              sliders: [
-                slider('Homework not submitted', 'missedAssignments', `${dt.thresholds.missedAssignments} or more`, 1, 8, 1),
-                slider('Attendance below', 'attendancePct', `${dt.thresholds.attendancePct}%`, 40, 95, 5),
-                slider('Participation below', 'participationPct', `${dt.thresholds.participationPct}%`, 20, 90, 5),
-              ],
-            },
-            { key: 'low_projected_grade', label: 'Low projected grade', sliders: [slider('Projected grade below', 'projectedGrade', String(dt.thresholds.projectedGrade), 40, 80, 1)] },
-            { key: 'heavy_commitments', label: 'Heavy outside commitments', sliders: [slider('Weighted hours a week', 'commitmentHours', `${dt.thresholds.commitmentHours} or more`, 5, 50, 1)] },
-            { key: 'missing_data', label: 'Missing data', sliders: [slider('Consecutive weeks with no entries', 'missingWeeks', `${dt.thresholds.missingWeeks} or more`, 1, 6, 1)] },
-          ].map((r) => ({
-            label: r.label,
-            sliders: r.sliders,
-            active: dt.active[r.key] !== false,
-            onToggle: () => toggleSig(r.key),
-          })),
-        }
-      : null;
+    return {
+      note: `These apply to ${boot ? boot.klass.name : 'this class'} only — switch class at the top to set another. Each signal is on or off against the value you set here, and a student’s level is the count of signals on: one is Watch, two is At risk, three or more is High risk.`,
+      historyNote: 'Applies from now on. A student’s level history keeps the thresholds that were in force at the time.',
+      rows: [
+        { key: 'downward_trend', label: 'Downward trend', sliders: [slider('Consecutive weeks of decline', 'declineWeeks', `${dt.thresholds.declineWeeks} weeks`, 2, 6, 1)] },
+        {
+          key: 'missed_engagement',
+          label: 'Missed or low engagement',
+          sliders: [
+            slider('Homework not submitted', 'missedAssignments', `${dt.thresholds.missedAssignments} or more`, 1, 8, 1),
+            slider('Attendance below', 'attendancePct', `${dt.thresholds.attendancePct}%`, 40, 95, 5),
+            slider('Participation below', 'participationPct', `${dt.thresholds.participationPct}%`, 20, 90, 5),
+          ],
+        },
+        { key: 'low_projected_grade', label: 'Low projected grade', sliders: [slider('Projected grade below', 'projectedGrade', String(dt.thresholds.projectedGrade), 40, 80, 1)] },
+        { key: 'heavy_commitments', label: 'Heavy outside commitments', sliders: [slider('Weighted hours a week', 'commitmentHours', `${dt.thresholds.commitmentHours} or more`, 5, 50, 1)] },
+        { key: 'missing_data', label: 'Missing data', sliders: [slider('Consecutive weeks with no entries', 'missingWeeks', `${dt.thresholds.missingWeeks} or more`, 1, 6, 1)] },
+      ].map((r) => ({
+        label: r.label,
+        sliders: r.sliders,
+        active: dt.active[r.key] !== false,
+        onToggle: () => toggleSig(r.key),
+      })),
+    };
+  }
 
-    const ex = s.explainer;
-    const explainer = ex
-      ? {
-          step1: 'Each criterion is converted to a percentage of what was possible, multiplied by its weight, and added together. A criterion with no entry is left out and the remaining weights are rescaled, so missing data is never counted as zero. That total is the raw score.',
-          step2: `The hours a student reports for work, child care and elder care are combined into weighted hours, counting an hour of work ×${ex.typeWeights.work}, child care ×${ex.typeWeights.childcare} and elder care ×${ex.typeWeights.eldercare}. Each weighted hour adds ${(ex.rate * 100).toFixed(1)} of a point to the factor, which stops at ×${ex.cap.toFixed(2)}.`,
-          step3: 'The adjusted score is the raw score multiplied by the factor, stopping at 100. Cumulative and rolling views average the weekly adjusted scores, so each week’s factor and ceiling apply to that week only.',
-          table: ex.table.map((t) => ({ hours: String(t.hours), factor: `×${t.factor.toFixed(2)}` })),
-          example: `Worked example: a raw score of ${ex.example.raw} with ${this.hoursPhrase(ex.example.hours)} gives ${ex.example.weighted_hours} weighted hours, a factor of ×${ex.example.factor.toFixed(2)} and an adjusted score of ${ex.example.adjusted.toFixed(1)}.`,
-          privacy: 'Nobody’s hours appear here. Entering commitments is optional, and a baseline has no effect until your instructor approves it.',
-        }
-      : null;
+  buildExplainerSection(ex) {
+    if (!ex) return null;
+    return {
+      step1: 'Each criterion is converted to a percentage of what was possible, multiplied by its weight, and added together. A criterion with no entry is left out and the remaining weights are rescaled, so missing data is never counted as zero. That total is the raw score.',
+      step2: `The hours a student reports for work, child care and elder care are combined into weighted hours, counting an hour of work ×${ex.typeWeights.work}, child care ×${ex.typeWeights.childcare} and elder care ×${ex.typeWeights.eldercare}. Each weighted hour adds ${(ex.rate * 100).toFixed(1)} of a point to the factor, which stops at ×${ex.cap.toFixed(2)}.`,
+      step3: 'The adjusted score is the raw score multiplied by the factor, stopping at 100. Cumulative and rolling views average the weekly adjusted scores, so each week’s factor and ceiling apply to that week only.',
+      table: ex.table.map((t) => ({ hours: String(t.hours), factor: `×${t.factor.toFixed(2)}` })),
+      example: `Worked example: a raw score of ${ex.example.raw} with ${this.hoursPhrase(ex.example.hours)} gives ${ex.example.weighted_hours} weighted hours, a factor of ×${ex.example.factor.toFixed(2)} and an adjusted score of ${ex.example.adjusted.toFixed(1)}.`,
+      privacy: 'Nobody’s hours appear here. Entering commitments is optional, and a baseline has no effect until your instructor approves it.',
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const boot = s.boot;
+    const week = boot ? boot.weeks[s.weekIdx] : null;
+    const rows = s.rows;
+    const best = rows.length ? Math.max(...rows.map((r) => r.score)) : 100;
+    const isLeague = s.tab === 'league';
+    const topN = this.props.topN ?? 10;
+
+    const tabs = this.buildTabs(s);
+    const classChips = this.buildClassChips(s, boot);
+    const podium = this.buildPodium(rows);
+    const visibleRows = this.buildVisibleRows(rows, best, s, topN);
+    const criteriaChips = this.buildCriteriaChips(s, boot);
+    const windowOpts = this.buildWindowOpts(s);
+    const nameModes = this.buildNameModes(s);
+
+    const { weightRows, draftTotal } = this.buildWeightRows(s, boot);
+    const { paramRows, dp } = this.buildParamRows(s);
+
+    const drawer = this.buildDrawer(s.drawer);
+
+    const me = this.buildMeSection(s.me, s);
+    const digest = this.buildDigestSection(s.digest);
+    const record = this.buildRecordSection(s.record);
+    const standing = this.buildStandingSection(s.standing);
+    const thresholds = this.buildThresholdsSection(s, boot);
+    const explainer = this.buildExplainerSection(s.explainer);
 
     const issues = s.issues || [];
     const weeksWithData = boot ? boot.weeksWithData : [];
