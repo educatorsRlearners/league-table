@@ -268,8 +268,8 @@ The service reads scores from the Google Sheet and keeps its own database for ac
 | Week | id, term\_id, week\_number (1–16), start\_date, end\_date | Google Sheet |
 | Entry | id, student\_id, criterion\_id, week\_id, earned, possible, recorded\_at | Google Sheet, read-only |
 | Account | id, role (instructor or student), student\_id, access\_code\_hash | App database |
-| Commitment baseline | id, student\_id, work\_hours, childcare\_hours, eldercare\_hours, status (pending, approved, rejected, superseded), effective\_from\_week, submitted\_at, decided\_by, decided\_at | App database |
-| Weekly update | id, student\_id, week\_id, work\_hours, childcare\_hours, eldercare\_hours, entered\_at, reversed\_by, reversed\_at | App database |
+| Commitment baseline | id, student\_id, hours (a map of work, child care and elder care hours), status (pending, approved, rejected, superseded), effective\_from\_week, submitted\_at, decided\_by, decided\_at | App database |
+| Weekly update | id, student\_id, week\_id, week\_number, hours (a map of work, child care and elder care hours), entered\_at, reversed\_by, reversed\_at | App database |
 | Change log | id, actor\_id, action, student\_id, week\_id, old\_values, new\_values, at | App database |
 | Settings | class\_id, criterion weights, type weights a, rate r, cap f\_max, saved views | App database |
 | Ranking row | student\_id, week\_id, raw\_score, weighted\_hours, factor, adjusted\_score, capped, rank, rank\_delta, per-criterion breakdown | Derived by the scoring service |
@@ -278,7 +278,7 @@ Notes:
 
 - An entry holds `earned` and `possible` rather than a percentage, so "4 of 5 homework tasks" and "82 of 100 on a project" both fit the same shape.
 - Students carry an `active` flag so a student who joins or leaves mid-semester does not distort earlier weeks.
-- Commitment hours are stored as numbers per type, never as free text, so no extra personal detail is collected.
+- Commitment hours are stored per type and served as an `Hours` map (`{work, childcare, eldercare}` numbers, never free text), so no extra personal detail is collected.
 - The commitment types (work, child care, elder care) are a configured list, so a fourth can be added without changing the schema.
 - The factor is derived, never stored, so it always reflects the current parameters and approvals; the change log keeps the history.
 - The Weeks tab is validated to have 16 weeks, with a warning if it does not.
