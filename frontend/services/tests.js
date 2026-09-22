@@ -863,17 +863,24 @@ export const SUITES = [scoringSuite, factorSuite, rankSuite, riskSuite, contract
 export async function runAll() {
   const results = [];
   for (const s of SUITES) {
-    const cases = [];
-    for (const t of s.tests) {
-      const t0 = performance.now();
-      try {
-        await t.fn();
-        cases.push({ title: t.title, pass: true, ms: performance.now() - t0 });
-      } catch (err) {
-        cases.push({ title: t.title, pass: false, ms: performance.now() - t0, error: err.message });
+    // Publish the suite entry before running its cases, so a mid-suite error
+    // still leaves every already-recorded case (plus the error) visible
+    // instead of discarding the whole suite's results.
+    const suiteResult = { name: s?.name ?? 'unknown suite', cases: [] };
+    results.push(suiteResult);
+    try {
+      for (const t of s.tests) {
+        const t0 = performance.now();
+        try {
+          await t.fn();
+          suiteResult.cases.push({ title: t.title, pass: true, ms: performance.now() - t0 });
+        } catch (err) {
+          suiteResult.cases.push({ title: t.title, pass: false, ms: performance.now() - t0, error: err?.message ?? String(err) });
+        }
       }
+    } catch (err) {
+      suiteResult.cases.push({ title: '(suite harness)', pass: false, ms: 0, error: err?.message ?? String(err) });
     }
-    results.push({ name: s.name, cases });
   }
   return results;
 }
