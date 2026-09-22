@@ -15,6 +15,14 @@ class RefreshTooSoon(Exception):
         super().__init__(f"Please wait {retry_after}s before refreshing again.")
 
 
+class ClassNotFound(Exception):
+    """Raised when a class id is not present in the data source listing."""
+
+    def __init__(self, class_id: str):
+        self.class_id = class_id
+        super().__init__(f"Unknown class '{class_id}'.")
+
+
 def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(SourceUnavailable)
     async def source_unavailable(request: Request, exc: SourceUnavailable):
@@ -39,6 +47,9 @@ def install_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=exc.status_code, content={"message": detail},
                             headers=exc.headers or {})
 
+    @app.exception_handler(ClassNotFound)
+    async def class_not_found(request: Request, exc: ClassNotFound):
+        return JSONResponse(status_code=404, content={"message": str(exc)})
 
     # Catch-all: every unexpected failure stays contract-consistent with the
     # documented Error schema instead of leaking FastAPI's default 500 body.

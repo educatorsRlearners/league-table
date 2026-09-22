@@ -7,7 +7,7 @@ import threading
 from typing import Callable
 
 from app.datasource import DataSource, Snapshot, SourceUnavailable
-from app.errors import RefreshTooSoon
+from app.errors import ClassNotFound, RefreshTooSoon
 from app.models import Issue
 from app.risk import evaluate_signals
 from app.scoring import (
@@ -238,7 +238,9 @@ class LeagueService:
 
     def _read(self, class_id: str) -> Snapshot:
         classes = self.source.list_classes()
-        klass = next(c for c in classes if c.id == class_id)
+        klass = next((c for c in classes if c.id == class_id), None)
+        if klass is None:
+            raise ClassNotFound(class_id)
         students = self.source.list_students(class_id)
         criteria = sorted(self.source.list_criteria(class_id), key=lambda c: c.sort_order)
         weeks = sorted(self.source.list_weeks(klass.term_id), key=lambda w: w.week_number)
