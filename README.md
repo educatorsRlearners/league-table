@@ -43,14 +43,13 @@ make test      # run the backend tests
 
 Then open <http://localhost:8000>. The interactive API docs are at <http://localhost:8000/docs>.
 
-`make run` serves both the API and the frontend from one origin. The page runs the same contract in the browser on seeded demo data (two classes, 24 students each); the API next to it implements that contract over HTTP with Bearer auth — see [Auth](#auth).
+`make run` serves both the API and the frontend from one origin. The page talks to the FastAPI service next to it over HTTP with Bearer auth (see [Auth](#auth)) for everything — scoring, ranking, risk and roles all run on the server, seeded with two demo classes of 24 students each.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-  UI["Browser<br/>frontend/"] -->|"in-browser service<br/>api.js + mockSource.js"| TOY["Toy DataSource + AppStore<br/>seeded demo data"]
-  HTTP["HTTP client<br/>Authorization: Bearer"] -->|"/classes, /me/*, /instructor/* (JSON)"| API["FastAPI<br/>backend/"]
+  UI["Browser<br/>frontend/League Table.dc.html"] -->|"httpApi.js<br/>Authorization: Bearer"| API["FastAPI<br/>backend/"]
   API --> S["Scoring, adjustment, ranking,<br/>risk, cache and roles"]
   S --> DS["DataSource<br/>read-only scores"]
   S --> AS["AppStore<br/>settings, commitments, risk, notes"]
@@ -58,9 +57,10 @@ flowchart LR
   DS -.-> G["Google Sheets adapter<br/>planned"]
   AS --> MEM["In-memory store"]
   AS -.-> SQ["SQLite store<br/>planned"]
+  TESTS["Tests.dc.html<br/>(browser suite)"] -.->|"reference logic only,<br/>not the shipped UI path"| MOCK["api.js + mockSource.js<br/>scoring.js, risk.js"]
 ```
 
-- The contract is [`openapi.yaml`](openapi.yaml), derived from the frontend service layer (`frontend/services/api.js`, `mockSource.js`, `scoring.js`, `risk.js`, `tests.js`). A contract test checks the running app against it.
+- The contract is [`openapi.yaml`](openapi.yaml). `frontend/services/httpApi.js` is the live client the shipped page uses; `frontend/services/api.js` + `mockSource.js` are a client-side reference implementation of the same contract, exercised only by the browser test suite (`tests.js`/`Tests.dc.html`), not by the running app. A contract test checks the running app against `openapi.yaml`.
 - Scores come through a read-only `DataSource`. Today that is two seeded toy classes of 24 students, 16 weeks and 5 criteria each, including a tie, a missing entry, a perfect week, a zero week and a late joiner. Entries run through week 12, so the latest complete week is the landing week.
 - Everything the service owns lives in the read-write `AppStore`: league settings, baselines, weekly updates, risk settings and snapshots, and instructor notes.
 - Reads are cached for 60 seconds. If the source fails, the last good snapshot is served and marked stale. Refresh is rate-limited to once every 10 seconds.
@@ -106,7 +106,7 @@ curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?wee
 
 | Path | What is in it |
 | --- | --- |
-| [`frontend/`](frontend) | The page and its services layer (`api.js` over `mockSource.js`, plus `scoring.js`, `risk.js` and the browser test suite `tests.js`) |
+| [`frontend/`](frontend) | The page and its services layer: `httpApi.js` (the live client, used by the page) plus `api.js`/`mockSource.js`/`scoring.js`/`risk.js` (a reference implementation exercised only by the browser test suite `tests.js`) |
 | [`backend/`](backend) | The FastAPI service and its pytest suite. See [`backend/README.md`](backend/README.md) |
 | [`openapi.yaml`](openapi.yaml) | The API contract |
 | [`_docs/spec.md`](_docs/spec.md) | The product spec: goals, scoring rules, data model and phasing |
@@ -115,13 +115,14 @@ curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?wee
 
 - **Backend:** `make test` runs the pytest suite, covering every endpoint, the scoring and adjustment rules, privacy scoping, the risk engine and digest, notes, the seeded edge cases and the OpenAPI contract.
 - **Lint:** `make lint` runs ruff and mypy over the backend (both are dev dependencies).
-- **Frontend:** the scoring and client tests run in the browser at <http://localhost:8000/Tests.dc.html> while the app is running (no headless runner yet, so there is no `make` target for them).
+- **Frontend:** the scoring, risk and mock-client tests run in the browser at <http://localhost:8000/Tests.dc.html> while the app is running (no headless runner yet, so there is no `make` target for them). These exercise the reference `scoring.js`/`risk.js`/`api.js` logic, not `httpApi.js`; the shipped page's real HTTP integration is covered by the backend's own endpoint tests plus manual/browser verification.
 
 ## Status
 
 This is an early version, built on demo data.
 
 - [x] FastAPI backend implementing the whole OpenAPI contract, on toy scores and an in-memory store
+- [x] Frontend wired to the real backend over HTTP (`httpApi.js`) instead of the in-browser mock
 - [x] Table, podium, week, cumulative and rolling windows, weights, breakdowns
 - [x] Commitments-based adjustment with a capped factor, the 100 ceiling and raw-score tie-breaks
 - [x] Risk digest, risk records with evidence and history, instructor notes, student standing
