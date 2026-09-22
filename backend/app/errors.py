@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.datasource import SourceUnavailable
+
+logger = logging.getLogger(__name__)
 
 
 class RefreshTooSoon(Exception):
@@ -34,3 +38,11 @@ def install_handlers(app: FastAPI) -> None:
         detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
         return JSONResponse(status_code=exc.status_code, content={"message": detail},
                             headers=exc.headers or {})
+
+
+    # Catch-all: every unexpected failure stays contract-consistent with the
+    # documented Error schema instead of leaking FastAPI's default 500 body.
+    @app.exception_handler(Exception)
+    async def unhandled(request: Request, exc: Exception):
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"message": "Something went wrong."})
