@@ -113,7 +113,7 @@ This is an early version, built on demo data.
 - [x] Instructor screens: approvals with an effective week, reversal, change log and adjustment settings
 - [x] Roles, the edit window and approvals enforced on the server
 - [ ] Generating and revoking student access codes
-- [ ] Animated reveal, replay, streaks and badges, head-to-head comparison
+- [ ] Animated reveal, replay, streaks and badges
 - [ ] Google Sheets adapter, data check against a real sheet, and a SQLite `AppStore`
 - [ ] University sign-in, privacy review, retention and backups before real students use it
 
