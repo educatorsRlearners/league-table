@@ -200,17 +200,31 @@ def rank_rows(rows: list[dict], tie_breakers: list[str] | None = None) -> list[d
     return keyed
 
 
+def _rounded(row: dict) -> float | None:
+    if "scoreRounded" in row and row["scoreRounded"] is not None and row["scoreRounded"] >= 0:
+        return float(row["scoreRounded"])
+    return _round1(row.get("score"))
+
+
+def _gap(a: float | None, b: float | None) -> float | None:
+    if a is None or b is None:
+        return None
+    diff = _round1(a - b)
+    assert diff is not None
+    return max(0.0, diff)
+
+
 def gap_to_next(rows: list[dict], index: int):
     for i in range(index - 1, -1, -1):
         if rows[i]["rank"] < rows[index]["rank"]:
-            return max(0, rows[i]["score"] - rows[index]["score"])
+            return _gap(_rounded(rows[i]), _rounded(rows[index]))
     return None
 
 
 def gap_to_below(rows: list[dict], index: int):
     for i in range(index + 1, len(rows)):
         if rows[i]["rank"] > rows[index]["rank"]:
-            return max(0, rows[index]["score"] - rows[i]["score"])
+            return _gap(_rounded(rows[index]), _rounded(rows[i]))
     return None
 
 

@@ -155,17 +155,29 @@ export function rankRows(rows, tieBreakers = []) {
   return keyed;
 }
 
-/** Points a student needs to add to reach the rank above them. */
+/** Points a student needs to add to reach the rank above them (rounded scores, matching rank grouping). */
 export function gapToNext(rows, index) {
+  const rounded = (r) => (r.scoreRounded != null && r.scoreRounded >= 0 ? r.scoreRounded : round1(r.score));
   for (let i = index - 1; i >= 0; i--) {
-    if (rows[i].rank < rows[index].rank) return Math.max(0, rows[i].score - rows[index].score);
+    if (rows[i].rank < rows[index].rank) {
+      const a = rounded(rows[i]);
+      const b = rounded(rows[index]);
+      if (a == null || b == null) return null;
+      return Math.max(0, round1(a - b));
+    }
   }
   return null;
 }
 
 export function gapToBelow(rows, index) {
+  const rounded = (r) => (r.scoreRounded != null && r.scoreRounded >= 0 ? r.scoreRounded : round1(r.score));
   for (let i = index + 1; i < rows.length; i++) {
-    if (rows[i].rank > rows[index].rank) return Math.max(0, rows[index].score - rows[i].score);
+    if (rows[i].rank > rows[index].rank) {
+      const a = rounded(rows[index]);
+      const b = rounded(rows[i]);
+      if (a == null || b == null) return null;
+      return Math.max(0, round1(a - b));
+    }
   }
   return null;
 }
