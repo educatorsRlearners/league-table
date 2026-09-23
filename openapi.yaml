@@ -264,17 +264,15 @@ paths:
       tags: [risk]
       summary: Cross-class risk digest
       description: |
-        Frontend: `getDigest({ instructorId = 'i1', week })`.
-        Auth: instructor-only. Covers every class taught. Each class group is
-        evaluated at `week` (or, if omitted, that class's own latest complete
-        week) and compared against week `week - 1` (`comparedWith: null` when
-        `week` is 1). Only rows with status new|still|cleared (never `quiet`)
-        are returned, sorted by level severity.
+        Frontend: `getDigest({ week })`.
+        Auth: instructor-only. The instructor is identified by the Bearer
+        token, not a client-supplied id. Covers every class taught. Each
+        class group is evaluated at `week` (or, if omitted, that class's own
+        latest complete week) and compared against week `week - 1`
+        (`comparedWith: null` when `week` is 1). Only rows with status
+        new|still|cleared (never `quiet`) are returned, sorted by level
+        severity.
       parameters:
-        - name: instructorId
-          in: query
-          required: false
-          schema: { type: string, default: i1 }
         - name: week
           in: query
           required: false

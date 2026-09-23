@@ -435,8 +435,9 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
      * and compared against week `week - 1`, so "newly flagged" is always
      * measured against the prior week rather than a stored last-visit snapshot.
      */
-    async getDigest({ instructorId = 'i1', week } = {}) {
+    async getDigest({ week, caller = { role: 'instructor' } } = {}) {
       await delay(200, 480);
+      const instructorId = caller.instructorId || 'i1';
       const classes = await source.listClasses(instructorId);
       const groups = [];
       for (const k of classes) {

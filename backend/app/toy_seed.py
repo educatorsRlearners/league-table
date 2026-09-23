@@ -64,9 +64,6 @@ CRITERIA: dict[str, list[dict[str, Any]]] = {
 }
 
 WEEK_COUNT = 16
-DATA_THROUGH = 12
-PARTIAL_WEEK = 12
-PARTIAL_KEYS = ["homework", "attendance"]
 
 TERM_START_MS = 1756080000000  # Date.UTC(2025, 7, 25), Monday 25 Aug 2025 → week 12 is 10–14 Nov
 
@@ -132,12 +129,8 @@ def build_entries(class_id: str, students: list[Student], weeks) -> list[Entry]:
     entries = []
     n = 0
     for w in weeks:
-        if w.week_number > DATA_THROUGH:
-            continue
         for c in criteria:
             if not c.get("everyWeek") and w.week_number not in c.get("weeks", []):
-                continue
-            if w.week_number == PARTIAL_WEEK and c["key"] not in PARTIAL_KEYS:
                 continue
             for i, s in enumerate(students):
                 if w.week_number < s.joined_week:

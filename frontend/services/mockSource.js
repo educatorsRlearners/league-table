@@ -68,10 +68,6 @@ const CRITERIA = {
 };
 
 export const WEEK_COUNT = 16;
-/** Entries exist through this week; week 12 is the one in progress. */
-export const DATA_THROUGH = 12;
-const PARTIAL_WEEK = 12;
-const PARTIAL_KEYS = ['homework', 'attendance'];
 const TERM_START = Date.UTC(2025, 7, 25); // Monday 25 Aug 2025 → week 12 is 10–14 Nov
 
 function buildWeeks() {
@@ -119,10 +115,8 @@ function buildEntries(classId, students, weeks) {
   const entries = [];
   let n = 0;
   for (const w of weeks) {
-    if (w.week_number > DATA_THROUGH) continue; // weeks 13–16 not yet recorded
     for (const c of criteria) {
       if (!c.everyWeek && !c.weeks.includes(w.week_number)) continue;
-      if (w.week_number === PARTIAL_WEEK && !PARTIAL_KEYS.includes(c.key)) continue;
       students.forEach((s, i) => {
         if (w.week_number < s.joined_week) return;
         const noise = (rng() - 0.5) * 0.26;
@@ -327,4 +321,4 @@ export function createToyAppStore() {
   };
 }
 
-export const TOY_FIXTURES = { CLASSES, CRITERIA, WEEK_COUNT, DATA_THROUGH, NAMES };
+export const TOY_FIXTURES = { CLASSES, CRITERIA, WEEK_COUNT, NAMES };

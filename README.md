@@ -26,7 +26,7 @@
 - **Fair to missing data:** a criterion with no entry is left out and the remaining weights are rescaled, so absence of data is never scored as zero.
 - **Ties:** students level on adjusted score are ordered by raw score, then the configured tie-breakers; any still level share a rank (1, 1, 3).
 - **Privacy toggle:** show full names, initials or nicknames in one click.
-- **Risk digest:** the instructor sees newly, still and cleared flags across every class they teach, each traced to five evidence-backed signals (downward trend, missed engagement, low projected grade, heavy commitments, missing data).
+- **Risk digest:** the instructor sees newly, still and cleared flags across every class they teach, each traced to five evidence-backed signals (downward trend, missed engagement, low projected grade, heavy commitments, missing data). Step through any week with the same control used on the league table; each week is always compared against the one before it.
 - **Outreach notes:** log private, timestamped notes on a student's risk record. Notes never travel to a student.
 - **Student standing:** each student sees only their own level, the signals that are on, and where to get help — no ranks, no classmates, no notes.
 - **Server-side rules:** scoring, the adjustment, ranking, risk and roles all run on the backend.
@@ -61,7 +61,7 @@ flowchart LR
 ```
 
 - The contract is [`openapi.yaml`](openapi.yaml). `frontend/services/httpApi.js` is the live client the shipped page uses; `frontend/services/api.js` + `mockSource.js` are a client-side reference implementation of the same contract, exercised only by the browser test suite (`tests.js`/`Tests.dc.html`), not by the running app. A contract test checks the running app against `openapi.yaml`.
-- Scores come through a read-only `DataSource`. Today that is two seeded toy classes of 24 students, 16 weeks and 5 criteria each, including a tie, a missing entry, a perfect week, a zero week and a late joiner. Entries run through week 12, so the latest complete week is the landing week.
+- Scores come through a read-only `DataSource`. Today that is two seeded toy classes of 24 students, 16 weeks and 5 criteria each, including a tie, a missing entry, a perfect week, a zero week and a late joiner. Entries run through all 16 weeks, so week 16 is the landing week.
 - Everything the service owns lives in the read-write `AppStore`: league settings, baselines, weekly updates, risk settings and snapshots, and instructor notes.
 - Reads are cached for 60 seconds. If the source fails, the last good snapshot is served and marked stale. Refresh is rate-limited to once every 10 seconds.
 - Problems in the data, such as an unknown student ID, are listed instead of breaking the table.
@@ -78,7 +78,7 @@ All endpoints take a Bearer token (see [Auth](#auth)). The full contract is in [
 | `GET /classes/{id}/students/{sid}/explanation` | instructor, or the student themselves | The full breakdown, including hours, factor and cap |
 | `GET /classes/{id}/explainer` | signed in | The formula and current parameters, with no personal data |
 | `GET /me/commitments?classId=&studentId=` | instructor, or the student themselves | Baseline, weekly updates, and hours, factor and source by week |
-| `GET /instructor/digest` | instructor | New/still/cleared flags across every class, with what changed since last look |
+| `GET /instructor/digest?week=` | instructor | New/still/cleared flags across every class, for a chosen week (default: each class's latest complete week) compared against the week before it |
 | `GET /classes/{id}/students/{sid}/risk` | instructor (with notes), or the student themselves (notes hidden) | Level, five signals with evidence, metrics, thresholds, history |
 | `POST /classes/{id}/students/{sid}/notes` | instructor | Log private outreach (body trimmed, empty rejected) |
 | `GET`/`PUT /classes/{id}/risk-settings` | instructor | Per-class risk thresholds and active signals |

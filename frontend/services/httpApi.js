@@ -113,8 +113,8 @@ export function createHttpApi({ baseUrl = '', fetch: fetchImpl } = {}) {
       send('GET', '/me/commitments', { query: { classId, studentId }, caller }),
 
     /** GET /instructor/digest */
-    getDigest: ({ instructorId = 'i1', week, caller = { role: 'instructor' } } = {}) =>
-      send('GET', '/instructor/digest', { query: { instructorId, week }, caller }),
+    getDigest: ({ week, caller = { role: 'instructor' } } = {}) =>
+      send('GET', '/instructor/digest', { query: { week }, caller }),
 
     /** GET /classes/{id}/students/{sid}/risk */
     getRiskRecord: ({ classId = 'c1', studentId, caller = { role: 'instructor' } }) =>

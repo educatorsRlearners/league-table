@@ -51,13 +51,10 @@ def get_commitments(classId: str = Query(alias="classId"), studentId: str = Quer
 
 @router.get("/instructor/digest", response_model=Digest, tags=["risk"],
             responses={401: {}, 403: {}})
-def get_digest(instructorId: str | None = Query(default=None, alias="instructorId"),
-               week: int | None = Query(default=None, alias="week",
+def get_digest(week: int | None = Query(default=None, alias="week",
                                         description="Week number. Defaults to each class's own latest complete week."),
                caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
-    iid = instructorId or instructor_id_of(caller)
-    if iid != instructor_id_of(caller):
-        raise HTTPException(status_code=403, detail="Forbidden.")
+    iid = instructor_id_of(caller)
 
     groups = []
     for klass in ctx.db.list_classes(iid):

@@ -8,7 +8,7 @@ import {
   resolveHours, weightedHours, commitmentFactor, adjust, mean,
 } from './scoring.js';
 import { createApi, ApiError } from './api.js';
-import { createToySource, createToyAppStore, WEEK_COUNT, DATA_THROUGH } from './mockSource.js';
+import { createToySource, createToyAppStore, WEEK_COUNT } from './mockSource.js';
 import { evaluateSignals, levelFor, diffState, DEFAULT_THRESHOLDS, SIGNAL_KEYS } from './risk.js';
 
 const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
@@ -369,10 +369,10 @@ contractSuite.it('every entry references a known student, week and criterion', a
   assert(entries.every((e) => typeof e.earned === 'number' && e.earned >= 0 && e.earned <= e.possible), 'score out of bounds');
 });
 
-contractSuite.it('records nothing past the week in progress', async () => {
+contractSuite.it('records entries through every week of the term', async () => {
   const entries = await createToySource().getEntries({ classId: 'c1' });
   const maxWeek = Math.max(...entries.map((e) => Number(e.week_id.slice(1))));
-  assert(maxWeek === DATA_THROUGH, `entries run to week ${maxWeek}`);
+  assert(maxWeek === WEEK_COUNT, `entries run to week ${maxWeek}`);
 });
 
 contractSuite.it('carries the seeded score edge cases', async () => {
@@ -687,7 +687,7 @@ apiSuite.it('returns a student’s own commitments and factor by week', async ()
 
 apiSuite.it('the digest surfaces a minority of the class, not the roster', async () => {
   const api = makeApi();
-  const digest = await api.getDigest({ instructorId: 'i1' });
+  const digest = await api.getDigest();
   for (const g of digest.groups) {
     assert(g.rows.length > 0, `${g.className} flagged nobody at all`);
     assert(g.rows.length <= 12, `${g.className} flagged ${g.rows.length} of 24 — the digest discriminates nothing`);
@@ -697,7 +697,7 @@ apiSuite.it('the digest surfaces a minority of the class, not the roster', async
 });
 
 apiSuite.it('computes the digest from the data, grouped by class', async () => {
-  const digest = await makeApi().getDigest({ instructorId: 'i1' });
+  const digest = await makeApi().getDigest();
   assert(digest.groups.length === 2, 'the digest must cover every class');
   for (const g of digest.groups) {
     assert(g.week >= 1, 'no evaluation week');
@@ -709,8 +709,8 @@ apiSuite.it('computes the digest from the data, grouped by class', async () => {
 
 apiSuite.it('always compares against the prior week, stable across repeated looks', async () => {
   const api = makeApi();
-  const first = await api.getDigest({ instructorId: 'i1' });
-  const second = await api.getDigest({ instructorId: 'i1' });
+  const first = await api.getDigest();
+  const second = await api.getDigest();
   for (const g of first.groups) {
     assert(g.comparedWith === g.week - 1, `${g.className} should compare against the prior week`);
   }
@@ -719,7 +719,7 @@ apiSuite.it('always compares against the prior week, stable across repeated look
 
 apiSuite.it('honors an explicit week and compares it against week - 1', async () => {
   const api = makeApi();
-  const digest = await api.getDigest({ instructorId: 'i1', week: 5 });
+  const digest = await api.getDigest({ week: 5 });
   for (const g of digest.groups) {
     assert(g.week === 5, `${g.className} should be evaluated at week 5`);
     assert(g.comparedWith === 4, `${g.className} should compare against week 4`);
@@ -728,7 +728,7 @@ apiSuite.it('honors an explicit week and compares it against week - 1', async ()
 
 apiSuite.it('a risk record explains every signal and traces it to data', async () => {
   const api = makeApi();
-  const digest = await api.getDigest({ instructorId: 'i1' });
+  const digest = await api.getDigest();
   const row = digest.groups.flatMap((g) => g.rows.map((r) => ({ ...r, classId: g.classId }))).find((r) => r.level === 'High risk' || r.level === 'At risk');
   assert(row, 'no flagged student to open');
   const rec = await api.getRiskRecord({ classId: row.classId, studentId: row.student_id });
@@ -854,9 +854,9 @@ apiSuite.it('runs a data check and reports issues instead of failing', async () 
   assert(boot.issues.length === 0, 'the seeded data should be clean');
 });
 
-apiSuite.it('returns an empty table, not an error, for a week with no entries', async () => {
-  const res = await makeApi().getRanking({ weekId: 'w15' });
-  assert(Array.isArray(res.rows) && res.rows.length === 0, 'a future week should simply be empty');
+apiSuite.it('returns an empty table, not an error, for an unknown week', async () => {
+  const res = await makeApi().getRanking({ weekId: 'w99' });
+  assert(Array.isArray(res.rows) && res.rows.length === 0, 'an unknown week should simply be empty');
 });
 
 apiSuite.it('ranks 24 students over 16 cumulative weeks well inside the budget', async () => {

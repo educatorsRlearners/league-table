@@ -50,11 +50,9 @@ def test_ranking_shape_and_order(instructor):
     assert res["weekCount"] == 1
 
 
-def test_ranking_unknown_and_empty_week(instructor):
+def test_ranking_unknown_week(instructor):
     unknown = instructor.get("/classes/c1/ranking", params={"week": "w99"}).json()
     assert unknown["rows"] == []
-    empty = instructor.get("/classes/c1/ranking", params={"week": "w15"}).json()
-    assert empty["rows"] == []
 
 
 def test_cap_and_factor(instructor):

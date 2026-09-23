@@ -722,7 +722,9 @@ class Component extends DCLogic {
     document.addEventListener('keydown', this.onKey);
     try {
       const base = document.baseURI;
-      const { createHttpApi } = await import(new URL('services/httpApi.js', base).href);
+      // Cache-busted: a stale cached copy of this module (old function signature)
+      // served alongside a fresh page previously caused silent request corruption.
+      const { createHttpApi } = await import(new URL(`services/httpApi.js?v=${Date.now()}`, base).href);
       this.api = createHttpApi({});
       await this.loadClass('c1');
     } catch (err) {
@@ -865,7 +867,7 @@ class Component extends DCLogic {
     if (!s.boot) return;
     try {
       const week = s.boot.weeks[s.weekIdx].week_number;
-      const digest = await this.api.getDigest({ instructorId: 'i1', week });
+      const digest = await this.api.getDigest({ week });
       this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest });
     } catch (err) {
       this.handleApiError(err);
