@@ -21,6 +21,13 @@ from app.service import DEFAULT_ROLLING_N, build_rows, resolved_weights, window_
 router = APIRouter(tags=["ranking"])
 
 
+def _validate_window_and_name_mode(window: str, name_mode: str) -> None:
+    if window not in ("week", "rolling", "cumulative"):
+        raise HTTPException(status_code=422, detail="window must be week, rolling or cumulative.")
+    if name_mode not in ("full", "initials", "nickname"):
+        raise HTTPException(status_code=422, detail="nameMode must be full, initials or nickname.")
+
+
 def _resolve(snap, criteria_keys, weights):
     keys = criteria_keys if criteria_keys else [c.key for c in snap.criteria]
     known = {c.key for c in snap.criteria}
@@ -68,10 +75,7 @@ def get_ranking(
 ):
     snap = need_class(ctx, classId)
     ensure_student_in_class(ctx, caller, classId)
-    if window not in ("week", "rolling", "cumulative"):
-        raise HTTPException(status_code=422, detail="window must be week, rolling or cumulative.")
-    if nameMode not in ("full", "initials", "nickname"):
-        raise HTTPException(status_code=422, detail="nameMode must be full, initials or nickname.")
+    _validate_window_and_name_mode(window, nameMode)
     criteria_keys = parse_criteria(criteria)
     weights_map = parse_weights(weights)
     keys, w = _resolve(snap, criteria_keys, weights_map)
@@ -117,10 +121,7 @@ def get_explanation(
     if caller.role == "student" and caller.studentId != studentId:
         raise HTTPException(status_code=403, detail="A student may only open their own breakdown.")
     snap = need_class(ctx, classId)
-    if window not in ("week", "rolling", "cumulative"):
-        raise HTTPException(status_code=422, detail="window must be week, rolling or cumulative.")
-    if nameMode not in ("full", "initials", "nickname"):
-        raise HTTPException(status_code=422, detail="nameMode must be full, initials or nickname.")
+    _validate_window_and_name_mode(window, nameMode)
     criteria_keys = parse_criteria(criteria)
     weights_map = parse_weights(weights)
     keys, w = _resolve(snap, criteria_keys, weights_map)

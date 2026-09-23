@@ -47,14 +47,7 @@ class MockDatabase:
     def get_entries(self, class_id: str, week_ids: list[str] | None = None,
                     criterion_keys: list[str] | None = None) -> list[Entry]:
         self._reachable()
-        out = []
-        for e in self.entries:
-            if e.criterion_key.split(":")[0] if False else None:
-                pass
-            # entries store class via criterion prefix? use lookup map instead
-            out.append(e)
-        # filter by class: entries ids start with classId-e
-        out = [e for e in out if e.id.startswith(f"{class_id}-e")]
+        out = [e for e in self.entries if e.id.startswith(f"{class_id}-e")]
         if week_ids is not None:
             out = [e for e in out if e.week_id in week_ids]
         if criterion_keys is not None:

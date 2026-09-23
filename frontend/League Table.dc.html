@@ -51,7 +51,7 @@
       </sc-if>
       <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
       <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
-      <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" style="min-height: 44px;">{{ themeLabel }}</button>
+      <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" aria-label="Toggle theme" style="min-height: 44px; font-size: 18px;">{{ themeLabel }}</button>
     </div>
   </header>
 
@@ -669,7 +669,7 @@
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:24,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;week&quot;,&quot;rolling&quot;,&quot;cumulative&quot;],&quot;default&quot;:&quot;rolling&quot;,&quot;tsType&quot;:&quot;'week' | 'rolling' | 'cumulative'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;rollingN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;showRaw&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:24,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;week&quot;,&quot;rolling&quot;,&quot;cumulative&quot;],&quot;default&quot;:&quot;rolling&quot;,&quot;tsType&quot;:&quot;'week' | 'rolling' | 'cumulative'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;rollingN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;showRaw&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
 class Component extends DCLogic {
   state = {
     loading: true,
@@ -683,7 +683,7 @@ class Component extends DCLogic {
     windowMode: this.props.defaultWindow || 'rolling',
     criteriaKeys: [],
     nameMode: this.props.nameMode || 'full',
-    theme: this.props.startTheme || 'light',
+    theme: this.props.startTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
     rawOn: this.props.showRaw ?? false,
     showAll: false,
     drawer: null,
@@ -1332,7 +1332,7 @@ class Component extends DCLogic {
 
     return {
       theme: s.theme,
-      themeLabel: s.theme === 'light' ? 'Dark' : 'Light',
+      themeLabel: s.theme === 'dark' ? '\u{1F319}' : '☀️',
       loading: s.loading && !s.errorMsg,
       errorMsg: s.errorMsg,
       klassName: boot ? boot.klass.name : 'Loading…',

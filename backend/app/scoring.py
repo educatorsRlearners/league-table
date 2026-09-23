@@ -166,11 +166,6 @@ def rank_rows(rows: list[dict], tie_breakers: list[str] | None = None) -> list[d
         for r in rows
     ]
 
-    def sort_key(r):
-        tie_vals = tuple(-(r.get("normalisedByKey", {}).get(k, -1)) for k in tie_breakers)
-        return (-r["scoreRounded"], -r["rawRounded"], *tie_vals, (r.get("display_name") or "").lower())
-
-    # Python sort can't mix easily; do it stepwise with sorted()
     keyed.sort(
         key=lambda r: (
             -r["scoreRounded"],

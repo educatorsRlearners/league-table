@@ -72,7 +72,7 @@ export const WEEK_COUNT = 16;
 export const DATA_THROUGH = 12;
 const PARTIAL_WEEK = 12;
 const PARTIAL_KEYS = ['homework', 'attendance'];
-const TERM_START = Date.UTC(2026, 6, 6); // Monday 6 July 2026 → week 12 is 21–25 Sep
+const TERM_START = Date.UTC(2025, 7, 25); // Monday 25 Aug 2025 → week 12 is 10–14 Nov
 
 function buildWeeks() {
   return Array.from({ length: WEEK_COUNT }, (_, i) => {
@@ -222,17 +222,17 @@ function seedCommitments(classId) {
   const p = classId === 'c1' ? 's' : 't';
   const id = (i) => `${p}${String(i + 1).padStart(2, '0')}`;
   const baselines = [
-    { id: `${classId}-b1`, student_id: id(0), work_hours: 12, childcare_hours: 6, eldercare_hours: 0, status: 'approved', effective_from_week: 1, submitted_at: '2026-07-07T09:12:00Z', decided_by: 'i1', decided_at: '2026-07-07T17:40:00Z' },
-    { id: `${classId}-b2`, student_id: id(1), work_hours: 30, childcare_hours: 10, eldercare_hours: 5, status: 'approved', effective_from_week: 1, submitted_at: '2026-07-07T10:02:00Z', decided_by: 'i1', decided_at: '2026-07-08T08:15:00Z' },
-    { id: `${classId}-b3`, student_id: id(2), work_hours: 10, childcare_hours: 0, eldercare_hours: 4, status: 'pending', effective_from_week: null, submitted_at: '2026-09-18T20:31:00Z', decided_by: null, decided_at: null },
-    { id: `${classId}-b4`, student_id: id(3), work_hours: 40, childcare_hours: 20, eldercare_hours: 10, status: 'rejected', effective_from_week: null, submitted_at: '2026-08-02T22:05:00Z', decided_by: 'i1', decided_at: '2026-08-03T09:00:00Z' },
-    { id: `${classId}-b5`, student_id: id(4), work_hours: 8, childcare_hours: 0, eldercare_hours: 0, status: 'approved', effective_from_week: 6, submitted_at: '2026-08-08T11:20:00Z', decided_by: 'i1', decided_at: '2026-08-09T10:00:00Z' },
-    { id: `${classId}-b6`, student_id: id(5), work_hours: 6, childcare_hours: 4, eldercare_hours: 0, status: 'approved', effective_from_week: 1, submitted_at: '2026-07-06T18:44:00Z', decided_by: 'i1', decided_at: '2026-07-07T17:41:00Z' },
-    { id: `${classId}-b7`, student_id: id(6), work_hours: 10, childcare_hours: 0, eldercare_hours: 2, status: 'approved', effective_from_week: 1, submitted_at: '2026-07-06T19:10:00Z', decided_by: 'i1', decided_at: '2026-07-07T17:42:00Z' },
+    { id: `${classId}-b1`, student_id: id(0), work_hours: 12, childcare_hours: 6, eldercare_hours: 0, status: 'approved', effective_from_week: 1, submitted_at: '2025-08-26T09:12:00Z', decided_by: 'i1', decided_at: '2025-08-26T17:40:00Z' },
+    { id: `${classId}-b2`, student_id: id(1), work_hours: 30, childcare_hours: 10, eldercare_hours: 5, status: 'approved', effective_from_week: 1, submitted_at: '2025-08-26T10:02:00Z', decided_by: 'i1', decided_at: '2025-08-27T08:15:00Z' },
+    { id: `${classId}-b3`, student_id: id(2), work_hours: 10, childcare_hours: 0, eldercare_hours: 4, status: 'pending', effective_from_week: null, submitted_at: '2025-11-07T20:31:00Z', decided_by: null, decided_at: null },
+    { id: `${classId}-b4`, student_id: id(3), work_hours: 40, childcare_hours: 20, eldercare_hours: 10, status: 'rejected', effective_from_week: null, submitted_at: '2025-09-21T22:05:00Z', decided_by: 'i1', decided_at: '2025-09-22T09:00:00Z' },
+    { id: `${classId}-b5`, student_id: id(4), work_hours: 8, childcare_hours: 0, eldercare_hours: 0, status: 'approved', effective_from_week: 6, submitted_at: '2025-09-27T11:20:00Z', decided_by: 'i1', decided_at: '2025-09-28T10:00:00Z' },
+    { id: `${classId}-b6`, student_id: id(5), work_hours: 6, childcare_hours: 4, eldercare_hours: 0, status: 'approved', effective_from_week: 1, submitted_at: '2025-08-25T18:44:00Z', decided_by: 'i1', decided_at: '2025-08-26T17:41:00Z' },
+    { id: `${classId}-b7`, student_id: id(6), work_hours: 10, childcare_hours: 0, eldercare_hours: 2, status: 'approved', effective_from_week: 1, submitted_at: '2025-08-25T19:10:00Z', decided_by: 'i1', decided_at: '2025-08-26T17:42:00Z' },
   ];
   const weeklyUpdates = [
-    { id: `${classId}-u1`, student_id: id(5), week_id: 'w10', week_number: 10, work_hours: 20, childcare_hours: 4, eldercare_hours: 0, entered_at: '2026-09-07T21:00:00Z', reversed_by: null, reversed_at: null },
-    { id: `${classId}-u2`, student_id: id(6), week_id: 'w9', week_number: 9, work_hours: 46, childcare_hours: 0, eldercare_hours: 2, entered_at: '2026-08-31T23:12:00Z', reversed_by: 'i1', reversed_at: '2026-09-01T08:30:00Z' },
+    { id: `${classId}-u1`, student_id: id(5), week_id: 'w10', week_number: 10, work_hours: 20, childcare_hours: 4, eldercare_hours: 0, entered_at: '2025-10-27T21:00:00Z', reversed_by: null, reversed_at: null },
+    { id: `${classId}-u2`, student_id: id(6), week_id: 'w9', week_number: 9, work_hours: 46, childcare_hours: 0, eldercare_hours: 2, entered_at: '2025-10-20T23:12:00Z', reversed_by: 'i1', reversed_at: '2025-10-21T08:30:00Z' },
   ];
   return { baselines, weeklyUpdates };
 }
@@ -247,8 +247,8 @@ function seedNotes(classId) {
   const p = classId === 'c1' ? 's' : 't';
   if (classId !== 'c1') return [];
   return [
-    { id: 'n1', instructor_id: 'i1', class_id: classId, student_id: `${p}13`, body: 'Emailed 14 Sep about the two missed problem sets. No reply yet.', created_at: '2026-09-14T11:20:00Z' },
-    { id: 'n2', instructor_id: 'i1', class_id: classId, student_id: `${p}13`, body: 'Met in office hours 18 Sep. Shift pattern changed at work. Follow up in two weeks.', created_at: '2026-09-18T15:05:00Z' },
+    { id: 'n1', instructor_id: 'i1', class_id: classId, student_id: `${p}13`, body: 'Emailed 3 Nov about the two missed problem sets. No reply yet.', created_at: '2025-11-03T11:20:00Z' },
+    { id: 'n2', instructor_id: 'i1', class_id: classId, student_id: `${p}13`, body: 'Met in office hours 7 Nov. Shift pattern changed at work. Follow up in two weeks.', created_at: '2025-11-07T15:05:00Z' },
   ];
 }
 
@@ -260,9 +260,9 @@ export function createToyAppStore() {
   const riskSnapshots = new Map();
   const notes = CLASSES.flatMap((c) => seedNotes(c.id));
   const log = [
-    { id: 'l1', actor_id: 'i1', action: 'baseline.approve', student_id: 's01', week_id: 'w1', old_values: null, new_values: { effective_from_week: 1 }, at: '2026-07-07T17:40:00Z' },
-    { id: 'l2', actor_id: 's06', action: 'weekly.set', student_id: 's06', week_id: 'w10', old_values: { work_hours: 6 }, new_values: { work_hours: 20 }, at: '2026-09-07T21:00:00Z' },
-    { id: 'l3', actor_id: 'i1', action: 'weekly.reverse', student_id: 's07', week_id: 'w9', old_values: { work_hours: 46 }, new_values: { work_hours: 10 }, at: '2026-09-01T08:30:00Z' },
+    { id: 'l1', actor_id: 'i1', action: 'baseline.approve', student_id: 's01', week_id: 'w1', old_values: null, new_values: { effective_from_week: 1 }, at: '2025-08-26T17:40:00Z' },
+    { id: 'l2', actor_id: 's06', action: 'weekly.set', student_id: 's06', week_id: 'w10', old_values: { work_hours: 6 }, new_values: { work_hours: 20 }, at: '2025-10-27T21:00:00Z' },
+    { id: 'l3', actor_id: 'i1', action: 'weekly.reverse', student_id: 's07', week_id: 'w9', old_values: { work_hours: 46 }, new_values: { work_hours: 10 }, at: '2025-10-21T08:30:00Z' },
   ];
 
   return {

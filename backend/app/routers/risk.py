@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -56,7 +56,6 @@ def get_digest(instructorId: str | None = Query(default=None, alias="instructorI
     iid = instructorId or instructor_id_of(caller)
     if iid != instructor_id_of(caller):
         raise HTTPException(status_code=403, detail="Forbidden.")
-    from datetime import datetime
 
     groups = []
     for klass in ctx.db.list_classes(iid):
@@ -137,7 +136,6 @@ def add_note(classId: str, studentId: str, body: NoteRequest,
     text = (body.body or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="A note needs some text.")
-    from datetime import datetime
     return ctx.store.add_note(class_id=classId, student_id=studentId,
                               instructor_id=instructor_id_of(caller), body=text,
                               at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())

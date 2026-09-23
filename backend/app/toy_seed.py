@@ -68,7 +68,7 @@ DATA_THROUGH = 12
 PARTIAL_WEEK = 12
 PARTIAL_KEYS = ["homework", "attendance"]
 
-TERM_START_MS = 1783296000000  # Date.UTC(2026, 6, 6)
+TERM_START_MS = 1756080000000  # Date.UTC(2025, 7, 25), Monday 25 Aug 2025 → week 12 is 10–14 Nov
 
 
 def _mulberry32(seed: int):
@@ -179,17 +179,17 @@ def seed_commitments(class_id: str) -> tuple[list[dict], list[dict]]:
         return f"{p}{i + 1:02d}"
 
     baselines = [
-        {"id": f"{class_id}-b1", "student_id": sid(0), "work_hours": 12, "childcare_hours": 6, "eldercare_hours": 0, "status": "approved", "effective_from_week": 1, "submitted_at": "2026-07-07T09:12:00Z", "decided_by": "i1", "decided_at": "2026-07-07T17:40:00Z"},
-        {"id": f"{class_id}-b2", "student_id": sid(1), "work_hours": 30, "childcare_hours": 10, "eldercare_hours": 5, "status": "approved", "effective_from_week": 1, "submitted_at": "2026-07-07T10:02:00Z", "decided_by": "i1", "decided_at": "2026-07-08T08:15:00Z"},
-        {"id": f"{class_id}-b3", "student_id": sid(2), "work_hours": 10, "childcare_hours": 0, "eldercare_hours": 4, "status": "pending", "effective_from_week": None, "submitted_at": "2026-09-18T20:31:00Z", "decided_by": None, "decided_at": None},
-        {"id": f"{class_id}-b4", "student_id": sid(3), "work_hours": 40, "childcare_hours": 20, "eldercare_hours": 10, "status": "rejected", "effective_from_week": None, "submitted_at": "2026-08-02T22:05:00Z", "decided_by": "i1", "decided_at": "2026-08-03T09:00:00Z"},
-        {"id": f"{class_id}-b5", "student_id": sid(4), "work_hours": 8, "childcare_hours": 0, "eldercare_hours": 0, "status": "approved", "effective_from_week": 6, "submitted_at": "2026-08-08T11:20:00Z", "decided_by": "i1", "decided_at": "2026-08-09T10:00:00Z"},
-        {"id": f"{class_id}-b6", "student_id": sid(5), "work_hours": 6, "childcare_hours": 4, "eldercare_hours": 0, "status": "approved", "effective_from_week": 1, "submitted_at": "2026-07-06T18:44:00Z", "decided_by": "i1", "decided_at": "2026-07-07T17:41:00Z"},
-        {"id": f"{class_id}-b7", "student_id": sid(6), "work_hours": 10, "childcare_hours": 0, "eldercare_hours": 2, "status": "approved", "effective_from_week": 1, "submitted_at": "2026-07-06T19:10:00Z", "decided_by": "i1", "decided_at": "2026-07-07T17:42:00Z"},
+        {"id": f"{class_id}-b1", "student_id": sid(0), "work_hours": 12, "childcare_hours": 6, "eldercare_hours": 0, "status": "approved", "effective_from_week": 1, "submitted_at": "2025-08-26T09:12:00Z", "decided_by": "i1", "decided_at": "2025-08-26T17:40:00Z"},
+        {"id": f"{class_id}-b2", "student_id": sid(1), "work_hours": 30, "childcare_hours": 10, "eldercare_hours": 5, "status": "approved", "effective_from_week": 1, "submitted_at": "2025-08-26T10:02:00Z", "decided_by": "i1", "decided_at": "2025-08-27T08:15:00Z"},
+        {"id": f"{class_id}-b3", "student_id": sid(2), "work_hours": 10, "childcare_hours": 0, "eldercare_hours": 4, "status": "pending", "effective_from_week": None, "submitted_at": "2025-11-07T20:31:00Z", "decided_by": None, "decided_at": None},
+        {"id": f"{class_id}-b4", "student_id": sid(3), "work_hours": 40, "childcare_hours": 20, "eldercare_hours": 10, "status": "rejected", "effective_from_week": None, "submitted_at": "2025-09-21T22:05:00Z", "decided_by": "i1", "decided_at": "2025-09-22T09:00:00Z"},
+        {"id": f"{class_id}-b5", "student_id": sid(4), "work_hours": 8, "childcare_hours": 0, "eldercare_hours": 0, "status": "approved", "effective_from_week": 6, "submitted_at": "2025-09-27T11:20:00Z", "decided_by": "i1", "decided_at": "2025-09-28T10:00:00Z"},
+        {"id": f"{class_id}-b6", "student_id": sid(5), "work_hours": 6, "childcare_hours": 4, "eldercare_hours": 0, "status": "approved", "effective_from_week": 1, "submitted_at": "2025-08-25T18:44:00Z", "decided_by": "i1", "decided_at": "2025-08-26T17:41:00Z"},
+        {"id": f"{class_id}-b7", "student_id": sid(6), "work_hours": 10, "childcare_hours": 0, "eldercare_hours": 2, "status": "approved", "effective_from_week": 1, "submitted_at": "2025-08-25T19:10:00Z", "decided_by": "i1", "decided_at": "2025-08-26T17:42:00Z"},
     ]
     updates = [
-        {"id": f"{class_id}-u1", "student_id": sid(5), "week_id": "w10", "week_number": 10, "work_hours": 20, "childcare_hours": 4, "eldercare_hours": 0, "entered_at": "2026-09-07T21:00:00Z", "reversed_by": None, "reversed_at": None},
-        {"id": f"{class_id}-u2", "student_id": sid(6), "week_id": "w9", "week_number": 9, "work_hours": 46, "childcare_hours": 0, "eldercare_hours": 2, "entered_at": "2026-08-31T23:12:00Z", "reversed_by": "i1", "reversed_at": "2026-09-01T08:30:00Z"},
+        {"id": f"{class_id}-u1", "student_id": sid(5), "week_id": "w10", "week_number": 10, "work_hours": 20, "childcare_hours": 4, "eldercare_hours": 0, "entered_at": "2025-10-27T21:00:00Z", "reversed_by": None, "reversed_at": None},
+        {"id": f"{class_id}-u2", "student_id": sid(6), "week_id": "w9", "week_number": 9, "work_hours": 46, "childcare_hours": 0, "eldercare_hours": 2, "entered_at": "2025-10-20T23:12:00Z", "reversed_by": "i1", "reversed_at": "2025-10-21T08:30:00Z"},
     ]
     return baselines, updates
 
@@ -197,9 +197,9 @@ def seed_commitments(class_id: str) -> tuple[list[dict], list[dict]]:
 def seed_notes() -> list[dict]:
     return [
         {"id": "n1", "instructor_id": "i1", "class_id": "c1", "student_id": "s13",
-         "body": "Emailed 14 Sep about the two missed problem sets. No reply yet.", "created_at": "2026-09-14T11:20:00Z"},
+         "body": "Emailed 3 Nov about the two missed problem sets. No reply yet.", "created_at": "2025-11-03T11:20:00Z"},
         {"id": "n2", "instructor_id": "i1", "class_id": "c1", "student_id": "s13",
-         "body": "Met in office hours 18 Sep. Shift pattern changed at work. Follow up in two weeks.", "created_at": "2026-09-18T15:05:00Z"},
+         "body": "Met in office hours 7 Nov. Shift pattern changed at work. Follow up in two weeks.", "created_at": "2025-11-07T15:05:00Z"},
     ]
 
 

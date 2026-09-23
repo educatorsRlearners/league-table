@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import threading
 from copy import deepcopy
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Protocol
 
 from app.risk import DEFAULT_ACTIVE, DEFAULT_THRESHOLDS
@@ -152,8 +152,6 @@ class MemoryStore:
     # notes
 
     def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict:
-        from datetime import datetime
-
         with self._lock:
             self._note_seq += 1
             note = {
