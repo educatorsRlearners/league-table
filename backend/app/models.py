@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 WindowMode = Literal["week", "rolling", "cumulative"]
 NameMode = Literal["full", "initials", "nickname"]
@@ -227,8 +227,48 @@ class WeeklyUpdate(BaseModel):
 class Commitments(BaseModel):
     studentId: str
     baseline: Baseline | None = None
+    activeBaseline: Baseline | None = None
     weeklyUpdates: list[WeeklyUpdate] = Field(default_factory=list)
     byWeek: list[dict[str, Any]]
+    editableWeeks: list[int] = Field(default_factory=list)
+
+
+class CommitmentHoursInput(BaseModel):
+    """A student's submitted hours: 0-80 per type, half-hour steps, <=120 total."""
+
+    work: float = Field(0, ge=0, le=80)
+    childcare: float = Field(0, ge=0, le=80)
+    eldercare: float = Field(0, ge=0, le=80)
+
+    @field_validator("work", "childcare", "eldercare")
+    @classmethod
+    def _half_hour_steps(cls, v: float) -> float:
+        if round(v * 2) != v * 2:
+            raise ValueError("Hours must be in half-hour steps.")
+        return v
+
+    @model_validator(mode="after")
+    def _check_total(self) -> CommitmentHoursInput:
+        if self.work + self.childcare + self.eldercare > 120:
+            raise ValueError("Total hours across work, childcare and eldercare cannot exceed 120.")
+        return self
+
+
+class BaselineDecisionRequest(BaseModel):
+    decision: Literal["approved", "rejected"]
+    effectiveFromWeek: int | None = None
+
+
+class PendingBaseline(BaseModel):
+    baseline: Baseline
+    student_id: str
+    display_name: str
+
+
+class StudentWeeklyUpdate(BaseModel):
+    update: WeeklyUpdate
+    student_id: str
+    display_name: str
 
 
 class Signal(BaseModel):

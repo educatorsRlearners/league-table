@@ -259,6 +259,255 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /me/commitments/baseline:
+    put:
+      tags: [commitments]
+      summary: Submit or change the semester baseline (own only)
+      description: |
+        Frontend: `saveBaseline({ classId, studentId, hours, caller })`. A
+        student submits weekly hours (work/childcare/eldercare) for the
+        whole semester. Saved as a new pending baseline; it does not affect
+        scoring until an instructor approves it, and an already-approved
+        baseline (if any) keeps counting until then. Hours are 0-80 each in
+        half-hour steps, summing to at most 120. Auth: student, own
+        `studentId` only -> else 403.
+      parameters:
+        - name: classId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: studentId
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitmentHoursInput'
+      responses:
+        '200':
+          description: Updated commitments, including the new pending baseline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Commitments'
+        '400':
+          description: Hours out of range or over the 120-hour total
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Only the student may submit their own baseline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Unknown class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /me/commitments/weeks/{weekNumber}:
+    put:
+      tags: [commitments]
+      summary: Edit this week's or last week's hours (own only)
+      description: |
+        Frontend: `saveWeeklyUpdate({ classId, studentId, weekNumber, hours,
+        caller })`. Replaces the reported hours for one week; takes effect
+        immediately once a baseline is approved (before that it is stored
+        but has no effect), and can be reversed by the instructor. Only the
+        current or previous calendar week is editable. Auth: student, own
+        `studentId` only -> else 403.
+      parameters:
+        - name: weekNumber
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: classId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: studentId
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitmentHoursInput'
+      responses:
+        '200':
+          description: Updated commitments, including the new weekly update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Commitments'
+        '400':
+          description: Hours out of range, or the week is outside the edit window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Only the student may edit their own hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Unknown class or week
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/commitments/pending:
+    get:
+      tags: [commitments]
+      summary: Queue of pending baselines awaiting approval
+      description: |
+        Frontend: `getPendingBaselines(classId)`. Auth: instructor.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Pending baselines, each with the student's display name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingBaseline'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /classes/{classId}/commitments/weekly-updates:
+    get:
+      tags: [commitments]
+      summary: Weekly updates across the class, most recent first
+      description: |
+        Frontend: `getWeeklyUpdates(classId)`. Every weekly update for the
+        class (including already-reversed ones), each with the student's
+        display name, so the instructor can find one to reverse. Auth: instructor.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+      responses:
+        '200':
+          description: Weekly updates, each with the student's display name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentWeeklyUpdate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /classes/{classId}/commitments/baselines/{baselineId}/decide:
+    post:
+      tags: [commitments]
+      summary: Approve or reject a pending baseline
+      description: |
+        Frontend: `decideBaseline({ classId, baselineId, decision,
+        effectiveFromWeek, caller })`. Approving picks the week it counts
+        from (defaults to the current calendar week) and supersedes any
+        baseline it replaces; rejecting leaves the previous approved
+        baseline, if any, in effect. Auth: instructor.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - name: baselineId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaselineDecisionRequest'
+      responses:
+        '200':
+          description: The decided baseline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Baseline'
+        '400':
+          description: effectiveFromWeek is not a valid week number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such pending baseline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Baseline has already been decided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /classes/{classId}/commitments/weekly-updates/{updateId}/reverse:
+    post:
+      tags: [commitments]
+      summary: Reverse a student's weekly update
+      description: |
+        Frontend: `reverseWeeklyUpdate({ classId, updateId, caller })`. The
+        week then falls back to the baseline in effect (or no hours, if none
+        is approved). Auth: instructor.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - name: updateId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The reversed weekly update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklyUpdate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such weekly update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Already reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /instructor/digest:
     get:
       tags: [risk]
@@ -858,10 +1107,11 @@ components:
 
     Commitments:
       type: object
-      required: [studentId, baseline, weeklyUpdates, byWeek]
+      required: [studentId, baseline, weeklyUpdates, byWeek, editableWeeks]
       properties:
         studentId: { type: string }
         baseline: { $ref: '#/components/schemas/Baseline', nullable: true }
+        activeBaseline: { $ref: '#/components/schemas/Baseline', nullable: true }
         weeklyUpdates: { type: array, items: { $ref: '#/components/schemas/WeeklyUpdate' } }
         byWeek:
           type: array
@@ -874,6 +1124,44 @@ components:
               source: { type: string, nullable: true }
               weighted_hours: { type: number }
               factor: { type: number }
+        editableWeeks:
+          type: array
+          items: { type: integer }
+          description: The current and previous calendar week - the only weeks a student may edit right now.
+
+    CommitmentHoursInput:
+      type: object
+      properties:
+        work: { type: number, minimum: 0, maximum: 80, multipleOf: 0.5, default: 0 }
+        childcare: { type: number, minimum: 0, maximum: 80, multipleOf: 0.5, default: 0 }
+        eldercare: { type: number, minimum: 0, maximum: 80, multipleOf: 0.5, default: 0 }
+      description: Each type 0-80 in half-hour steps; the three types sum to at most 120.
+
+    BaselineDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        effectiveFromWeek:
+          type: integer
+          nullable: true
+          description: Week the approved baseline counts from; defaults to the current calendar week. Ignored when rejecting.
+
+    PendingBaseline:
+      type: object
+      required: [baseline, student_id, display_name]
+      properties:
+        baseline: { $ref: '#/components/schemas/Baseline' }
+        student_id: { type: string }
+        display_name: { type: string }
+
+    StudentWeeklyUpdate:
+      type: object
+      required: [update, student_id, display_name]
+      properties:
+        update: { $ref: '#/components/schemas/WeeklyUpdate' }
+        student_id: { type: string }
+        display_name: { type: string }
 
     Signal:
       type: object

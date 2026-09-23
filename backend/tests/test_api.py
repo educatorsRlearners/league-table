@@ -3,6 +3,8 @@
 import json
 from itertools import pairwise
 
+from fastapi.testclient import TestClient
+
 
 def approx(a, b, eps=1e-6):
     return abs(a - b) <= eps
@@ -165,6 +167,100 @@ def test_commitments(instructor, ada):
     assert ada.get("/me/commitments", params={"classId": "c1", "studentId": "s02"}).status_code == 403
     full = instructor.get("/me/commitments", params={"classId": "c1", "studentId": "s02"}).json()
     assert full["studentId"] == "s02"
+
+
+def test_baseline_submission_is_neutral_until_approved(app, instructor):
+    liam = TestClient(app)
+    liam.headers.update({"Authorization": "Bearer s10"})
+
+    before = liam.get("/me/commitments", params={"classId": "c1", "studentId": "s10"}).json()
+    assert before["baseline"] is None and before["activeBaseline"] is None
+    assert set(before["editableWeeks"]) == {15, 16}
+
+    r = liam.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s10"},
+                json={"work": 10, "childcare": 2, "eldercare": 0})
+    assert r.status_code == 200
+    comm = r.json()
+    assert comm["baseline"]["status"] == "pending"
+    assert comm["activeBaseline"] is None
+    assert approx(comm["byWeek"][-1]["factor"], 1, 1e-9)
+
+    pending = instructor.get("/classes/c1/commitments/pending").json()
+    entry = next(p for p in pending if p["student_id"] == "s10")
+    assert entry["display_name"]
+    baseline_id = entry["baseline"]["id"]
+
+    decided = instructor.post(f"/classes/c1/commitments/baselines/{baseline_id}/decide",
+                              json={"decision": "approved"})
+    assert decided.status_code == 200
+    assert decided.json()["status"] == "approved"
+    assert decided.json()["effective_from_week"] == 16
+
+    after = liam.get("/me/commitments", params={"classId": "c1", "studentId": "s10"}).json()
+    assert after["activeBaseline"]["status"] == "approved"
+    assert after["byWeek"][-1]["hours"] == {"work": 10, "childcare": 2, "eldercare": 0}
+
+    # a second decision on the same (now-approved) baseline is a conflict
+    assert instructor.post(f"/classes/c1/commitments/baselines/{baseline_id}/decide",
+                           json={"decision": "approved"}).status_code == 409
+
+
+def test_baseline_rejection_and_ownership(app, instructor):
+    mira = TestClient(app)
+    mira.headers.update({"Authorization": "Bearer s13"})
+
+    mira.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s13"},
+             json={"work": 5, "childcare": 0, "eldercare": 0})
+    baseline_id = instructor.get("/classes/c1/commitments/pending").json()
+    baseline_id = next(p["baseline"]["id"] for p in baseline_id if p["student_id"] == "s13")
+
+    rejected = instructor.post(f"/classes/c1/commitments/baselines/{baseline_id}/decide",
+                               json={"decision": "rejected"})
+    assert rejected.status_code == 200 and rejected.json()["status"] == "rejected"
+
+    comm = mira.get("/me/commitments", params={"classId": "c1", "studentId": "s13"}).json()
+    assert comm["baseline"]["status"] == "rejected" and comm["activeBaseline"] is None
+
+    # only the owning student may submit or edit their own commitments
+    assert instructor.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s13"},
+                          json={"work": 1, "childcare": 0, "eldercare": 0}).status_code == 403
+    other = TestClient(app)
+    other.headers.update({"Authorization": "Bearer s14"})
+    assert other.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s13"},
+                     json={"work": 1, "childcare": 0, "eldercare": 0}).status_code == 403
+
+
+def test_commitment_hours_validation(ada):
+    over_total = ada.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s01"},
+                         json={"work": 80, "childcare": 40, "eldercare": 1})
+    assert over_total.status_code == 422
+    bad_step = ada.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s01"},
+                       json={"work": 10.25, "childcare": 0, "eldercare": 0})
+    assert bad_step.status_code == 422
+    out_of_range = ada.put("/me/commitments/baseline", params={"classId": "c1", "studentId": "s01"},
+                           json={"work": 81, "childcare": 0, "eldercare": 0})
+    assert out_of_range.status_code == 422
+
+
+def test_weekly_update_edit_window_and_reversal(instructor, ben):
+    assert ben.put("/me/commitments/weeks/1", params={"classId": "c1", "studentId": "s02"},
+                   json={"work": 3, "childcare": 0, "eldercare": 0}).status_code == 400
+
+    r = ben.put("/me/commitments/weeks/16", params={"classId": "c1", "studentId": "s02"},
+               json={"work": 3, "childcare": 0, "eldercare": 0})
+    assert r.status_code == 200
+    comm = r.json()
+    week16 = next(w for w in comm["weeklyUpdates"] if w["week_number"] == 16)
+    assert week16["work_hours"] == 3 and week16["reversed_at"] is None
+    assert comm["byWeek"][-1]["source"] == "weekly"
+
+    reversed_ = instructor.post(f"/classes/c1/commitments/weekly-updates/{week16['id']}/reverse")
+    assert reversed_.status_code == 200
+    assert reversed_.json()["reversed_at"] is not None
+    assert instructor.post(f"/classes/c1/commitments/weekly-updates/{week16['id']}/reverse").status_code == 409
+
+    after = ben.get("/me/commitments", params={"classId": "c1", "studentId": "s02"}).json()
+    assert after["byWeek"][-1]["source"] == "baseline"
 
 
 def test_digest(instructor):

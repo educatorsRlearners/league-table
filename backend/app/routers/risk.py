@@ -4,27 +4,57 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.auth import Caller, get_caller, instructor_id_of, require_instructor
 from app.deps import get_ctx, need_class
 from app.models import (
+    Baseline,
+    BaselineDecisionRequest,
+    CommitmentHoursInput,
     Commitments,
     Digest,
     Note,
     NoteRequest,
+    PendingBaseline,
     RiskRecord,
     RiskSettings,
     RiskSettingsPatch,
     Standing,
+    StudentWeeklyUpdate,
+    WeeklyUpdate,
 )
 from app.risk import LEVELS as LEVEL_ORDER
 from app.risk import diff_state, evaluate_signals
 from app.scoring import commitment_factor, resolve_hours, weighted_hours
-from app.service import evaluation_week_number, hours_at, risk_weekly
+from app.service import (
+    calendar_week_number,
+    editable_week_numbers,
+    evaluation_week_number,
+    hours_at,
+    risk_weekly,
+)
 
 router = APIRouter()
 HELP_TEXT = "Office hours are Tuesdays 2–4pm, and the advising team can be reached at advising@example.edu."  # noqa: RUF001
+
+
+def _commitments_payload(ctx, snap, student_id: str) -> dict:
+    comm = ctx.store.get_commitments(snap.class_id, student_id)
+    active_baseline, updates = comm["activeBaseline"], comm["weeklyUpdates"]
+    settings = snap.settings
+    type_weights = settings.get("typeWeights", {})
+    rate, cap = settings.get("rate", 0.01), settings.get("cap", 1.25)
+    by_week = []
+    for w in snap.weeks:
+        resolved = resolve_hours(baseline=active_baseline, weekly_updates=updates, week_number=w.week_number)
+        h = weighted_hours(resolved["hours"], type_weights)
+        by_week.append({"week_number": w.week_number, "hours": resolved["hours"],
+                        "source": resolved["source"], "weighted_hours": h,
+                        "factor": commitment_factor(h, rate, cap)})
+    return {"studentId": student_id, "baseline": comm["baseline"], "activeBaseline": active_baseline,
+            "weeklyUpdates": updates, "byWeek": by_week,
+            "editableWeeks": editable_week_numbers(snap.weeks, ctx.clock())}
 
 
 @router.get("/me/commitments", response_model=Commitments, tags=["commitments"],
@@ -34,19 +64,113 @@ def get_commitments(classId: str = Query(alias="classId"), studentId: str = Quer
     if caller.role == "student" and caller.studentId != studentId:
         raise HTTPException(status_code=403, detail="A student may only read their own commitments.")
     snap = need_class(ctx, classId)
-    comm = ctx.store.get_commitments(classId, studentId)
-    baseline, updates = comm["baseline"], comm["weeklyUpdates"]
-    settings = snap.settings
-    type_weights = settings.get("typeWeights", {})
-    rate, cap = settings.get("rate", 0.01), settings.get("cap", 1.25)
-    by_week = []
-    for w in snap.weeks:
-        resolved = resolve_hours(baseline=baseline, weekly_updates=updates, week_number=w.week_number)
-        h = weighted_hours(resolved["hours"], type_weights)
-        by_week.append({"week_number": w.week_number, "hours": resolved["hours"],
-                        "source": resolved["source"], "weighted_hours": h,
-                        "factor": commitment_factor(h, rate, cap)})
-    return {"studentId": studentId, "baseline": baseline, "weeklyUpdates": updates, "byWeek": by_week}
+    return _commitments_payload(ctx, snap, studentId)
+
+
+@router.put("/me/commitments/baseline", response_model=Commitments, tags=["commitments"],
+            responses={400: {}, 401: {}, 403: {}, 404: {}})
+def save_baseline(classId: str = Query(alias="classId"), studentId: str = Query(alias="studentId"),
+                  body: CommitmentHoursInput = Body(...),
+                  caller: Caller = Depends(get_caller), ctx=Depends(get_ctx)):
+    if caller.role != "student" or caller.studentId != studentId:
+        raise HTTPException(status_code=403, detail="Only the student may submit their own baseline.")
+    need_class(ctx, classId)
+    ctx.store.save_baseline(class_id=classId, student_id=studentId, hours=body.model_dump(),
+                            submitted_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
+    ctx.service._cache.pop(classId, None)
+    snap = need_class(ctx, classId)
+    return _commitments_payload(ctx, snap, studentId)
+
+
+@router.put("/me/commitments/weeks/{weekNumber}", response_model=Commitments, tags=["commitments"],
+            responses={400: {}, 401: {}, 403: {}, 404: {}})
+def save_weekly_update(weekNumber: int, classId: str = Query(alias="classId"), studentId: str = Query(alias="studentId"),
+                       body: CommitmentHoursInput = Body(...),
+                       caller: Caller = Depends(get_caller), ctx=Depends(get_ctx)):
+    if caller.role != "student" or caller.studentId != studentId:
+        raise HTTPException(status_code=403, detail="Only the student may edit their own hours.")
+    snap = need_class(ctx, classId)
+    week = next((w for w in snap.weeks if w.week_number == weekNumber), None)
+    if week is None:
+        raise HTTPException(status_code=404, detail="No such week.")
+    editable = editable_week_numbers(snap.weeks, ctx.clock())
+    if weekNumber not in editable:
+        raise HTTPException(status_code=400,
+                            detail=f"Only week {' or '.join(str(n) for n in editable)} can be edited right now.")
+    ctx.store.save_weekly_update(class_id=classId, student_id=studentId, week_id=week.id, week_number=weekNumber,
+                                 hours=body.model_dump(), entered_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
+    ctx.service._cache.pop(classId, None)
+    snap = need_class(ctx, classId)
+    return _commitments_payload(ctx, snap, studentId)
+
+
+@router.get("/classes/{classId}/commitments/pending", response_model=list[PendingBaseline], tags=["commitments"],
+            responses={401: {}, 403: {}})
+def list_pending_baselines(classId: str, caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
+    snap = need_class(ctx, classId)
+    students_by_id = {s.id: s for s in snap.students}
+    rows = ctx.store.list_pending_baselines(classId)
+    return [
+        {"baseline": b, "student_id": b["student_id"],
+         "display_name": students_by_id[b["student_id"]].display_name
+         if b["student_id"] in students_by_id else b["student_id"]}
+        for b in rows
+    ]
+
+
+@router.get("/classes/{classId}/commitments/weekly-updates", response_model=list[StudentWeeklyUpdate],
+            tags=["commitments"], responses={401: {}, 403: {}})
+def list_weekly_updates(classId: str, caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
+    snap = need_class(ctx, classId)
+    students_by_id = {s.id: s for s in snap.students}
+    rows = ctx.store.list_weekly_updates(classId)
+    return [
+        {"update": u, "student_id": u["student_id"],
+         "display_name": students_by_id[u["student_id"]].display_name
+         if u["student_id"] in students_by_id else u["student_id"]}
+        for u in reversed(rows)
+    ]
+
+
+@router.post("/classes/{classId}/commitments/baselines/{baselineId}/decide", response_model=Baseline,
+             tags=["commitments"], responses={400: {}, 401: {}, 403: {}, 404: {}, 409: {}})
+def decide_baseline(classId: str, baselineId: str, body: BaselineDecisionRequest,
+                    caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
+    snap = need_class(ctx, classId)
+    effective = body.effectiveFromWeek
+    if body.decision == "approved":
+        if effective is None:
+            effective = calendar_week_number(snap.weeks, ctx.clock())
+        max_week = snap.weeks[-1].week_number if snap.weeks else None
+        if effective is None or effective < 1 or (max_week is not None and effective > max_week):
+            raise HTTPException(status_code=400, detail="effectiveFromWeek must be a valid week number.")
+    try:
+        result = ctx.store.decide_baseline(class_id=classId, baseline_id=baselineId, status=body.decision,
+                                           effective_from_week=effective, decided_by=instructor_id_of(caller),
+                                           decided_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such pending baseline.")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    ctx.service._cache.pop(classId, None)
+    return result
+
+
+@router.post("/classes/{classId}/commitments/weekly-updates/{updateId}/reverse", response_model=WeeklyUpdate,
+             tags=["commitments"], responses={401: {}, 403: {}, 404: {}, 409: {}})
+def reverse_weekly_update(classId: str, updateId: str,
+                          caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
+    need_class(ctx, classId)
+    try:
+        result = ctx.store.reverse_weekly_update(class_id=classId, update_id=updateId,
+                                                  reversed_by=instructor_id_of(caller),
+                                                  reversed_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such weekly update.")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    ctx.service._cache.pop(classId, None)
+    return result
 
 
 @router.get("/instructor/digest", response_model=Digest, tags=["risk"],

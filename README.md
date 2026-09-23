@@ -77,7 +77,13 @@ All endpoints take a Bearer token (see [Auth](#auth)). The full contract is in [
 | `GET /classes/{id}/ranking?week=&criteria=&window=` | signed in (students: own class; rows scoped) | Ranked adjusted scores for a week, cumulative or rolling window |
 | `GET /classes/{id}/students/{sid}/explanation` | instructor, or the student themselves | The full breakdown, including hours, factor and cap |
 | `GET /classes/{id}/explainer` | signed in | The formula and current parameters, with no personal data |
-| `GET /me/commitments?classId=&studentId=` | instructor, or the student themselves | Baseline, weekly updates, and hours, factor and source by week |
+| `GET /me/commitments?classId=&studentId=` | instructor, or the student themselves | Active + pending baseline, weekly updates, hours/factor/source by week, and which weeks are editable |
+| `PUT /me/commitments/baseline?classId=&studentId=` | the student themselves | Submit/change the semester baseline (0-80h per type, half-hour steps, ≤120 total); pending until an instructor decides |
+| `PUT /me/commitments/weeks/{weekNumber}?classId=&studentId=` | the student themselves | Replace one week's hours; only the current or previous calendar week is editable |
+| `GET /classes/{id}/commitments/pending` | instructor | Queue of pending baselines awaiting a decision |
+| `POST /classes/{id}/commitments/baselines/{baselineId}/decide` | instructor | Approve (picking the effective week) or reject a pending baseline |
+| `GET /classes/{id}/commitments/weekly-updates` | instructor | Every weekly update for the class, most recent first |
+| `POST /classes/{id}/commitments/weekly-updates/{updateId}/reverse` | instructor | Reverse a weekly update |
 | `GET /instructor/digest?week=` | instructor | New/still/cleared flags across every class, for a chosen week (default: each class's latest complete week) compared against the week before it |
 | `GET /classes/{id}/students/{sid}/risk` | instructor (with notes), or the student themselves (notes hidden) | Level, five signals with evidence, metrics, thresholds, history |
 | `POST /classes/{id}/students/{sid}/notes` | instructor | Log private outreach (body trimmed, empty rejected) |
@@ -127,7 +133,7 @@ This is an early version, built on demo data.
 - [x] Commitments-based adjustment with a capped factor, the 100 ceiling and raw-score tie-breaks
 - [x] Risk digest, risk records with evidence and history, instructor notes, student standing
 - [x] Roles and privacy scoping enforced on the server
-- [ ] Student self-service for commitments (baseline submission, weekly updates)
+- [x] Student self-service for commitments (baseline submission, weekly updates) with instructor approval, effective-week choice and reversal
 - [ ] Animated reveal, replay, streaks and badges
 - [ ] Google Sheets adapter, data check against a real sheet, and a Postgres `AppStore` in production
 - [ ] University sign-in (JWT issuance), privacy review, retention and backups before real students use it

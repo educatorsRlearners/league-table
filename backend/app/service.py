@@ -5,10 +5,11 @@ from __future__ import annotations
 import math
 import threading
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 
 from app.datasource import DataSource, Snapshot, SourceUnavailable
 from app.errors import ClassNotFound, RefreshTooSoon
-from app.models import Issue
+from app.models import Issue, Week
 from app.risk import evaluate_signals
 from app.scoring import (
     adjust,
@@ -76,6 +77,38 @@ def evaluation_week_number(snapshot: Snapshot) -> int:
     return week.week_number if week else snapshot.weeks[0].week_number
 
 
+def active_baseline(baselines: list[dict], student_id: str) -> dict | None:
+    """The latest approved baseline for a student: what actually counts
+    towards their score right now. A newer pending/rejected submission
+    never displaces it until an instructor approves it."""
+    approved = [b for b in baselines if b["student_id"] == student_id and b["status"] == "approved"]
+    return approved[-1] if approved else None
+
+
+def calendar_week_number(weeks: list[Week], now: float) -> int | None:
+    """Which week today falls in, by calendar date. Clamped to the term's
+    first/last week when today is outside it (e.g. seeded demo terms)."""
+    if not weeks:
+        return None
+    today = datetime.fromtimestamp(now, tz=UTC).date()
+    for w in weeks:
+        if date.fromisoformat(w.start_date) <= today <= date.fromisoformat(w.end_date):
+            return w.week_number
+    first, last = weeks[0], weeks[-1]
+    if today < date.fromisoformat(first.start_date):
+        return first.week_number
+    return last.week_number
+
+
+def editable_week_numbers(weeks: list[Week], now: float) -> list[int]:
+    """The current and previous calendar week: the only weeks a student may edit."""
+    current = calendar_week_number(weeks, now)
+    if current is None:
+        return []
+    numbers = {w.week_number for w in weeks}
+    return sorted(n for n in (current - 1, current) if n in numbers)
+
+
 def resolved_weights(snapshot: Snapshot, keys: list[str], override: dict | None) -> dict:
     defaults = {c.key: c.default_weight for c in snapshot.criteria}
     base = override if override is not None else (snapshot.settings.get("weights") or defaults)
@@ -87,7 +120,7 @@ def _criteria_by_key(snapshot: Snapshot) -> dict:
 
 
 def student_weeks(snapshot: Snapshot, student, wks, criteria, criteria_keys: list[str], weights: dict):
-    baseline = next((b for b in snapshot.baselines if b["student_id"] == student.id and b["status"] != "superseded"), None)
+    baseline = active_baseline(snapshot.baselines, student.id)
     updates = [u for u in snapshot.weekly_updates if u["student_id"] == student.id]
     type_weights = snapshot.settings.get("typeWeights", {"work": 1, "childcare": 1, "eldercare": 1})
     rate = snapshot.settings.get("rate", 0.01)
@@ -178,7 +211,7 @@ def risk_weekly(snapshot: Snapshot, student, up_to_week: int) -> list[dict]:
 
 
 def hours_at(snapshot: Snapshot, student, week_number: int) -> float:
-    baseline = next((b for b in snapshot.baselines if b["student_id"] == student.id and b["status"] != "superseded"), None)
+    baseline = active_baseline(snapshot.baselines, student.id)
     updates = [u for u in snapshot.weekly_updates if u["student_id"] == student.id]
     resolved = resolve_hours(baseline=baseline, weekly_updates=updates, week_number=week_number)
     return weighted_hours(resolved["hours"], snapshot.settings.get("typeWeights", {}))

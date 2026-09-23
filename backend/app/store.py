@@ -56,6 +56,13 @@ class AppStore(Protocol):
     def list_baselines(self, class_id: str) -> list[dict]: ...
     def list_weekly_updates(self, class_id: str) -> list[dict]: ...
     def get_commitments(self, class_id: str, student_id: str) -> dict: ...
+    def save_baseline(self, *, class_id: str, student_id: str, hours: dict, submitted_at: str) -> dict: ...
+    def save_weekly_update(self, *, class_id: str, student_id: str, week_id: str, week_number: int,
+                           hours: dict, entered_at: str) -> dict: ...
+    def list_pending_baselines(self, class_id: str) -> list[dict]: ...
+    def decide_baseline(self, *, class_id: str, baseline_id: str, status: str, effective_from_week: int | None,
+                        decided_by: str, decided_at: str) -> dict: ...
+    def reverse_weekly_update(self, *, class_id: str, update_id: str, reversed_by: str, reversed_at: str) -> dict: ...
     def get_risk_settings(self, class_id: str) -> dict: ...
     def save_risk_settings(self, class_id: str, patch: dict) -> dict: ...
     def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict: ...
@@ -75,6 +82,17 @@ _NOTE_FIELDS = ("id", "instructor_id", "class_id", "student_id", "body", "create
 
 def _row_to_dict(row, fields: tuple[str, ...]) -> dict:
     return {f: getattr(row, f) for f in fields}
+
+
+def _next_id(existing_ids: list[str], prefix: str) -> str:
+    seq = 0
+    for existing in existing_ids:
+        if existing.startswith(prefix):
+            try:
+                seq = max(seq, int(existing[len(prefix):]))
+            except ValueError:
+                pass
+    return f"{prefix}{seq + 1}"
 
 
 class SqlAlchemyStore:
@@ -189,13 +207,107 @@ class SqlAlchemyStore:
                        BaselineRow.status != "superseded")
                 .order_by(BaselineRow.pk)
             ).all()
+            approved = [b for b in baselines if b.status == "approved"]
             baseline = _row_to_dict(baselines[-1], _BASELINE_FIELDS) if baselines else None
+            active_baseline = _row_to_dict(approved[-1], _BASELINE_FIELDS) if approved else None
             updates = session.scalars(
                 select(WeeklyUpdateRow)
                 .where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id)
                 .order_by(WeeklyUpdateRow.pk)
             ).all()
-            return {"baseline": baseline, "weeklyUpdates": [_row_to_dict(u, _UPDATE_FIELDS) for u in updates]}
+            return {"baseline": baseline, "activeBaseline": active_baseline,
+                    "weeklyUpdates": [_row_to_dict(u, _UPDATE_FIELDS) for u in updates]}
+
+    def save_baseline(self, *, class_id: str, student_id: str, hours: dict, submitted_at: str) -> dict:
+        with self._lock, self._session() as session:
+            existing_ids = session.scalars(
+                select(BaselineRow.id).where(BaselineRow.class_id == class_id)
+            ).all()
+            row = BaselineRow(
+                id=_next_id(list(existing_ids), f"{class_id}-b"), class_id=class_id, student_id=student_id,
+                work_hours=hours.get("work", 0) or 0, childcare_hours=hours.get("childcare", 0) or 0,
+                eldercare_hours=hours.get("eldercare", 0) or 0, status="pending", effective_from_week=None,
+                submitted_at=submitted_at, decided_by=None, decided_at=None,
+            )
+            session.add(row)
+            session.commit()
+            return _row_to_dict(row, _BASELINE_FIELDS)
+
+    def save_weekly_update(self, *, class_id: str, student_id: str, week_id: str, week_number: int,
+                           hours: dict, entered_at: str) -> dict:
+        with self._lock, self._session() as session:
+            row = session.scalar(
+                select(WeeklyUpdateRow).where(
+                    WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
+                    WeeklyUpdateRow.week_number == week_number, WeeklyUpdateRow.reversed_at.is_(None),
+                )
+            )
+            if row is None:
+                existing_ids = session.scalars(
+                    select(WeeklyUpdateRow.id).where(WeeklyUpdateRow.class_id == class_id)
+                ).all()
+                row = WeeklyUpdateRow(id=_next_id(list(existing_ids), f"{class_id}-u"), class_id=class_id,
+                                      student_id=student_id, week_id=week_id, week_number=week_number,
+                                      reversed_by=None, reversed_at=None)
+                session.add(row)
+            row.work_hours = hours.get("work", 0) or 0
+            row.childcare_hours = hours.get("childcare", 0) or 0
+            row.eldercare_hours = hours.get("eldercare", 0) or 0
+            row.entered_at = entered_at
+            session.commit()
+            session.refresh(row)
+            return _row_to_dict(row, _UPDATE_FIELDS)
+
+    def list_pending_baselines(self, class_id: str) -> list[dict]:
+        with self._lock, self._session() as session:
+            rows = session.scalars(
+                select(BaselineRow)
+                .where(BaselineRow.class_id == class_id, BaselineRow.status == "pending")
+                .order_by(BaselineRow.pk)
+            ).all()
+            return [_row_to_dict(r, _BASELINE_FIELDS) for r in rows]
+
+    def decide_baseline(self, *, class_id: str, baseline_id: str, status: str, effective_from_week: int | None,
+                        decided_by: str, decided_at: str) -> dict:
+        with self._lock, self._session() as session:
+            row = session.scalar(
+                select(BaselineRow).where(BaselineRow.class_id == class_id, BaselineRow.id == baseline_id)
+            )
+            if row is None:
+                raise KeyError(baseline_id)
+            if row.status != "pending":
+                raise ValueError(f"Baseline '{baseline_id}' has already been decided.")
+            if status == "approved":
+                previously_approved = session.scalars(
+                    select(BaselineRow).where(
+                        BaselineRow.class_id == class_id, BaselineRow.student_id == row.student_id,
+                        BaselineRow.status == "approved",
+                    )
+                ).all()
+                for prior in previously_approved:
+                    prior.status = "superseded"
+                row.effective_from_week = effective_from_week
+            row.status = status
+            row.decided_by = decided_by
+            row.decided_at = decided_at
+            session.commit()
+            session.refresh(row)
+            return _row_to_dict(row, _BASELINE_FIELDS)
+
+    def reverse_weekly_update(self, *, class_id: str, update_id: str, reversed_by: str, reversed_at: str) -> dict:
+        with self._lock, self._session() as session:
+            row = session.scalar(
+                select(WeeklyUpdateRow).where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.id == update_id)
+            )
+            if row is None:
+                raise KeyError(update_id)
+            if row.reversed_at:
+                raise ValueError(f"Weekly update '{update_id}' has already been reversed.")
+            row.reversed_by = reversed_by
+            row.reversed_at = reversed_at
+            session.commit()
+            session.refresh(row)
+            return _row_to_dict(row, _UPDATE_FIELDS)
 
     # risk
 
@@ -227,15 +339,9 @@ class SqlAlchemyStore:
     def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict:
         with self._lock, self._session() as session:
             existing_ids = session.scalars(select(NoteRow.id)).all()
-            seq = 0
-            for note_id in existing_ids:
-                try:
-                    seq = max(seq, int(str(note_id)[1:]))
-                except ValueError:
-                    pass
             row = NoteRow(
-                id=f"n{seq + 1}", instructor_id=instructor_id, class_id=class_id, student_id=student_id,
-                body=body, created_at=at or datetime.now(UTC).isoformat(),
+                id=_next_id(list(existing_ids), "n"), instructor_id=instructor_id, class_id=class_id,
+                student_id=student_id, body=body, created_at=at or datetime.now(UTC).isoformat(),
             )
             session.add(row)
             session.commit()

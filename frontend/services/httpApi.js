@@ -112,6 +112,35 @@ export function createHttpApi({ baseUrl = '', fetch: fetchImpl } = {}) {
     getCommitments: ({ classId = 'c1', studentId, caller = { role: 'instructor' } }) =>
       send('GET', '/me/commitments', { query: { classId, studentId }, caller }),
 
+    /** PUT /me/commitments/baseline */
+    saveBaseline: ({ classId = 'c1', studentId, hours, caller = { role: 'student', studentId } }) =>
+      send('PUT', '/me/commitments/baseline', { query: { classId, studentId }, body: hours, caller }),
+
+    /** PUT /me/commitments/weeks/{weekNumber} */
+    saveWeeklyUpdate: ({ classId = 'c1', studentId, weekNumber, hours, caller = { role: 'student', studentId } }) =>
+      send('PUT', `/me/commitments/weeks/${weekNumber}`, { query: { classId, studentId }, body: hours, caller }),
+
+    /** GET /classes/{id}/commitments/pending */
+    getPendingBaselines: (classId = 'c1') =>
+      send('GET', `/classes/${classId}/commitments/pending`, { caller: { role: 'instructor' } }),
+
+    /** POST /classes/{id}/commitments/baselines/{baselineId}/decide */
+    decideBaseline: ({ classId = 'c1', baselineId, decision, effectiveFromWeek }) =>
+      send('POST', `/classes/${classId}/commitments/baselines/${encodeURIComponent(baselineId)}/decide`, {
+        body: { decision, effectiveFromWeek },
+        caller: { role: 'instructor' },
+      }),
+
+    /** GET /classes/{id}/commitments/weekly-updates */
+    getWeeklyUpdates: (classId = 'c1') =>
+      send('GET', `/classes/${classId}/commitments/weekly-updates`, { caller: { role: 'instructor' } }),
+
+    /** POST /classes/{id}/commitments/weekly-updates/{updateId}/reverse */
+    reverseWeeklyUpdate: ({ classId = 'c1', updateId }) =>
+      send('POST', `/classes/${classId}/commitments/weekly-updates/${encodeURIComponent(updateId)}/reverse`, {
+        caller: { role: 'instructor' },
+      }),
+
     /** GET /instructor/digest */
     getDigest: ({ week, caller = { role: 'instructor' } } = {}) =>
       send('GET', '/instructor/digest', { query: { week }, caller }),

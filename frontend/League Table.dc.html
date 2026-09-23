@@ -386,6 +386,124 @@
         </div>
       </div>
     </sc-if>
+
+    <sc-if value="{{ commitmentsView }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 700px; margin: 0 auto; display: grid; gap: var(--space-6);">
+        <div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">{{ commitmentsView.kicker }}</div>
+          <h2 style="margin: var(--space-1) 0 0;">My commitments</h2>
+          <p style="font-size: 13px; opacity: 0.75; text-align: justify; max-width: 62ch;">{{ commitmentsView.intro }}</p>
+        </div>
+
+        <sc-if value="{{ commitmentsView.error }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px solid var(--color-divider); border-left: 3px solid var(--color-accent-700); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px;">{{ commitmentsView.error }}</div>
+        </sc-if>
+
+        <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-4);">
+          <h3 style="margin: 0 0 var(--space-1); font-size: 17px;">Semester baseline</h3>
+          <p style="font-size: 13px; opacity: 0.8; margin-bottom: var(--space-3);">{{ commitmentsView.statusText }}</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3);">
+            <sc-for list="{{ commitmentsView.baselineFields }}" as="field" hint-placeholder-count="3">
+              <div class="field">
+                <label for="baseline-{{ field.key }}">{{ field.label }} hours / week</label>
+                <input id="baseline-{{ field.key }}" class="input" type="number" min="0" max="80" step="0.5" value="{{ field.value }}" onChange="{{ field.onChange }}" style="width: 100%;">
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: var(--space-3);">
+            <button class="btn btn-primary" onClick="{{ commitmentsView.onSaveBaseline }}" style="min-height: 44px;">Save semester baseline</button>
+          </div>
+        </div>
+
+        <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-4);">
+          <h3 style="margin: 0 0 var(--space-1); font-size: 17px;">This week's hours</h3>
+          <p style="font-size: 13px; opacity: 0.8; margin-bottom: var(--space-3);">{{ commitmentsView.editableWeeksText }}</p>
+          <sc-if value="{{ commitmentsView.weekEditable }}" hint-placeholder-val="{{ false }}">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3);">
+              <sc-for list="{{ commitmentsView.weekFields }}" as="field" hint-placeholder-count="3">
+                <div class="field">
+                  <label for="week-{{ field.key }}">{{ field.label }} hours, {{ commitmentsView.weekLabel }}</label>
+                  <input id="week-{{ field.key }}" class="input" type="number" min="0" max="80" step="0.5" value="{{ field.value }}" onChange="{{ field.onChange }}" style="width: 100%;">
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: var(--space-3);">
+              <button class="btn btn-primary" onClick="{{ commitmentsView.onSaveWeek }}" style="min-height: 44px;">Save {{ commitmentsView.weekLabel }}</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom: var(--space-2); font-size: 17px;">Weekly changes so far</h3>
+          <div style="display: grid; gap: var(--space-2);">
+            <sc-for list="{{ commitmentsView.history }}" as="h" hint-placeholder-count="2">
+              <div style="display: flex; justify-content: space-between; gap: var(--space-3); border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-2); font-size: 13px;">
+                <span>{{ h.label }} — {{ h.hoursText }}</span>
+                <span style="opacity: 0.7;">{{ h.statusText }}</span>
+              </div>
+            </sc-for>
+            <div style="font-size: 13px; opacity: 0.7;">{{ commitmentsView.historyEmpty }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ approvals }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 900px; margin: 0 auto; display: grid; gap: var(--space-6);">
+        <div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Instructor only · never projected</div>
+          <h2 style="margin: var(--space-1) 0 0;">Approvals</h2>
+          <p style="font-size: 13px; opacity: 0.8; max-width: 66ch; text-align: justify;">{{ approvals.note }}</p>
+        </div>
+
+        <sc-if value="{{ approvals.error }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px solid var(--color-divider); border-left: 3px solid var(--color-accent-700); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px;">{{ approvals.error }}</div>
+        </sc-if>
+
+        <div>
+          <h3 style="margin-bottom: var(--space-2); font-size: 17px;">Pending baselines</h3>
+          <div style="display: grid; gap: var(--space-3);">
+            <sc-for list="{{ approvals.pending }}" as="p" hint-placeholder-count="2">
+              <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-3); display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+                <div style="margin-right: auto;">
+                  <div style="font-family: var(--font-heading); font-size: 18px;">{{ p.name }}</div>
+                  <div style="font-size: 13px; opacity: 0.75;">{{ p.hoursText }} · submitted {{ p.submittedText }}</div>
+                </div>
+                <div class="field" style="margin: 0;">
+                  <label for="week-{{ p.id }}" style="font-size: 11px;">Effective from week</label>
+                  <input id="week-{{ p.id }}" class="input" type="number" min="1" max="16" step="1" placeholder="current" value="{{ p.effectiveWeek }}" onChange="{{ p.onWeekChange }}" style="width: 90px;">
+                </div>
+                <button class="btn btn-primary" onClick="{{ p.onApprove }}" style="min-height: 44px;">Approve</button>
+                <button class="btn btn-ghost" onClick="{{ p.onReject }}" style="min-height: 44px;">Reject</button>
+              </div>
+            </sc-for>
+            <div style="font-size: 13px; opacity: 0.7;">{{ approvals.pendingEmpty }}</div>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom: var(--space-1); font-size: 17px;">Weekly changes</h3>
+          <p style="font-size: 13px; opacity: 0.8; margin-bottom: var(--space-2);">{{ approvals.updatesNote }}</p>
+          <div style="display: grid; gap: var(--space-2);">
+            <sc-for list="{{ approvals.updates }}" as="u" hint-placeholder-count="2">
+              <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-3); display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+                <div style="margin-right: auto;">
+                  <div style="font-family: var(--font-heading); font-size: 16px;">{{ u.name }} · {{ u.label }}</div>
+                  <div style="font-size: 13px; opacity: 0.75;">{{ u.hoursText }} · {{ u.statusText }}</div>
+                </div>
+                <sc-if value="{{ u.reversed }}" hint-placeholder-val="{{ false }}">
+                  <span class="tag tag-outline">Reversed</span>
+                </sc-if>
+                <sc-if value="{{ u.notReversed }}" hint-placeholder-val="{{ true }}">
+                  <button class="btn btn-ghost" onClick="{{ u.onReverse }}" style="min-height: 44px;">Reverse</button>
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="font-size: 13px; opacity: 0.7;">{{ approvals.updatesEmpty }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
   </main>
 
   <sc-if value="{{ drawer }}" hint-placeholder-val="{{ false }}">
@@ -708,6 +826,15 @@ class Component extends DCLogic {
     standing: null,
     record: null,
     noteDraft: '',
+    commitments: null,
+    commitDraft: { work: 0, childcare: 0, eldercare: 0 },
+    weekDraft: { work: 0, childcare: 0, eldercare: 0 },
+    weekDraftNumber: null,
+    commitError: null,
+    pendingBaselines: null,
+    weeklyUpdates: null,
+    decideWeekDraft: {},
+    approvalsError: null,
     thresholdsOpen: false,
     draftThresholds: null,
     draftWeights: {},
@@ -771,6 +898,8 @@ class Component extends DCLogic {
     if (tab === 'league') return this.loadRanking();
     if (tab === 'me') return this.loadMe();
     if (tab === 'standing') return this.loadStanding();
+    if (tab === 'commitments') return this.loadCommitmentsTab();
+    if (tab === 'approvals') return this.loadApprovals();
     return this.loadDigest();
   };
 
@@ -783,7 +912,7 @@ class Component extends DCLogic {
         studentId,
         caller: { role: 'student', studentId, classId: s.classId },
       });
-      this.setState({ loading: false, errorMsg: null, rows: [], me: null, digest: null, standing });
+      this.setState({ loading: false, errorMsg: null, rows: [], me: null, digest: null, standing, commitments: null, pendingBaselines: null });
     } catch (err) {
       this.handleApiError(err);
     }
@@ -840,6 +969,7 @@ class Component extends DCLogic {
       this.setState({
         loading: false, errorMsg: null, rows: res.rows, weekCount: res.weekCount,
         lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues, me: null, digest: null, standing: null,
+        commitments: null, pendingBaselines: null,
       });
     } catch (err) {
       this.handleApiError(err);
@@ -856,7 +986,7 @@ class Component extends DCLogic {
         this.api.getExplanation({ ...this.query(), studentId, caller }),
         this.api.getCommitments({ classId: s.classId, studentId, caller }),
       ]);
-      this.setState({ loading: false, errorMsg: null, rows: [], digest: null, standing: null, me: { ex, commitments } });
+      this.setState({ loading: false, errorMsg: null, rows: [], digest: null, standing: null, me: { ex, commitments }, commitments: null, pendingBaselines: null });
     } catch (err) {
       this.handleApiError(err, { me: null });
     }
@@ -868,9 +998,106 @@ class Component extends DCLogic {
     try {
       const week = s.boot.weeks[s.weekIdx].week_number;
       const digest = await this.api.getDigest({ week });
-      this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest });
+      this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest, commitments: null, pendingBaselines: null });
     } catch (err) {
       this.handleApiError(err);
+    }
+  };
+
+  loadCommitmentsTab = async () => {
+    const s = this.state;
+    if (!s.boot) return;
+    const studentId = this.selfId(s.classId);
+    const caller = { role: 'student', studentId, classId: s.classId };
+    try {
+      const commitments = await this.api.getCommitments({ classId: s.classId, studentId, caller });
+      const base = commitments.baseline || commitments.activeBaseline;
+      const editable = commitments.editableWeeks || [];
+      const weekNumber = editable.length ? editable[editable.length - 1] : null;
+      const existingWeek = weekNumber != null
+        ? commitments.weeklyUpdates.find((u) => u.week_number === weekNumber && !u.reversed_at)
+        : null;
+      this.setState({
+        loading: false, errorMsg: null, rows: [], me: null, digest: null, standing: null, pendingBaselines: null,
+        commitments,
+        commitDraft: base
+          ? { work: base.work_hours, childcare: base.childcare_hours, eldercare: base.eldercare_hours }
+          : { work: 0, childcare: 0, eldercare: 0 },
+        weekDraftNumber: weekNumber,
+        weekDraft: existingWeek
+          ? { work: existingWeek.work_hours, childcare: existingWeek.childcare_hours, eldercare: existingWeek.eldercare_hours }
+          : { work: 0, childcare: 0, eldercare: 0 },
+        commitError: null,
+      });
+    } catch (err) {
+      this.handleApiError(err, { commitments: null });
+    }
+  };
+
+  saveBaselineDraft = async () => {
+    const s = this.state;
+    const studentId = this.selfId(s.classId);
+    try {
+      await this.api.saveBaseline({ classId: s.classId, studentId, hours: s.commitDraft });
+      this.setState({ commitError: null });
+      await this.loadCommitmentsTab();
+    } catch (err) {
+      this.setState({ commitError: err.message || String(err) });
+    }
+  };
+
+  saveWeekDraft = async () => {
+    const s = this.state;
+    if (s.weekDraftNumber == null) return;
+    const studentId = this.selfId(s.classId);
+    try {
+      await this.api.saveWeeklyUpdate({
+        classId: s.classId, studentId, weekNumber: s.weekDraftNumber, hours: s.weekDraft,
+      });
+      this.setState({ commitError: null });
+      await this.loadCommitmentsTab();
+    } catch (err) {
+      this.setState({ commitError: err.message || String(err) });
+    }
+  };
+
+  loadApprovals = async () => {
+    const s = this.state;
+    if (!s.boot) return;
+    try {
+      const [pendingBaselines, weeklyUpdates] = await Promise.all([
+        this.api.getPendingBaselines(s.classId),
+        this.api.getWeeklyUpdates(s.classId),
+      ]);
+      this.setState({
+        loading: false, errorMsg: null, rows: [], me: null, digest: null, standing: null, commitments: null,
+        pendingBaselines, weeklyUpdates, approvalsError: null,
+      });
+    } catch (err) {
+      this.handleApiError(err, { pendingBaselines: null, weeklyUpdates: null });
+    }
+  };
+
+  decideBaseline = async (baselineId, decision) => {
+    const s = this.state;
+    const raw = s.decideWeekDraft[baselineId];
+    const effectiveFromWeek = decision === 'approved' && raw !== undefined && raw !== '' ? Number(raw) : undefined;
+    try {
+      await this.api.decideBaseline({ classId: s.classId, baselineId, decision, effectiveFromWeek });
+      this.setState({ approvalsError: null });
+      await this.loadApprovals();
+    } catch (err) {
+      this.setState({ approvalsError: err.message || String(err) });
+    }
+  };
+
+  reverseWeeklyUpdate = async (updateId) => {
+    try {
+      await this.api.reverseWeeklyUpdate({ classId: this.state.classId, updateId });
+      this.setState({ approvalsError: null });
+      await this.loadApprovals();
+    } catch (err) {
+      this.setState({ approvalsError: err.message || String(err) });
     }
   };
 
@@ -944,7 +1171,9 @@ class Component extends DCLogic {
       { key: 'league', label: 'League table' },
       { key: 'me', label: 'My breakdown' },
       { key: 'standing', label: 'My standing' },
+      { key: 'commitments', label: 'My commitments' },
       { key: 'risk', label: 'Risk digest' },
+      { key: 'approvals', label: 'Approvals' },
     ].map((t) => ({
       label: t.label,
       active: s.tab === t.key,
@@ -1270,6 +1499,98 @@ class Component extends DCLogic {
     };
   }
 
+  hourFieldRows(draft, onFieldChange) {
+    return [
+      { key: 'work', label: 'Work' },
+      { key: 'childcare', label: 'Child care' },
+      { key: 'eldercare', label: 'Elder care' },
+    ].map((f) => ({
+      key: f.key,
+      label: f.label,
+      value: draft[f.key],
+      onChange: (e) => onFieldChange(f.key, Number(e.target.value)),
+    }));
+  }
+
+  buildCommitmentsSection(m, s) {
+    if (!m) return null;
+    const baseline = m.baseline;
+    const active = m.activeBaseline;
+    const statusText = !baseline
+      ? 'You have not submitted a semester baseline yet. Until you do, your factor stays at ×1.00.'
+      : baseline.status === 'approved'
+        ? `Approved, counting from week ${baseline.effective_from_week}.`
+        : baseline.status === 'pending'
+          ? (active
+              ? `Pending — your instructor hasn't decided yet. Your approved baseline (from week ${active.effective_from_week}) keeps counting until they do.`
+              : 'Pending — it has no effect on your score until your instructor approves it.')
+          : 'Rejected. Submitting a new baseline below will send it to your instructor again.';
+    const editable = m.editableWeeks || [];
+    const history = [...m.weeklyUpdates].reverse().map((u) => ({
+      label: `Week ${u.week_number}`,
+      hoursText: this.hoursPhrase({ work: u.work_hours, childcare: u.childcare_hours, eldercare: u.eldercare_hours }),
+      statusText: u.reversed_at ? 'Reversed by your instructor' : 'In effect',
+    }));
+    return {
+      kicker: 'Only you and your instructor can see this',
+      intro: 'Set your hours for the whole semester, and adjust the current or previous week if they change. Your instructor approves the semester baseline before it counts; a weekly change takes effect right away and can be reversed by your instructor.',
+      statusText,
+      error: s.commitError,
+      baselineFields: this.hourFieldRows(s.commitDraft, (key, value) =>
+        this.setState((prev) => ({ commitDraft: { ...prev.commitDraft, [key]: value } }))),
+      onSaveBaseline: this.saveBaselineDraft,
+      editableWeeksText: editable.length
+        ? `You can edit ${editable.map((n) => `week ${n}`).join(' or ')} right now.`
+        : 'No week is open for editing right now.',
+      weekEditable: s.weekDraftNumber != null,
+      weekLabel: s.weekDraftNumber != null ? `Week ${s.weekDraftNumber}` : '',
+      weekFields: s.weekDraftNumber != null
+        ? this.hourFieldRows(s.weekDraft, (key, value) => this.setState((prev) => ({ weekDraft: { ...prev.weekDraft, [key]: value } })))
+        : [],
+      onSaveWeek: this.saveWeekDraft,
+      history,
+      historyEmpty: history.length ? '' : 'No weekly changes yet.',
+    };
+  }
+
+  buildApprovalsSection(s) {
+    if (!s.pendingBaselines) return null;
+    const pending = s.pendingBaselines.map((p) => ({
+      id: p.baseline.id,
+      name: p.display_name,
+      hoursText: this.hoursPhrase({ work: p.baseline.work_hours, childcare: p.baseline.childcare_hours, eldercare: p.baseline.eldercare_hours }),
+      submittedText: p.baseline.submitted_at ? new Date(p.baseline.submitted_at).toLocaleString() : '',
+      effectiveWeek: s.decideWeekDraft[p.baseline.id] ?? '',
+      onWeekChange: (e) => {
+        const v = e.target.value;
+        this.setState((prev) => ({ decideWeekDraft: { ...prev.decideWeekDraft, [p.baseline.id]: v } }));
+      },
+      onApprove: () => this.decideBaseline(p.baseline.id, 'approved'),
+      onReject: () => this.decideBaseline(p.baseline.id, 'rejected'),
+    }));
+    const updates = (s.weeklyUpdates || []).map((r) => ({
+      id: r.update.id,
+      name: r.display_name,
+      label: `Week ${r.update.week_number}`,
+      hoursText: this.hoursPhrase({ work: r.update.work_hours, childcare: r.update.childcare_hours, eldercare: r.update.eldercare_hours }),
+      reversed: !!r.update.reversed_at,
+      notReversed: !r.update.reversed_at,
+      statusText: r.update.reversed_at
+        ? `Reversed ${new Date(r.update.reversed_at).toLocaleString()}`
+        : `Entered ${new Date(r.update.entered_at).toLocaleString()}`,
+      onReverse: () => this.reverseWeeklyUpdate(r.update.id),
+    }));
+    return {
+      error: s.approvalsError,
+      note: 'Semester baselines your students have submitted, waiting on your decision. Approving picks the week it counts from — leave it blank to use the current week — and supersedes any baseline it replaces; earlier weeks keep their existing factor. Rejecting leaves any previously approved baseline in effect.',
+      pending,
+      pendingEmpty: pending.length ? '' : 'Nothing waiting on you right now.',
+      updatesNote: 'Weekly changes your students have made. Reversing one falls back to the baseline in effect for that week.',
+      updates,
+      updatesEmpty: updates.length ? '' : 'No weekly changes yet.',
+    };
+  }
+
   buildThresholdsSection(s, boot) {
     const dt = s.draftThresholds;
     if (!(s.thresholdsOpen && dt)) return null;
@@ -1344,6 +1665,8 @@ class Component extends DCLogic {
     const digest = this.buildDigestSection(s.digest);
     const record = this.buildRecordSection(s.record);
     const standing = this.buildStandingSection(s.standing);
+    const commitmentsView = this.buildCommitmentsSection(s.commitments, s);
+    const approvals = this.buildApprovalsSection(s);
     const thresholds = this.buildThresholdsSection(s, boot);
     const explainer = this.buildExplainerSection(s.explainer);
 
@@ -1390,10 +1713,14 @@ class Component extends DCLogic {
         ? '← → week · 1–5 single criterion · 0 all criteria · Esc close'
         : s.tab === 'me' ? '← → week · Esc close'
           : s.tab === 'standing' ? 'Your own view — classmates never see this screen'
-            : 'Instructor only — never projected',
+            : s.tab === 'commitments' ? 'Your own view — classmates never see this screen'
+              : s.tab === 'approvals' ? 'Instructor only — never projected'
+                : 'Instructor only — never projected',
       me,
       digest,
       standing,
+      commitmentsView,
+      approvals,
       record,
       thresholds,
       noteDraft: s.noteDraft,
