@@ -63,6 +63,10 @@ def create_app(
             "type": "http", "scheme": "bearer", "bearerFormat": "JWT",
             "description": "JWT identifying the caller. Server derives role, studentId and class membership.",
         }
+        # Public: the login picker has to work before anyone has a token.
+        login_options = schema.get("paths", {}).get("/login/options", {}).get("get")
+        if login_options is not None:
+            login_options["security"] = []
         app.openapi_schema = schema
         return schema
 

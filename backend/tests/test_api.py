@@ -15,6 +15,16 @@ def test_auth_required(anon):
     assert anon.get("/classes/c1/bootstrap").status_code == 401
 
 
+def test_login_options_are_public(anon):
+    r = anon.get("/login/options")
+    assert r.status_code == 200
+    classes = r.json()["classes"]
+    assert {c["id"] for c in classes} == {"c1", "c2"}
+    c1 = next(c for c in classes if c["id"] == "c1")
+    assert c1["instructor_id"] == "i1" and len(c1["students"]) == 24
+    assert {"id": "s01", "display_name": "Amara Okonkwo"} in c1["students"]
+
+
 def test_list_classes(instructor):
     r = instructor.get("/classes")
     assert r.status_code == 200

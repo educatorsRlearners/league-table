@@ -85,6 +85,9 @@ export function createHttpApi({ baseUrl = '', fetch: fetchImpl } = {}) {
       return { kind: 'http', label: 'Live backend', demo: true, store: 'FastAPI' };
     },
 
+    /** GET /login/options — public, no token needed. */
+    getLoginOptions: () => send('GET', '/login/options', {}),
+
     /** GET /classes */
     listClasses: (instructorId = 'i1') =>
       send('GET', '/classes', { query: { instructor_id: instructorId }, caller: { role: 'instructor' } }),

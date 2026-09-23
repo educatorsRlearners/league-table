@@ -40,6 +40,55 @@
 
 <div data-theme="{{ theme }}" style="min-height: 100vh; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding-bottom: 64px;">
 
+  <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ true }}">
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-6);">
+      <div style="width: min(480px, 100%);">
+        <div style="text-align: center; margin-bottom: var(--space-6);">
+          <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Demo sign-in</div>
+          <h1 style="margin: var(--space-1) 0 0; font-family: var(--font-heading);">League Table</h1>
+          <p style="font-size: 13px; opacity: 0.75; margin-top: var(--space-2);">{{ loginIntro }}</p>
+        </div>
+
+        <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px solid var(--color-divider); border-left: 3px solid var(--color-accent-700); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px; margin-bottom: var(--space-4);">{{ loginError }}</div>
+        </sc-if>
+
+        <div style="display: flex; gap: var(--space-2); border-bottom: 1px solid var(--color-divider); margin-bottom: var(--space-4);">
+          <sc-for list="{{ loginRoleTabs }}" as="rt" hint-placeholder-count="3">
+            <button onClick="{{ rt.onClick }}" aria-pressed="{{ rt.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ rt.rule }}; font-family: var(--font-heading); font-size: 16px; color: {{ rt.color }};">{{ rt.label }}</button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ loginIsInstructorLike }}" hint-placeholder-val="{{ false }}">
+          <p style="font-size: 13px; opacity: 0.8; margin-bottom: var(--space-4);">{{ loginRoleNote }}</p>
+          <button class="btn btn-primary" onClick="{{ onLoginContinue }}" style="min-height: 44px; width: 100%;">{{ loginContinueLabel }}</button>
+        </sc-if>
+
+        <sc-if value="{{ loginIsStudent }}" hint-placeholder-val="{{ false }}">
+          <div class="field" style="margin-bottom: var(--space-3);">
+            <label for="login-class">Class</label>
+            <select id="login-class" class="input" value="{{ loginClassId }}" onChange="{{ onLoginClassChange }}" style="width: 100%;">
+              <sc-for list="{{ loginClassOptions }}" as="co" hint-placeholder-count="2">
+                <option value="{{ co.id }}">{{ co.label }}</option>
+              </sc-for>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom: var(--space-4);">
+            <label for="login-student">You are</label>
+            <select id="login-student" class="input" value="{{ loginStudentId }}" onChange="{{ onLoginStudentChange }}" style="width: 100%;">
+              <sc-for list="{{ loginStudentOptions }}" as="so" hint-placeholder-count="6">
+                <option value="{{ so.id }}">{{ so.label }}</option>
+              </sc-for>
+            </select>
+          </div>
+          <button class="btn btn-primary" onClick="{{ onLoginContinue }}" style="min-height: 44px; width: 100%;">{{ loginContinueLabel }}</button>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ false }}">
+
   <header style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6) var(--space-3);">
     <div style="margin-right: auto; display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; min-width: 0;">
       <span style="font-family: var(--font-heading); font-size: clamp(22px, 2vw, 30px); letter-spacing: -0.015em;">{{ klassName }}</span>
@@ -50,8 +99,10 @@
         <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">Demo data</span>
       </sc-if>
       <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
+      <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">{{ identityLabel }}</span>
       <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
       <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" aria-label="Toggle theme" style="min-height: 44px; font-size: 18px;">{{ themeLabel }}</button>
+      <button class="btn btn-ghost" onClick="{{ onLogout }}" style="min-height: 44px;">Log out</button>
     </div>
   </header>
 
@@ -61,12 +112,14 @@
         <button onClick="{{ t.onClick }}" aria-pressed="{{ t.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ t.rule }}; font-family: var(--font-heading); font-size: 17px; color: {{ t.color }};" style-hover="border-bottom-color: var(--color-accent-600);">{{ t.label }}</button>
       </sc-for>
     </nav>
-    <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto; padding-bottom: var(--space-2);">
-      <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Class</span>
-      <sc-for list="{{ classChips }}" as="k" hint-placeholder-count="2">
-        <button onClick="{{ k.onClick }}" aria-pressed="{{ k.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ k.bg }}; border: 1px solid {{ k.border }}; color: {{ k.color }};">{{ k.label }}</button>
-      </sc-for>
-    </div>
+    <sc-if value="{{ showClassSwitcher }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto; padding-bottom: var(--space-2);">
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Class</span>
+        <sc-for list="{{ classChips }}" as="k" hint-placeholder-count="2">
+          <button onClick="{{ k.onClick }}" aria-pressed="{{ k.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ k.bg }}; border: 1px solid {{ k.border }}; color: {{ k.color }};">{{ k.label }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
   </div>
 
   <sc-if value="{{ errorMsg }}" hint-placeholder-val="{{ false }}">
@@ -798,12 +851,22 @@
     <span>{{ shortcutHint }}</span>
     <span style="margin-left: auto;"><a href="Tests.dc.html">Service &amp; scoring tests</a></span>
   </footer>
+
+  </sc-if>
 </div>
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:24,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;week&quot;,&quot;rolling&quot;,&quot;cumulative&quot;],&quot;default&quot;:&quot;rolling&quot;,&quot;tsType&quot;:&quot;'week' | 'rolling' | 'cumulative'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;rollingN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;showRaw&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
 class Component extends DCLogic {
   state = {
+    loggedIn: false,
+    role: null,
+    identity: null,
+    loginOptions: null,
+    loginRole: 'instructor',
+    loginClassId: 'c1',
+    loginStudentId: null,
+    loginError: null,
     loading: true,
     errorMsg: null,
     tab: 'league',
@@ -853,7 +916,15 @@ class Component extends DCLogic {
       // served alongside a fresh page previously caused silent request corruption.
       const { createHttpApi } = await import(new URL(`services/httpApi.js?v=${Date.now()}`, base).href);
       this.api = createHttpApi({});
-      await this.loadClass('c1');
+      const loginOptions = await this.api.getLoginOptions();
+      const firstClass = loginOptions.classes[0];
+      const firstStudent = firstClass ? firstClass.students[0] : null;
+      this.setState({
+        loading: false,
+        loginOptions,
+        loginClassId: firstClass ? firstClass.id : 'c1',
+        loginStudentId: firstStudent ? firstStudent.id : null,
+      });
     } catch (err) {
       this.handleApiError(err);
     }
@@ -863,16 +934,43 @@ class Component extends DCLogic {
     document.removeEventListener('keydown', this.onKey);
   }
 
-  /** The demo student account for a class, used by the "My breakdown" screen. */
-  selfId(classId) {
-    return classId === 'c1' ? 's01' : 't03';
+  findLoginClass(classId) {
+    const opts = this.state.loginOptions;
+    return opts ? opts.classes.find((c) => c.id === classId) || null : null;
   }
 
-  caller() {
-    return this.state.tab === 'me'
-      ? { role: 'student', studentId: this.selfId(this.state.classId), classId: this.state.classId }
-      : { role: 'instructor' };
-  }
+  doLogin = () => {
+    const s = this.state;
+    if (s.loginRole === 'student') {
+      const klass = this.findLoginClass(s.loginClassId);
+      const student = klass ? klass.students.find((st) => st.id === s.loginStudentId) : null;
+      if (!klass || !student) {
+        this.setState({ loginError: 'Pick a class and a student to continue.' });
+        return;
+      }
+      this.setState(
+        {
+          loggedIn: true, role: 'student', loginError: null,
+          identity: { studentId: student.id, classId: klass.id, displayName: student.display_name },
+          tab: 'me',
+        },
+        () => this.loadClass(klass.id),
+      );
+      return;
+    }
+    this.setState(
+      { loggedIn: true, role: s.loginRole, identity: null, loginError: null, tab: 'league' },
+      () => this.loadClass(s.classId || 'c1'),
+    );
+  };
+
+  logout = () => {
+    this.setState({
+      loggedIn: false, role: null, identity: null, loginError: null,
+      boot: null, rows: [], me: null, digest: null, standing: null, commitments: null, pendingBaselines: null,
+      weeklyUpdates: null, record: null, drawer: null,
+    });
+  };
 
   async loadClass(classId) {
     this.setState({ loading: true, classId, drawer: null, me: null, showAll: false });
@@ -905,7 +1003,8 @@ class Component extends DCLogic {
 
   loadStanding = async () => {
     const s = this.state;
-    const studentId = this.selfId(s.classId);
+    if (!s.identity) return;
+    const studentId = s.identity.studentId;
     try {
       const standing = await this.api.getMyStanding({
         classId: s.classId,
@@ -978,8 +1077,8 @@ class Component extends DCLogic {
 
   loadMe = async () => {
     const s = this.state;
-    if (!s.boot) return;
-    const studentId = this.selfId(s.classId);
+    if (!s.boot || !s.identity) return;
+    const studentId = s.identity.studentId;
     const caller = { role: 'student', studentId, classId: s.classId };
     try {
       const [ex, commitments] = await Promise.all([
@@ -1006,8 +1105,8 @@ class Component extends DCLogic {
 
   loadCommitmentsTab = async () => {
     const s = this.state;
-    if (!s.boot) return;
-    const studentId = this.selfId(s.classId);
+    if (!s.boot || !s.identity) return;
+    const studentId = s.identity.studentId;
     const caller = { role: 'student', studentId, classId: s.classId };
     try {
       const commitments = await this.api.getCommitments({ classId: s.classId, studentId, caller });
@@ -1036,7 +1135,8 @@ class Component extends DCLogic {
 
   saveBaselineDraft = async () => {
     const s = this.state;
-    const studentId = this.selfId(s.classId);
+    if (!s.identity) return;
+    const studentId = s.identity.studentId;
     try {
       await this.api.saveBaseline({ classId: s.classId, studentId, hours: s.commitDraft });
       this.setState({ commitError: null });
@@ -1048,8 +1148,8 @@ class Component extends DCLogic {
 
   saveWeekDraft = async () => {
     const s = this.state;
-    if (s.weekDraftNumber == null) return;
-    const studentId = this.selfId(s.classId);
+    if (s.weekDraftNumber == null || !s.identity) return;
+    const studentId = s.identity.studentId;
     try {
       await this.api.saveWeeklyUpdate({
         classId: s.classId, studentId, weekNumber: s.weekDraftNumber, hours: s.weekDraft,
@@ -1166,15 +1266,46 @@ class Component extends DCLogic {
     };
   }
 
+  buildLoginSection(s) {
+    const opts = s.loginOptions;
+    const roleTabs = [
+      { key: 'instructor', label: 'Instructor' },
+      { key: 'student', label: 'Student' },
+      { key: 'admin', label: 'Admin' },
+    ].map((r) => ({
+      label: r.label,
+      active: s.loginRole === r.key,
+      rule: s.loginRole === r.key ? 'var(--color-accent)' : 'transparent',
+      color: s.loginRole === r.key ? 'var(--color-text)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
+      onClick: () => this.setState({ loginRole: r.key, loginError: null }),
+    }));
+    const klass = opts ? opts.classes.find((c) => c.id === s.loginClassId) : null;
+    return {
+      loginIntro: s.loginRole === 'student'
+        ? 'Pick your class and your name to see your own scoreboard, standing and commitments.'
+        : s.loginRole === 'admin'
+          ? 'Admin is a placeholder role for now — it opens the same view as the instructor.'
+          : 'Sign in as the instructor to run the league table, risk digest and commitment approvals.',
+      loginRoleTabs: roleTabs,
+      loginIsInstructorLike: s.loginRole === 'instructor' || s.loginRole === 'admin',
+      loginIsStudent: s.loginRole === 'student',
+      loginRoleNote: 'One demo instructor teaches both classes; there is nothing else to pick.',
+      loginContinueLabel: s.loginRole === 'student' ? 'Continue as this student' : `Continue as ${s.loginRole}`,
+      loginClassOptions: opts ? opts.classes.map((c) => ({ id: c.id, label: c.name })) : [],
+      loginStudentOptions: klass ? klass.students.map((st) => ({ id: st.id, label: st.display_name })) : [],
+    };
+  }
+
   buildTabs(s) {
-    return [
-      { key: 'league', label: 'League table' },
-      { key: 'me', label: 'My breakdown' },
-      { key: 'standing', label: 'My standing' },
-      { key: 'commitments', label: 'My commitments' },
-      { key: 'risk', label: 'Risk digest' },
-      { key: 'approvals', label: 'Approvals' },
-    ].map((t) => ({
+    const allTabs = [
+      { key: 'league', label: 'League table', roles: ['instructor', 'admin'] },
+      { key: 'me', label: 'My breakdown', roles: ['student'] },
+      { key: 'standing', label: 'My standing', roles: ['student'] },
+      { key: 'commitments', label: 'My commitments', roles: ['student'] },
+      { key: 'risk', label: 'Risk digest', roles: ['instructor', 'admin'] },
+      { key: 'approvals', label: 'Approvals', roles: ['instructor', 'admin'] },
+    ];
+    return allTabs.filter((t) => t.roles.includes(s.role)).map((t) => ({
       label: t.label,
       active: s.tab === t.key,
       rule: s.tab === t.key ? 'var(--color-accent)' : 'transparent',
@@ -1648,6 +1779,7 @@ class Component extends DCLogic {
     const isLeague = s.tab === 'league';
     const topN = this.props.topN ?? 10;
 
+    const login = this.buildLoginSection(s);
     const tabs = this.buildTabs(s);
     const classChips = this.buildClassChips(s, boot);
     const podium = this.buildPodium(rows);
@@ -1679,6 +1811,25 @@ class Component extends DCLogic {
       themeLabel: s.theme === 'dark' ? '\u{1F319}' : '☀️',
       loading: s.loading && !s.errorMsg,
       errorMsg: s.errorMsg,
+      loggedIn: s.loggedIn,
+      showLogin: !s.loggedIn,
+      ...login,
+      loginClassId: s.loginClassId,
+      loginStudentId: s.loginStudentId,
+      loginError: s.loginError,
+      onLoginClassChange: (e) => {
+        const classId = e.target.value;
+        const klass = this.findLoginClass(classId);
+        const student = klass && klass.students.length ? klass.students[0] : null;
+        this.setState({ loginClassId: classId, loginStudentId: student ? student.id : null });
+      },
+      onLoginStudentChange: (e) => this.setState({ loginStudentId: e.target.value }),
+      onLoginContinue: this.doLogin,
+      onLogout: this.logout,
+      identityLabel: s.role === 'student' && s.identity
+        ? `${s.identity.displayName} · Student`
+        : s.role === 'admin' ? 'Admin' : 'Instructor',
+      showClassSwitcher: s.role !== 'student',
       klassName: boot ? boot.klass.name : 'Loading…',
       termLabel: boot ? `16-week semester · ${boot.klass.external_id}` : '',
       demo: boot ? boot.source.demo : false,

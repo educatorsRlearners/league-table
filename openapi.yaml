@@ -29,6 +29,7 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: login
   - name: classes
   - name: ranking
   - name: students
@@ -37,6 +38,24 @@ tags:
   - name: settings
   - name: cache
 paths:
+  /login/options:
+    get:
+      tags: [login]
+      summary: Classes and student rosters for the login picker
+      description: |
+        Frontend: `getLoginOptions()`. Public: no Bearer token, since nobody
+        has one yet at this point. Returns only class names and student
+        ids/display names to populate a role/identity picker — no scores,
+        hours or other personal data.
+      security: []
+      responses:
+        '200':
+          description: Login options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginOptions'
+
   /classes:
     get:
       tags: [classes]
@@ -857,6 +876,28 @@ components:
         name: { type: string, example: 'PHYS 204 · Mechanics' }
         term_id: { type: string, example: t1 }
         sheet_id: { type: string, example: sheet-phys204 }
+
+    LoginStudent:
+      type: object
+      required: [id, display_name]
+      properties:
+        id: { type: string, example: s01 }
+        display_name: { type: string, example: 'Amara Okonkwo' }
+
+    LoginClass:
+      type: object
+      required: [id, name, instructor_id, students]
+      properties:
+        id: { type: string, example: c1 }
+        name: { type: string, example: 'PHYS 204 · Mechanics' }
+        instructor_id: { type: string, example: i1 }
+        students: { type: array, items: { $ref: '#/components/schemas/LoginStudent' } }
+
+    LoginOptions:
+      type: object
+      required: [classes]
+      properties:
+        classes: { type: array, items: { $ref: '#/components/schemas/LoginClass' } }
 
     Week:
       type: object

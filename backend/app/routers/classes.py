@@ -6,11 +6,32 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import Caller, get_caller, instructor_id_of, require_instructor
 from app.deps import get_ctx, need_class, student_class_ids
-from app.models import Bootstrap, Class, Explainer, LeagueSettings, LeagueSettingsPatch
+from app.models import (
+    Bootstrap,
+    Class,
+    Explainer,
+    LeagueSettings,
+    LeagueSettingsPatch,
+    LoginOptions,
+)
 from app.scoring import commitment_factor, normalise_weights, weighted_hours
 from app.service import DEFAULT_ROLLING_N, latest_complete_week_id
 
 router = APIRouter(tags=["classes"])
+
+
+@router.get("/login/options", response_model=LoginOptions, tags=["login"])
+def get_login_options(ctx=Depends(get_ctx)):
+    """Public: no Bearer token. Just class/student names for the login
+    picker — no scores, hours or other personal data."""
+    classes = []
+    for c in ctx.db.list_classes():
+        students = [s for s in ctx.db.list_students(c.id) if s.active]
+        classes.append({
+            "id": c.id, "name": c.name, "instructor_id": c.instructor_id,
+            "students": [{"id": s.id, "display_name": s.display_name} for s in students],
+        })
+    return {"classes": classes}
 
 
 @router.get("/classes", response_model=list[Class], tags=["classes"],

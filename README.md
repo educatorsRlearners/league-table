@@ -72,6 +72,7 @@ All endpoints take a Bearer token (see [Auth](#auth)). The full contract is in [
 
 | Endpoint | Who | Purpose |
 | --- | --- | --- |
+| `GET /login/options` | public (no token) | Classes and student rosters (id + display name only) for the login picker |
 | `GET /classes` | instructor | Classes the instructor teaches |
 | `GET /classes/{id}/bootstrap` | signed in (students: own class) | Weeks, criteria, weights, settings, accounts, source and issues in one call |
 | `GET /classes/{id}/ranking?week=&criteria=&window=` | signed in (students: own class; rows scoped) | Ranked adjusted scores for a week, cumulative or rolling window |
@@ -94,7 +95,7 @@ All endpoints take a Bearer token (see [Auth](#auth)). The full contract is in [
 
 ## Auth
 
-Every endpoint needs `Authorization: Bearer <token>`; the server derives the role (instructor/student), student ID and class membership from it and enforces ownership with 403s. There is no login endpoint: tokens are issued out of band (university sign-in later).
+Every endpoint needs `Authorization: Bearer <token>`; the server derives the role (instructor/student), student ID and class membership from it and enforces ownership with 403s. There is still no real sign-in (university sign-in later) — the frontend's login screen is a demo picker: choose Instructor, Student or Admin (Admin currently opens the same view as Instructor — it's a role stub, since its real job per the spec is server configuration, not a browser screen) and, for Student, a class and a name from the roster, which sets the Bearer token client-side. The roster it lists comes from `GET /login/options`, the one endpoint that doesn't require a token. The nav is scoped to the signed-in role, and the choice is session-only (not persisted across reloads).
 
 The demo accepts opaque tokens:
 

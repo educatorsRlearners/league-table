@@ -24,6 +24,22 @@ class Class(BaseModel):
     sheet_id: str | None = None
 
 
+class LoginStudent(BaseModel):
+    id: str
+    display_name: str
+
+
+class LoginClass(BaseModel):
+    id: str
+    name: str
+    instructor_id: str
+    students: list[LoginStudent]
+
+
+class LoginOptions(BaseModel):
+    classes: list[LoginClass]
+
+
 class Week(BaseModel):
     id: str
     term_id: str

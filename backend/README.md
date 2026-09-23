@@ -17,8 +17,10 @@ uv run pytest
 DATABASE_URL="sqlite:///./league_table.db" uv run uvicorn app.main:create_app --factory --reload
 ```
 
-Auth is a Bearer token on every endpoint (`bearerAuth`, JWT shape). The demo
-accepts opaque tokens: `i1` (instructor `i1`), `s01` (student `s01` in `c1`),
+Auth is a Bearer token on every endpoint (`bearerAuth`, JWT shape) except
+`GET /login/options`, which is public so the frontend's login screen can list
+classes/students before anyone has a token. The demo accepts opaque tokens:
+`i1` (instructor `i1`), `s01` (student `s01` in `c1`),
 `t03` (student `t03` in `c2`), plus `student:<sid>:<cid>` /
 `instructor:<iid>` forms. Students only ever see their own raw score, factor
 and hours; classmates' rows carry adjusted score + rank only.
