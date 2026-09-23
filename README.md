@@ -55,14 +55,14 @@ flowchart LR
   S --> AS["AppStore<br/>settings, commitments, risk, notes"]
   DS --> M["Toy scores<br/>seeded demo classes"]
   DS -.-> G["Google Sheets adapter<br/>planned"]
-  AS --> MEM["In-memory store"]
-  AS -.-> SQ["SQLite store<br/>planned"]
+  AS --> SQ["SQLAlchemy store<br/>SQLite by default, DATABASE_URL-configured"]
+  SQ -.-> PG["Postgres, etc.<br/>same store, different URL"]
   TESTS["Tests.dc.html<br/>(browser suite)"] -.->|"reference logic only,<br/>not the shipped UI path"| MOCK["api.js + mockSource.js<br/>scoring.js, risk.js"]
 ```
 
 - The contract is [`openapi.yaml`](openapi.yaml). `frontend/services/httpApi.js` is the live client the shipped page uses; `frontend/services/api.js` + `mockSource.js` are a client-side reference implementation of the same contract, exercised only by the browser test suite (`tests.js`/`Tests.dc.html`), not by the running app. A contract test checks the running app against `openapi.yaml`.
 - Scores come through a read-only `DataSource`. Today that is two seeded toy classes of 24 students, 16 weeks and 5 criteria each, including a tie, a missing entry, a perfect week, a zero week and a late joiner. Entries run through all 16 weeks, so week 16 is the landing week.
-- Everything the service owns lives in the read-write `AppStore`: league settings, baselines, weekly updates, risk settings and snapshots, and instructor notes.
+- Everything the service owns lives in the read-write `AppStore`: league settings, baselines, weekly updates, risk settings and snapshots, and instructor notes. It's backed by SQLAlchemy against whatever `DATABASE_URL` points at (SQLite in memory by default, so a fresh, empty store every run; set `DATABASE_URL` to a file (`sqlite:///./league_table.db`) or another SQLAlchemy-supported database such as Postgres for persistence).
 - Reads are cached for 60 seconds. If the source fails, the last good snapshot is served and marked stale. Refresh is rate-limited to once every 10 seconds.
 - Problems in the data, such as an unknown student ID, are listed instead of breaking the table.
 
@@ -121,7 +121,7 @@ curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?wee
 
 This is an early version, built on demo data.
 
-- [x] FastAPI backend implementing the whole OpenAPI contract, on toy scores and an in-memory store
+- [x] FastAPI backend implementing the whole OpenAPI contract, on toy scores and a SQLAlchemy-backed store (SQLite by default, `DATABASE_URL`-configured)
 - [x] Frontend wired to the real backend over HTTP (`httpApi.js`) instead of the in-browser mock
 - [x] Table, podium, week, cumulative and rolling windows, weights, breakdowns
 - [x] Commitments-based adjustment with a capped factor, the 100 ceiling and raw-score tie-breaks
@@ -129,7 +129,7 @@ This is an early version, built on demo data.
 - [x] Roles and privacy scoping enforced on the server
 - [ ] Student self-service for commitments (baseline submission, weekly updates)
 - [ ] Animated reveal, replay, streaks and badges
-- [ ] Google Sheets adapter, data check against a real sheet, and a SQLite `AppStore`
+- [ ] Google Sheets adapter, data check against a real sheet, and a Postgres `AppStore` in production
 - [ ] University sign-in (JWT issuance), privacy review, retention and backups before real students use it
 
 See the phasing in [`_docs/spec.md`](_docs/spec.md) for the plan.

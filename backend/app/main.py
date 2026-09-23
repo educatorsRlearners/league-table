@@ -10,7 +10,7 @@ from app.deps import AppContext, set_ctx
 from app.errors import install_handlers
 from app.routers import classes, data, ranking, risk
 from app.service import LeagueService
-from app.store import MemoryStore
+from app.store import SqlAlchemyStore
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 FRONTEND_PAGE = "/League%20Table.dc.html"
@@ -27,6 +27,7 @@ def create_app(
     store=None,
     clock: Callable[[], float] = time.time,
     frontend_dir: Path | None = FRONTEND_DIR,
+    database_url: str | None = None,
 ) -> FastAPI:
     if db is None or store is None:
         from app.toy_seed import build_toy
@@ -34,7 +35,7 @@ def create_app(
         toy = build_toy()
         db = db or toy.db
         if store is None:
-            store = MemoryStore(class_ids=[c.id for c in toy.db.classes], seed=toy.seed)
+            store = SqlAlchemyStore(database_url=database_url, class_ids=[c.id for c in toy.db.classes], seed=toy.seed)
     app = FastAPI(
         title="League Table Backend (as expected by frontend/services/api.js)",
         version="1.0.0",
