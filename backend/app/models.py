@@ -287,7 +287,6 @@ class DigestGroup(BaseModel):
     className: str
     week: int
     comparedWith: int | None = None
-    comparedWithStored: bool = False
     rows: list[DigestRow] = Field(default_factory=list)
 
 

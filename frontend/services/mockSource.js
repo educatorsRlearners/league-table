@@ -257,7 +257,6 @@ export function createToyAppStore() {
   const weights = {};
   const commitments = Object.fromEntries(CLASSES.map((c) => [c.id, seedCommitments(c.id)]));
   const riskSettings = Object.fromEntries(CLASSES.map((c) => [c.id, seedRiskSettings()]));
-  const riskSnapshots = new Map();
   const notes = CLASSES.flatMap((c) => seedNotes(c.id));
   const log = [
     { id: 'l1', actor_id: 'i1', action: 'baseline.approve', student_id: 's01', week_id: 'w1', old_values: null, new_values: { effective_from_week: 1 }, at: '2025-08-26T17:40:00Z' },
@@ -299,14 +298,6 @@ export function createToyAppStore() {
         active: { ...riskSettings[classId].active, ...(patch.active || {}) },
       };
       return riskSettings[classId];
-    },
-    /** What the instructor saw last time, so the digest can say what changed. */
-    async getRiskSnapshot(classId) {
-      return riskSnapshots.get(classId) || null;
-    },
-    async saveRiskSnapshot(classId, snapshot) {
-      riskSnapshots.set(classId, snapshot);
-      return snapshot;
     },
     async addNote({ classId, studentId, instructorId = 'i1', body }) {
       const note = {

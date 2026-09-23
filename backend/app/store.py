@@ -43,8 +43,6 @@ class AppStore(Protocol):
     def get_commitments(self, class_id: str, student_id: str) -> dict: ...
     def get_risk_settings(self, class_id: str) -> dict: ...
     def save_risk_settings(self, class_id: str, patch: dict) -> dict: ...
-    def get_risk_snapshot(self, class_id: str) -> dict | None: ...
-    def save_risk_snapshot(self, class_id: str, snapshot: dict) -> dict: ...
     def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict: ...
     def list_notes(self, class_id: str, student_id: str | None, instructor_id: str) -> list[dict]: ...
 
@@ -61,7 +59,6 @@ class MemoryStore:
         self._baselines: dict[str, list[dict]] = {}
         self._updates: dict[str, list[dict]] = {}
         self._risk_settings: dict[str, dict] = {}
-        self._risk_snapshots: dict[str, dict] = {}
         self._notes: list[dict] = []
         self._note_seq = 0
         for cid in class_ids or []:
@@ -138,16 +135,6 @@ class MemoryStore:
             }
             self._risk_settings[class_id] = merged
             return deepcopy(merged)
-
-    def get_risk_snapshot(self, class_id: str) -> dict | None:
-        with self._lock:
-            snap = self._risk_snapshots.get(class_id)
-            return deepcopy(snap) if snap is not None else None
-
-    def save_risk_snapshot(self, class_id: str, snapshot: dict) -> dict:
-        with self._lock:
-            self._risk_snapshots[class_id] = deepcopy(snapshot)
-            return deepcopy(snapshot)
 
     # notes
 

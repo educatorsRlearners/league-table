@@ -264,16 +264,22 @@ paths:
       tags: [risk]
       summary: Cross-class risk digest
       description: |
-        Frontend: `getDigest(instructorId = 'i1')`.
-        Auth: instructor-only. Covers every class taught. Each class group
-        carries evaluation week, `comparedWith` (stored snapshot or prior
-        week), and only rows with status new|still|cleared (never `quiet`),
-        sorted by level severity. First visit `comparedWithStored=false`.
+        Frontend: `getDigest({ instructorId = 'i1', week })`.
+        Auth: instructor-only. Covers every class taught. Each class group is
+        evaluated at `week` (or, if omitted, that class's own latest complete
+        week) and compared against week `week - 1` (`comparedWith: null` when
+        `week` is 1). Only rows with status new|still|cleared (never `quiet`)
+        are returned, sorted by level severity.
       parameters:
         - name: instructorId
           in: query
           required: false
           schema: { type: string, default: i1 }
+        - name: week
+          in: query
+          required: false
+          schema: { type: integer }
+          description: Week number to evaluate. Defaults to each class's own latest complete week.
       responses:
         '200':
           description: Digest payload
@@ -963,13 +969,12 @@ components:
           type: array
           items:
             type: object
-            required: [classId, className, week, comparedWith, comparedWithStored, rows]
+            required: [classId, className, week, comparedWith, rows]
             properties:
               classId: { type: string }
               className: { type: string }
               week: { type: integer }
               comparedWith: { type: integer, nullable: true }
-              comparedWithStored: { type: boolean }
               rows: { type: array, items: { $ref: '#/components/schemas/DigestRow' } }
         computedAt: { type: string, format: date-time }
 

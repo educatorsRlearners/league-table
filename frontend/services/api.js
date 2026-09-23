@@ -431,17 +431,17 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
 
     /**
      * GET /instructor/digest — across every class the instructor teaches.
-     * "Newly flagged" is measured against what they saw last time; on a first
-     * visit the previous week stands in, so the comparison is always real.
+     * Each class is evaluated at `week` (or its own latest complete week)
+     * and compared against week `week - 1`, so "newly flagged" is always
+     * measured against the prior week rather than a stored last-visit snapshot.
      */
-    async getDigest(instructorId = 'i1') {
+    async getDigest({ instructorId = 'i1', week } = {}) {
       await delay(200, 480);
       const classes = await source.listClasses(instructorId);
       const groups = [];
       for (const k of classes) {
-        const current = await evaluateClass(k.id);
-        const stored = await store.getRiskSnapshot(k.id);
-        const prior = stored || (current.week > 1 ? await evaluateClass(k.id, current.week - 1) : { rows: [], week: null });
+        const current = await evaluateClass(k.id, week);
+        const prior = current.week > 1 ? await evaluateClass(k.id, current.week - 1) : { rows: [], week: null };
         const priorById = new Map(prior.rows.map((r) => [r.student_id, r]));
         const notes = await store.listNotes(k.id, null, instructorId);
         const noteCount = new Map();
@@ -452,7 +452,6 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
           className: k.name,
           week: current.week,
           comparedWith: prior.week,
-          comparedWithStored: !!stored,
           rows: current.rows
             .map((r) => ({
               student_id: r.student_id,
@@ -466,7 +465,6 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
             .filter((r) => r.status !== 'quiet')
             .sort((a, b) => LEVEL_ORDER.indexOf(b.level) - LEVEL_ORDER.indexOf(a.level) || a.display_name.localeCompare(b.display_name)),
         });
-        await store.saveRiskSnapshot(k.id, current);
       }
       return { instructorId, groups, computedAt: new Date(now()).toISOString() };
     },

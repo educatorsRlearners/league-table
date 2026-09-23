@@ -176,9 +176,16 @@ def test_digest(instructor):
         assert g["rows"]
         assert len(g["rows"]) <= 12
         assert all(r["status"] in ("new", "still", "cleared") for r in g["rows"])
+        assert g["comparedWith"] == g["week"] - 1 or (g["week"] == 1 and g["comparedWith"] is None)
     second = instructor.get("/instructor/digest").json()
-    assert second["groups"][0]["comparedWithStored"] is True
-    assert all(r["status"] != "new" for r in second["groups"][0]["rows"])
+    assert second == digest
+
+
+def test_digest_week_param(instructor):
+    digest = instructor.get("/instructor/digest", params={"week": 5}).json()
+    for g in digest["groups"]:
+        assert g["week"] == 5
+        assert g["comparedWith"] == 4
 
 
 def test_risk_record(instructor, ada):

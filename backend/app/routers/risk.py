@@ -52,6 +52,8 @@ def get_commitments(classId: str = Query(alias="classId"), studentId: str = Quer
 @router.get("/instructor/digest", response_model=Digest, tags=["risk"],
             responses={401: {}, 403: {}})
 def get_digest(instructorId: str | None = Query(default=None, alias="instructorId"),
+               week: int | None = Query(default=None, alias="week",
+                                        description="Week number. Defaults to each class's own latest complete week."),
                caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
     iid = instructorId or instructor_id_of(caller)
     if iid != instructor_id_of(caller):
@@ -59,17 +61,11 @@ def get_digest(instructorId: str | None = Query(default=None, alias="instructorI
 
     groups = []
     for klass in ctx.db.list_classes(iid):
-        current = ctx.service.evaluate_class(klass.id)
-        stored = ctx.store.get_risk_snapshot(klass.id)
-        if stored is not None:
-            prior = stored
-            stored_flag = True
-        elif current["week"] > 1:
+        current = ctx.service.evaluate_class(klass.id, week)
+        if current["week"] > 1:
             prior = ctx.service.evaluate_class(klass.id, current["week"] - 1)
-            stored_flag = False
         else:
             prior = {"week": None, "rows": []}
-            stored_flag = False
         prior_by_id = {r["student_id"]: r for r in prior.get("rows", [])}
         notes = ctx.store.list_notes(klass.id, None, iid)
         counts: dict[str, int] = {}
@@ -88,8 +84,7 @@ def get_digest(instructorId: str | None = Query(default=None, alias="instructorI
         order = {lvl: i for i, lvl in enumerate(LEVEL_ORDER)}
         rows.sort(key=lambda r: (-order.get(r["level"], 0), r["display_name"].lower()))
         groups.append({"classId": klass.id, "className": klass.name, "week": current["week"],
-                       "comparedWith": prior.get("week"), "comparedWithStored": stored_flag, "rows": rows})
-        ctx.store.save_risk_snapshot(klass.id, current)
+                       "comparedWith": prior.get("week"), "rows": rows})
     return {"instructorId": iid, "groups": groups,
             "computedAt": datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat()}
 

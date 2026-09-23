@@ -318,7 +318,7 @@ contractSuite.it('DataSource implements every read method in the interface', asy
 
 contractSuite.it('AppStore implements every read/write method in the interface', async () => {
   const st = createToyAppStore();
-  for (const m of ['getLeagueSettings', 'saveLeagueSettings', 'listBaselines', 'listWeeklyUpdates', 'getCommitments', 'getRiskSettings', 'saveRiskSettings', 'getRiskSnapshot', 'saveRiskSnapshot', 'addNote', 'listNotes', 'appendLog', 'listLog']) {
+  for (const m of ['getLeagueSettings', 'saveLeagueSettings', 'listBaselines', 'listWeeklyUpdates', 'getCommitments', 'getRiskSettings', 'saveRiskSettings', 'addNote', 'listNotes', 'appendLog', 'listLog']) {
     assert(typeof st[m] === 'function', `missing ${m}()`);
   }
 });
@@ -687,7 +687,7 @@ apiSuite.it('returns a student’s own commitments and factor by week', async ()
 
 apiSuite.it('the digest surfaces a minority of the class, not the roster', async () => {
   const api = makeApi();
-  const digest = await api.getDigest('i1');
+  const digest = await api.getDigest({ instructorId: 'i1' });
   for (const g of digest.groups) {
     assert(g.rows.length > 0, `${g.className} flagged nobody at all`);
     assert(g.rows.length <= 12, `${g.className} flagged ${g.rows.length} of 24 — the digest discriminates nothing`);
@@ -697,7 +697,7 @@ apiSuite.it('the digest surfaces a minority of the class, not the roster', async
 });
 
 apiSuite.it('computes the digest from the data, grouped by class', async () => {
-  const digest = await makeApi().getDigest('i1');
+  const digest = await makeApi().getDigest({ instructorId: 'i1' });
   assert(digest.groups.length === 2, 'the digest must cover every class');
   for (const g of digest.groups) {
     assert(g.week >= 1, 'no evaluation week');
@@ -707,18 +707,28 @@ apiSuite.it('computes the digest from the data, grouped by class', async () => {
   assert(digest.groups.some((g) => g.rows.length > 0), 'nothing flagged anywhere — the engine is not running');
 });
 
-apiSuite.it('reads what changed against the stored snapshot on the second look', async () => {
+apiSuite.it('always compares against the prior week, stable across repeated looks', async () => {
   const api = makeApi();
-  const first = await api.getDigest('i1');
-  const second = await api.getDigest('i1');
-  assert(first.groups[0].comparedWithStored === false, 'the first look has nothing stored to compare with');
-  assert(second.groups[0].comparedWithStored === true, 'the second look should compare with the saved snapshot');
-  assert(second.groups[0].rows.every((r) => r.status !== 'new'), 'nothing can be newly flagged twice in a row');
+  const first = await api.getDigest({ instructorId: 'i1' });
+  const second = await api.getDigest({ instructorId: 'i1' });
+  for (const g of first.groups) {
+    assert(g.comparedWith === g.week - 1, `${g.className} should compare against the prior week`);
+  }
+  assert(JSON.stringify(second.groups) === JSON.stringify(first.groups), 'two looks with no week param should be identical');
+});
+
+apiSuite.it('honors an explicit week and compares it against week - 1', async () => {
+  const api = makeApi();
+  const digest = await api.getDigest({ instructorId: 'i1', week: 5 });
+  for (const g of digest.groups) {
+    assert(g.week === 5, `${g.className} should be evaluated at week 5`);
+    assert(g.comparedWith === 4, `${g.className} should compare against week 4`);
+  }
 });
 
 apiSuite.it('a risk record explains every signal and traces it to data', async () => {
   const api = makeApi();
-  const digest = await api.getDigest('i1');
+  const digest = await api.getDigest({ instructorId: 'i1' });
   const row = digest.groups.flatMap((g) => g.rows.map((r) => ({ ...r, classId: g.classId }))).find((r) => r.level === 'High risk' || r.level === 'At risk');
   assert(row, 'no flagged student to open');
   const rec = await api.getRiskRecord({ classId: row.classId, studentId: row.student_id });

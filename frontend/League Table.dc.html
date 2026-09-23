@@ -144,6 +144,20 @@
     </div>
   </sc-if>
 
+  <sc-if value="{{ showRiskControls }}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
+      <div style="display: flex; align-items: center; gap: var(--space-2);">
+        <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
+        <div style="min-width: 210px; text-align: center;">
+          <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
+          <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" style="width: 100%; accent-color: var(--color-accent);">
+        </div>
+        <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ hasIssues }}" hint-placeholder-val="{{ false }}">
     <div style="padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--color-divider); font-size: 13px;">
       <span class="tag tag-outline">Data check</span>
@@ -786,7 +800,7 @@ class Component extends DCLogic {
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     const { boot, tab } = this.state;
     if (e.key === 'Escape') return this.setState({ drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false });
-    if (!boot || tab === 'risk') return;
+    if (!boot) return;
     if (e.key === 'ArrowLeft') return this.stepWeek(-1);
     if (e.key === 'ArrowRight') return this.stepWeek(1);
     if (tab !== 'league') return;
@@ -847,8 +861,11 @@ class Component extends DCLogic {
   };
 
   loadDigest = async () => {
+    const s = this.state;
+    if (!s.boot) return;
     try {
-      const digest = await this.api.getDigest('i1');
+      const week = s.boot.weeks[s.weekIdx].week_number;
+      const digest = await this.api.getDigest({ instructorId: 'i1', week });
       this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest });
     } catch (err) {
       this.handleApiError(err);
@@ -1167,7 +1184,9 @@ class Component extends DCLogic {
     return {
       note: 'Which students across your classes are worth checking in on, and what changed since you last looked. Every flag traces back to data you already have. A flag is a prompt for a conversation, not a verdict, and nothing here is ever shown to the class.',
       comparedText: g0
-        ? `Evaluated at week ${g0.week}, compared with ${g0.comparedWithStored ? 'what you saw last time' : `week ${g0.comparedWith}`}. Open a student to see the signals and the data behind them.`
+        ? (g0.comparedWith != null
+            ? `Evaluated at week ${g0.week}, compared with week ${g0.comparedWith}. Open a student to see the signals and the data behind them.`
+            : `Evaluated at week ${g0.week}. This is the first week, so there's nothing to compare it with yet. Open a student to see the signals and the data behind them.`)
         : '',
       groups: digestState.groups.map((g) => ({
         className: g.className,
@@ -1346,6 +1365,7 @@ class Component extends DCLogic {
       classChips,
       showControls: !!boot && !s.loading && s.tab === 'league',
       showStudentControls: !!boot && !s.loading && s.tab === 'me',
+      showRiskControls: !!boot && !s.loading && s.tab === 'risk',
       weekLabel: week ? `Week ${week.week_number}` : '',
       weekNumber: week ? week.week_number : 1,
       weekRange: week ? `${week.start_date} – ${week.end_date}${weekHasData ? '' : ' · nothing recorded yet'}` : '',
