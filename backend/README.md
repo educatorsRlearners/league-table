@@ -24,6 +24,14 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/league_table" uv run uvicorn
 backend wired to it via `DATABASE_URL`, if you'd rather not run Postgres
 locally yourself.
 
+`make test-integration` runs `tests/test_integration_docker.py`: it boots that
+same docker-compose stack (in its own `league_table_it` project + remapped
+ports, so it won't collide with a stack you already have running) and drives
+it over real HTTP + Postgres, checking things the fast in-memory suite can't:
+`DATABASE_URL` wiring, JSON columns round-tripping through Postgres, and data
+surviving a backend restart / full stack recreation. Requires Docker; slow
+enough that it's excluded from the default `make test` / `pytest` run.
+
 Auth is a Bearer token on every endpoint (`bearerAuth`, JWT shape) except
 `GET /login/options`, which is public so the frontend's login screen can list
 classes/students before anyone has a token. The demo accepts opaque tokens:

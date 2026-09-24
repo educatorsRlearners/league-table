@@ -22,6 +22,12 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# Integration tests spin up the real docker-compose stack; excluded from the
+# default (fast, no-Docker-required) run. `make test-integration` opts in.
+addopts = "-m 'not integration'"
+markers = [
+    "integration: exercises the docker-compose stack over real HTTP/Postgres (requires Docker)",
+]
 filterwarnings = [
     # Starlette's own test client uses a deprecated anyio alias; nothing to fix on our side.
     # Remove once Starlette releases a version that no longer does.

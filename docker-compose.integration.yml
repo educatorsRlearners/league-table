@@ -1,0 +1,11 @@
+# Override used only by the integration tests (backend/tests/test_integration_docker.py).
+# It remaps host ports so the test stack never collides with a stack you already
+# have running via plain `docker compose up`; the two run as separate projects
+# (-p league_table_it) with separate volumes, so neither can clobber the other.
+services:
+  db:
+    ports:
+      - "15433:5432"
+  backend:
+    ports:
+      - "18000:8000"
