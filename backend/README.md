@@ -15,7 +15,14 @@ uv run pytest
 
 # Persist to a SQLite file instead of the default in-memory DB:
 DATABASE_URL="sqlite:///./league_table.db" uv run uvicorn app.main:create_app --factory --reload
+
+# Point at Postgres instead (driver is `psycopg`, pinned automatically):
+DATABASE_URL="postgresql://user:pass@localhost:5432/league_table" uv run uvicorn app.main:create_app --factory --reload
 ```
+
+`docker-compose up` (from the repo root) starts a Postgres container plus the
+backend wired to it via `DATABASE_URL`, if you'd rather not run Postgres
+locally yourself.
 
 Auth is a Bearer token on every endpoint (`bearerAuth`, JWT shape) except
 `GET /login/options`, which is public so the frontend's login screen can list

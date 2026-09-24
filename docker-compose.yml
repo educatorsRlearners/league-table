@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: league_table
+      POSTGRES_PASSWORD: league_table
+      POSTGRES_DB: league_table
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U league_table"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://league_table:league_table@db:5432/league_table
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
