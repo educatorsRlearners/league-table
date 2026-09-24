@@ -1,0 +1,12 @@
+# Override used only by the Playwright e2e tests (e2e/tests/*.spec.js, driven
+# by e2e/global-setup.js and e2e/global-teardown.js via `make e2e`). Remaps
+# host ports and runs as its own compose project (-p league_table_e2e) so it
+# never collides with a stack you already have running via plain
+# `docker compose up`, or with the docker-compose.integration.yml stack.
+services:
+  db:
+    ports:
+      - "15442:5432"
+  backend:
+    ports:
+      - "18010:8000"

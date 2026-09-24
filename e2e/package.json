@@ -1,0 +1,12 @@
+{
+  "name": "league-table-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright end-to-end tests driving the app through a browser against the real docker-compose stack.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
