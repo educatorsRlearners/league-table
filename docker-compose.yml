@@ -6,7 +6,10 @@ services:
       POSTGRES_PASSWORD: league_table
       POSTGRES_DB: league_table
     ports:
-      - "5432:5432"
+      # Host port 5433: 5432 is likely already taken by a local Postgres
+      # install. The backend talks to the container over the internal
+      # Docker network on 5432 regardless (see DATABASE_URL below).
+      - "5433:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
