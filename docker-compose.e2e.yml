@@ -3,10 +3,13 @@
 # host ports and runs as its own compose project (-p league_table_e2e) so it
 # never collides with a stack you already have running via plain
 # `docker compose up`, or with the docker-compose.integration.yml stack.
+# The ports are marked `!override` because Compose appends `ports` lists when
+# merging files; without it the base 8000/5433 would stay published too and
+# collide with a running dev stack.
 services:
   db:
-    ports:
+    ports: !override
       - "15442:5432"
   backend:
-    ports:
+    ports: !override
       - "18010:8000"
