@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<title>League Table</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 </head>
@@ -34,33 +35,70 @@
   @media (prefers-reduced-motion: reduce) {
     * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
   }
-  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  /* WCAG 2.2 AA (#42). --color-accent (#b68235) is 3.0:1 on the light page, fine for
+     borders and fills but not for text, so every text use of the accent goes through
+     --lt-accent-text (the -700 step: 6.4:1 light, 11:1 dark). No token changes needed.
+     --lt-muted replaces opacity: .6-.8 on text (opacity fails 4.5:1 once composited).
+     --lt-edge is the 3:1 outline for the score bar. */
+  [data-theme] {
+    --lt-accent-text: var(--color-accent-700);
+    --lt-bar-low: var(--color-accent-600);
+    --lt-muted: color-mix(in srgb, var(--color-text) 74%, transparent);
+    --lt-edge: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+  .btn-primary, .btn-ghost, .tag-outline { color: var(--lt-accent-text); }
+  :focus-visible { outline: 2px solid var(--lt-accent-text); outline-offset: 2px; }
+  /* The selected state is never colour alone: heavier text, plus an underline on tabs. */
+  button[aria-pressed="true"] { font-weight: 700; }
+  .lt-tab[aria-pressed="true"] { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 6px; }
+  .table th { color: var(--lt-muted); }
+  .lt-seg { padding: 0 var(--space-4); }
+  .lt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .lt-grid { display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(110px, 26%) 120px 150px; gap: var(--space-3); }
+  .lt-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+  .lt-podium > button { min-width: 0; overflow-wrap: anywhere; }
+  .lt-open { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: var(--space-3); min-width: 0; width: 100%; min-height: 44px; cursor: pointer; }
+  .lt-open:focus-visible { outline: 2px solid var(--lt-accent-text); outline-offset: 2px; }
+  /* 320 CSS px / 200% zoom (WCAG 1.4.10): stack each ranking row instead of scrolling sideways. */
+  @media (max-width: 760px) {
+    .lt-pad { padding-left: var(--space-3) !important; padding-right: var(--space-3) !important; }
+    .lt-seg { padding: 0 var(--space-2); }
+    .lt-podium { gap: var(--space-2); }
+    .lt-podium > button { padding: var(--space-2) var(--space-1) !important; }
+    .lt-podium .lt-av { display: none !important; }
+    .lt-podium .lt-pname { font-size: 15px !important; }
+    .lt-podium .lt-pscore { font-size: 20px !important; }
+    .lt-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); padding: 0 !important; border: 0 !important; }
+    .lt-row { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "rank who who" ". bar bar" ". adj move"; row-gap: var(--space-2); }
+    .lt-c-rank { grid-area: rank; } .lt-c-who { grid-area: who; } .lt-c-bar { grid-area: bar; }
+    .lt-c-adj { grid-area: adj; text-align: left !important; } .lt-c-move { grid-area: move; }
+  }
 </style>
 </helmet>
 
 <div data-theme="{{ theme }}" style="min-height: 100vh; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding-bottom: 64px;">
 
   <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ true }}">
-    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-6);">
+    <main style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-6);">
       <div style="width: min(480px, 100%);">
         <div style="text-align: center; margin-bottom: var(--space-6);">
-          <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Demo sign-in</div>
+          <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lt-accent-text);">Demo sign-in</div>
           <h1 style="margin: var(--space-1) 0 0; font-family: var(--font-heading);">League Table</h1>
-          <p style="font-size: 13px; opacity: 0.75; margin-top: var(--space-2);">{{ loginIntro }}</p>
+          <p style="font-size: 13px; color: var(--lt-muted); margin-top: var(--space-2);">{{ loginIntro }}</p>
         </div>
 
         <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
-          <div style="border: 1px solid var(--color-divider); border-left: 3px solid var(--color-accent-700); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px; margin-bottom: var(--space-4);">{{ loginError }}</div>
+          <div role="alert" style="border: 1px solid var(--color-divider); border-left: 3px solid var(--color-accent-700); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px; margin-bottom: var(--space-4);"><strong>Error:</strong> {{ loginError }}</div>
         </sc-if>
 
-        <div style="display: flex; gap: var(--space-2); border-bottom: 1px solid var(--color-divider); margin-bottom: var(--space-4);">
+        <div style="display: flex; flex-wrap: wrap; gap: var(--space-2); border-bottom: 1px solid var(--color-divider); margin-bottom: var(--space-4);">
           <sc-for list="{{ loginRoleTabs }}" as="rt" hint-placeholder-count="3">
-            <button onClick="{{ rt.onClick }}" aria-pressed="{{ rt.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ rt.rule }}; font-family: var(--font-heading); font-size: 16px; color: {{ rt.color }};">{{ rt.label }}</button>
+            <button class="lt-tab" onClick="{{ rt.onClick }}" aria-pressed="{{ rt.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ rt.rule }}; font-family: var(--font-heading); font-size: 16px; color: {{ rt.color }};">{{ rt.label }}</button>
           </sc-for>
         </div>
 
         <sc-if value="{{ loginIsInstructorLike }}" hint-placeholder-val="{{ false }}">
-          <p style="font-size: 13px; opacity: 0.8; margin-bottom: var(--space-4);">{{ loginRoleNote }}</p>
+          <p style="font-size: 13px; color: var(--lt-muted); margin-bottom: var(--space-4);">{{ loginRoleNote }}</p>
           <button class="btn btn-primary" onClick="{{ onLoginContinue }}" style="min-height: 44px; width: 100%;">{{ loginContinueLabel }}</button>
         </sc-if>
 
@@ -84,21 +122,21 @@
           <button class="btn btn-primary" onClick="{{ onLoginContinue }}" style="min-height: 44px; width: 100%;">{{ loginContinueLabel }}</button>
         </sc-if>
       </div>
-    </div>
+    </main>
   </sc-if>
 
   <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ false }}">
 
-  <header style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6) var(--space-3);">
+  <header style="display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-6) var(--space-3);" class="lt-pad">
     <div style="margin-right: auto; display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; min-width: 0;">
-      <span style="font-family: var(--font-heading); font-size: clamp(22px, 2vw, 30px); letter-spacing: -0.015em;">{{ klassName }}</span>
-      <span style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ termLabel }}</span>
+      <h1 style="margin: 0; font-weight: 400; font-family: var(--font-heading); font-size: clamp(22px, 2vw, 30px); letter-spacing: -0.015em;">{{ klassName }}</h1>
+      <span style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lt-accent-text); font-variant-numeric: lining-nums tabular-nums;">{{ termLabel }}</span>
     </div>
     <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
       <sc-if value="{{ demo }}" hint-placeholder-val="{{ true }}">
         <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">Demo data</span>
       </sc-if>
-      <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
+      <span style="font-size: 12px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
       <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">{{ identityLabel }}</span>
       <sc-if value="{{ present }}" hint-placeholder-val="{{ false }}">
         <button class="btn btn-primary" data-present-exit onClick="{{ onTogglePresent }}" style="min-height: 44px;" title="Leave Present mode (P)">Exit Present</button>
@@ -109,15 +147,15 @@
     </div>
   </header>
 
-  <div style="display: flex; align-items: flex-end; gap: var(--space-6); flex-wrap: wrap; padding: 0 var(--space-6); border-bottom: 1px solid var(--color-divider);">
-    <nav style="display: flex; gap: var(--space-2);" aria-label="Screens">
+  <div style="display: flex; align-items: flex-end; gap: var(--space-6); flex-wrap: wrap; padding: 0 var(--space-6); border-bottom: 1px solid var(--color-divider);" class="lt-pad">
+    <nav style="display: flex; flex-wrap: wrap; gap: var(--space-2);" aria-label="Screens">
       <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
-        <button onClick="{{ t.onClick }}" aria-pressed="{{ t.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ t.rule }}; font-family: var(--font-heading); font-size: 17px; color: {{ t.color }};" style-hover="border-bottom-color: var(--color-accent-600);">{{ t.label }}</button>
+        <button class="lt-tab" onClick="{{ t.onClick }}" aria-pressed="{{ t.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ t.rule }}; font-family: var(--font-heading); font-size: 17px; color: {{ t.color }};" style-hover="border-bottom-color: var(--color-accent-600);">{{ t.label }}</button>
       </sc-for>
     </nav>
     <sc-if value="{{ showClassSwitcher }}" hint-placeholder-val="{{ false }}">
       <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto; padding-bottom: var(--space-2);">
-        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Class</span>
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lt-muted);">Class</span>
         <sc-for list="{{ classChips }}" as="k" hint-placeholder-count="2">
           <button onClick="{{ k.onClick }}" aria-pressed="{{ k.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ k.bg }}; border: 1px solid {{ k.border }}; color: {{ k.color }};">{{ k.label }}</button>
         </sc-for>
@@ -126,9 +164,9 @@
   </div>
 
   <sc-if value="{{ errorMsg }}" hint-placeholder-val="{{ false }}">
-    <div style="margin: var(--space-8) auto; max-width: 620px; padding: var(--space-6); border: 1px solid var(--color-divider); border-radius: var(--radius-md); text-align: center;">
+    <div role="alert" style="margin: var(--space-8) auto; max-width: 620px; padding: var(--space-6); border: 1px solid var(--color-divider); border-radius: var(--radius-md); text-align: center;">
       <h3 style="margin-bottom: var(--space-2);">The table could not load</h3>
-      <p style="font-size: 14px; opacity: 0.8;">{{ errorMsg }}</p>
+      <p style="font-size: 14px; color: var(--lt-muted);">{{ errorMsg }}</p>
       <button class="btn btn-primary" onClick="{{ onRefresh }}" style="min-height: 44px;">Try again</button>
     </div>
   </sc-if>
@@ -139,7 +177,7 @@
       <div style="height: 64px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.4;"></div>
       <div style="height: 64px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.3;"></div>
       <div style="height: 64px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.2;"></div>
-      <p style="font-size: 13px; opacity: 0.7;">Reading the class data…</p>
+      <p role="status" style="font-size: 13px; color: var(--lt-muted);">Reading the class data…</p>
     </div>
   </sc-if>
 
@@ -148,17 +186,17 @@
 
       <div style="display: flex; align-items: center; gap: var(--space-2);">
         <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
-        <div style="min-width: 210px; text-align: center;">
+        <div style="flex: 1 1 210px; min-width: 0; text-align: center;">
           <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
-          <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
-          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" style="width: 100%; accent-color: var(--color-accent);">
+          <div style="font-size: 11px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" aria-valuetext="{{ weekValueText }}" style="width: 100%; min-height: 24px; accent-color: var(--color-accent);">
         </div>
         <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
       </div>
 
       <div style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
         <sc-for list="{{ windowOpts }}" as="wo" hint-placeholder-count="3">
-          <button onClick="{{ wo.onClick }}" aria-pressed="{{ wo.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); font-family: var(--font-heading); font-size: 14px; background: {{ wo.bg }}; color: var(--color-text);">{{ wo.label }}</button>
+          <button class="lt-seg" onClick="{{ wo.onClick }}" aria-pressed="{{ wo.active }}" style="min-height: 44px; cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); font-family: var(--font-heading); font-size: 14px; background: {{ wo.bg }}; color: var(--color-text);">{{ wo.label }}</button>
         </sc-for>
       </div>
 
@@ -172,12 +210,12 @@
         </sc-if>
       </div>
 
-      <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
+      <div style="display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-left: auto;">
         <button data-present-toggle onClick="{{ onTogglePresent }}" aria-pressed="{{ present }}" title="Hide hours, factors and raw scores for the projector (P)" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ presentBg }}; border: 1px solid {{ presentBorder }}; color: var(--color-text);">Present</button>
         <sc-if value="{{ showInstructorTools }}" hint-placeholder-val="{{ true }}">
           <button onClick="{{ onToggleRaw }}" aria-pressed="{{ rawOn }}" title="Instructor only — compare the adjusted order with the raw order" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ rawBg }}; border: 1px solid {{ rawBorder }}; color: var(--color-text);">Raw view</button>
         </sc-if>
-        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Names</span>
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lt-muted);">Names</span>
         <sc-for list="{{ nameModes }}" as="nm" hint-placeholder-count="3">
           <button onClick="{{ nm.onClick }}" aria-pressed="{{ nm.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ nm.bg }}; border: 1px solid {{ nm.border }}; color: var(--color-text);">{{ nm.label }}</button>
         </sc-for>
@@ -189,16 +227,16 @@
     <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
       <div style="display: flex; align-items: center; gap: var(--space-2);">
         <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
-        <div style="min-width: 210px; text-align: center;">
+        <div style="flex: 1 1 210px; min-width: 0; text-align: center;">
           <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
-          <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
-          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" style="width: 100%; accent-color: var(--color-accent);">
+          <div style="font-size: 11px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" aria-valuetext="{{ weekValueText }}" style="width: 100%; min-height: 24px; accent-color: var(--color-accent);">
         </div>
         <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
       </div>
       <div style="display: inline-flex; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
         <sc-for list="{{ windowOpts }}" as="wo" hint-placeholder-count="3">
-          <button onClick="{{ wo.onClick }}" aria-pressed="{{ wo.active }}" style="min-height: 44px; padding: 0 var(--space-4); cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); font-family: var(--font-heading); font-size: 14px; background: {{ wo.bg }}; color: var(--color-text);">{{ wo.label }}</button>
+          <button class="lt-seg" onClick="{{ wo.onClick }}" aria-pressed="{{ wo.active }}" style="min-height: 44px; cursor: pointer; border: 0; border-left: 1px solid var(--color-divider); font-family: var(--font-heading); font-size: 14px; background: {{ wo.bg }}; color: var(--color-text);">{{ wo.label }}</button>
         </sc-for>
       </div>
       <button class="btn btn-ghost" onClick="{{ onOpenExplainer }}" style="min-height: 44px; margin-left: auto;">How the score works</button>
@@ -209,10 +247,10 @@
     <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-divider);">
       <div style="display: flex; align-items: center; gap: var(--space-2);">
         <button class="btn btn-ghost" onClick="{{ onPrevWeek }}" aria-label="Previous week" style="min-height: 44px; min-width: 44px;">←</button>
-        <div style="min-width: 210px; text-align: center;">
+        <div style="flex: 1 1 210px; min-width: 0; text-align: center;">
           <div style="font-family: var(--font-heading); font-size: 19px; font-variant-numeric: lining-nums tabular-nums;">{{ weekLabel }}</div>
-          <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
-          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" style="width: 100%; accent-color: var(--color-accent);">
+          <div style="font-size: 11px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums;">{{ weekRange }}</div>
+          <input type="range" min="1" max="16" step="1" value="{{ weekNumber }}" onChange="{{ onScrubWeek }}" aria-label="Week" aria-valuetext="{{ weekValueText }}" style="width: 100%; min-height: 24px; accent-color: var(--color-accent);">
         </div>
         <button class="btn btn-ghost" onClick="{{ onNextWeek }}" aria-label="Next week" style="min-height: 44px; min-width: 44px;">→</button>
       </div>
@@ -233,85 +271,91 @@
   <main style="padding: var(--space-6); max-width: 1680px; margin: 0 auto;">
 
     <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
-      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: end; margin-bottom: var(--space-8);">
+      <div class="lt-podium" style="align-items: end; margin-bottom: var(--space-8);">
         <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
-          <button onClick="{{ p.onClick }}" style="text-align: center; cursor: pointer; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
-            <div style="font-family: var(--font-heading); font-size: clamp(30px, 3.4vw, 56px); line-height: 1; color: var(--color-accent); font-variant-numeric: lining-nums tabular-nums;">{{ p.rank }}</div>
-            <div style="margin: var(--space-3) auto var(--space-2); width: {{ p.avatarSize }}; height: {{ p.avatarSize }}; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: {{ p.monogramSize }}; color: var(--color-text);">{{ p.monogram }}</div>
-            <div style="font-family: var(--font-heading); font-size: clamp(20px, 1.9vw, 34px); line-height: 1.15; color: var(--color-text);">{{ p.name }}</div>
-            <div style="font-family: var(--font-heading); font-size: clamp(24px, 2.2vw, 40px); font-variant-numeric: lining-nums tabular-nums; color: var(--color-text);">{{ p.score }}</div>
-            <div style="font-size: 12px; color: var(--color-text); opacity: 0.75; font-variant-numeric: lining-nums tabular-nums;">{{ p.deltaText }}</div>
-            <div style="font-size: 11px; color: var(--color-accent); letter-spacing: 0.06em; text-transform: uppercase;">{{ p.flag }}</div>
+          <button onClick="{{ p.onClick }}" aria-label="{{ p.label }}" data-open-key="{{ p.key }}" style="text-align: center; cursor: pointer; background: transparent; color: var(--color-text); font-family: var(--font-body); padding: var(--space-4) var(--space-3); border: 1px solid {{ p.border }}; border-top-width: {{ p.topRule }}; border-radius: var(--radius-md); animation: lt-rise 420ms ease-out both; animation-delay: {{ p.delay }}; transform: translateY({{ p.lift }});">
+            <div style="font-family: var(--font-heading); font-size: clamp(30px, 3.4vw, 56px); line-height: 1; color: var(--lt-accent-text); font-variant-numeric: lining-nums tabular-nums;">{{ p.rank }}</div>
+            <div class="lt-av" aria-hidden="true" style="margin: var(--space-3) auto var(--space-2); width: {{ p.avatarSize }}; height: {{ p.avatarSize }}; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: {{ p.monogramSize }}; color: var(--color-text);">{{ p.monogram }}</div>
+            <div class="lt-pname" style="font-family: var(--font-heading); font-size: clamp(20px, 1.9vw, 34px); line-height: 1.15; color: var(--color-text);">{{ p.name }}</div>
+            <div class="lt-pscore" style="font-family: var(--font-heading); font-size: clamp(24px, 2.2vw, 40px); font-variant-numeric: lining-nums tabular-nums; color: var(--color-text);">{{ p.score }}</div>
+            <div style="font-size: 12px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums;">{{ p.deltaText }}</div>
+            <div style="font-size: 11px; color: var(--lt-accent-text); letter-spacing: 0.06em; text-transform: uppercase;">{{ p.flag }}</div>
           </button>
         </sc-for>
       </div>
 
       <div role="table" aria-label="Class ranking" style="border-top: 1px solid var(--color-divider);">
-        <div role="row" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(110px, 26%) 120px 150px; gap: var(--space-3); padding: var(--space-2) var(--space-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 60%, transparent); border-bottom: 1px solid var(--color-divider);">
+        <div role="rowgroup">
+        <div role="row" class="lt-grid lt-head" style="padding: var(--space-2) var(--space-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lt-muted); border-bottom: 1px solid var(--color-divider);">
           <div role="columnheader">Rank</div>
           <div role="columnheader">Student</div>
           <div role="columnheader">Score</div>
           <div role="columnheader" style="text-align: right;">Adjusted</div>
           <div role="columnheader" style="text-align: right;">Movement &amp; gaps</div>
         </div>
+        </div>
+        <div role="rowgroup">
 
         <sc-for list="{{ visibleRows }}" as="row" hint-placeholder-count="10">
-          <div role="row" onClick="{{ row.onClick }}" tabIndex="0" onKeyDown="{{ row.onKeyDown }}" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(110px, 26%) 120px 150px; gap: var(--space-3); align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: pointer; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
-            <div role="cell" style="font-family: var(--font-heading); font-size: clamp(26px, 2.4vw, 48px); line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: {{ row.rankColor }};">{{ row.rank }}</div>
-            <div role="cell" style="display: flex; align-items: center; gap: var(--space-3); min-width: 0;">
-              <span style="flex: none; width: 40px; height: 40px; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 15px;">{{ row.monogram }}</span>
+          <div role="row" class="lt-grid lt-row" onClick="{{ row.onClick }}" style="align-items: center; min-height: 68px; padding: var(--space-2) var(--space-3); cursor: pointer; border-bottom: 1px solid var(--color-divider); background: {{ row.bg }}; animation: lt-rise 360ms ease-out both; animation-delay: {{ row.delay }};" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
+            <div role="cell" class="lt-c-rank" style="font-family: var(--font-heading); font-size: clamp(26px, 2.4vw, 48px); line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: {{ row.rankColor }};">{{ row.rank }}</div>
+            <div role="cell" class="lt-c-who" style="min-width: 0;">
+             <button class="lt-open" aria-label="{{ row.label }}" data-open-key="{{ row.key }}">
+              <span aria-hidden="true" style="flex: none; width: 40px; height: 40px; border: 1px solid var(--color-divider); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 15px;">{{ row.monogram }}</span>
               <span style="min-width: 0;">
                 <span style="display: block; font-family: var(--font-heading); font-size: clamp(18px, 1.6vw, 32px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ row.name }}</span>
-                <span style="display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent);">{{ row.flag }}</span>
+                <span style="display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lt-accent-text);">{{ row.flag }}</span>
               </span>
+             </button>
             </div>
-            <div role="cell">
-              <div style="height: 14px; border: 1px solid var(--color-divider); border-radius: 2px; overflow: hidden;">
+            <div role="cell" class="lt-c-bar">
+              <div aria-hidden="true" style="height: 14px; border: 1px solid var(--lt-edge); border-radius: 2px; overflow: hidden;">
                 <div style="height: 100%; width: {{ row.barWidth }}; background: {{ row.barFill }}; transition: width 520ms cubic-bezier(.2,.7,.3,1);"></div>
               </div>
-              <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums; margin-top: 3px;">{{ row.rawText }}</div>
+              <div style="font-size: 11px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums; margin-top: 3px;">{{ row.rawText }}</div>
             </div>
-            <div role="cell" style="text-align: right;">
+            <div role="cell" class="lt-c-adj" style="text-align: right;">
               <div style="font-family: var(--font-heading); font-size: clamp(20px, 1.7vw, 32px); font-variant-numeric: lining-nums tabular-nums;">{{ row.score }}</div>
-              <div style="font-size: 11px; opacity: 0.6; font-variant-numeric: lining-nums tabular-nums;">{{ row.factorText }}</div>
+              <div style="font-size: 11px; color: var(--lt-muted); font-variant-numeric: lining-nums tabular-nums;">{{ row.factorText }}</div>
             </div>
-            <div role="cell" style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">
+            <div role="cell" class="lt-c-move" style="text-align: right; font-variant-numeric: lining-nums tabular-nums;">
               <div style="font-size: 15px; color: {{ row.deltaColor }};">{{ row.deltaText }}</div>
-              <div style="font-size: 11px; opacity: 0.6;">{{ row.gapUpText }}</div>
-              <div style="font-size: 11px; opacity: 0.6;">{{ row.gapDownText }}</div>
+              <div style="font-size: 11px; color: var(--lt-muted);">{{ row.gapUpText }}</div>
+              <div style="font-size: 11px; color: var(--lt-muted);">{{ row.gapDownText }}</div>
             </div>
           </div>
         </sc-for>
+        </div>
       </div>
 
       <div style="display: flex; justify-content: center; padding: var(--space-4);">
         <button class="btn btn-secondary" onClick="{{ onToggleShowAll }}" style="min-height: 44px;">{{ showAllLabel }}</button>
       </div>
 
-      <p style="text-align: center; font-size: 12px; opacity: 0.65; max-width: 720px; margin: 0 auto; text-wrap: pretty; font-variant-numeric: lining-nums tabular-nums;">{{ footnote }}</p>
+      <p style="text-align: center; font-size: 12px; color: var(--lt-muted); max-width: 720px; margin: 0 auto; text-wrap: pretty; font-variant-numeric: lining-nums tabular-nums;">{{ footnote }}</p>
     </sc-if>
 
     <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
-      <div style="padding: var(--space-8); text-align: center; border: 1px solid var(--color-divider); border-radius: var(--radius-md);">
+      <div role="status" style="padding: var(--space-8); text-align: center; border: 1px solid var(--color-divider); border-radius: var(--radius-md);">
         <h3>No scores recorded for this week</h3>
-        <p style="font-size: 14px; opacity: 0.75;">{{ emptyHint }}</p>
+        <p style="font-size: 14px; color: var(--lt-muted);">{{ emptyHint }}</p>
       </div>
     </sc-if>
 
     <sc-if value="{{ me }}" hint-placeholder-val="{{ false }}">
       <div style="max-width: 860px; margin: 0 auto; display: grid; gap: var(--space-6);">
         <div>
-          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">{{ me.kicker }}</div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lt-accent-text);">{{ me.kicker }}</div>
           <h2 style="margin: var(--space-1) 0 0;">{{ me.name }}</h2>
-          <p style="font-size: 13px; opacity: 0.75; text-align: justify; max-width: 62ch;">{{ me.privacyNote }}</p>
+          <p style="font-size: 13px; color: var(--lt-muted); text-align: justify; max-width: 62ch;">{{ me.privacyNote }}</p>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3);">
           <sc-for list="{{ me.stats }}" as="st" hint-placeholder-count="4">
             <div style="border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: var(--space-3);">
-              <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6;">{{ st.label }}</div>
+              <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lt-muted);">{{ st.label }}</div>
               <div style="font-family: var(--font-heading); font-size: 30px; font-variant-numeric: lining-nums tabular-nums;">{{ st.value }}</div>
-              <div style="font-size: 11px; opacity: 0.65;">{{ st.note }}</div>
+              <div style="font-size: 11px; color: var(--lt-muted);">{{ st.note }}</div>
             </div>
           </sc-for>
         </div>
@@ -366,8 +410,8 @@
               </sc-for>
             </tbody>
           </table>
-          <p style="font-size: 12px; opacity: 0.7; margin-top: var(--space-2);">{{ me.hoursNote }}</p>
-          <p style="font-size: 12px; opacity: 0.7;">{{ me.cappedNote }}</p>
+          <p style="font-size: 12px; color: var(--lt-muted); margin-top: var(--space-2);">{{ me.hoursNote }}</p>
+          <p style="font-size: 12px; color: var(--lt-muted);">{{ me.cappedNote }}</p>
         </div>
 
         <div style="border-top: 1px solid var(--color-divider); padding-top: var(--space-3); display: grid; gap: var(--space-1); font-size: 14px;">
@@ -570,7 +614,7 @@
   <sc-if value="{{ drawer }}" hint-placeholder-val="{{ false }}">
     <div style="position: fixed; inset: 0; z-index: 40;">
       <div onClick="{{ onCloseDrawer }}" style="position: absolute; inset: 0; background: color-mix(in srgb, #201f1d 45%, transparent);"></div>
-      <aside role="dialog" aria-label="Score breakdown" style="position: absolute; top: 0; right: 0; bottom: 0; width: min(600px, 100%); overflow-y: auto; background: var(--color-bg); border-left: 1px solid var(--color-divider); box-shadow: var(--shadow-lg); padding: var(--space-6);">
+      <aside role="dialog" aria-label="Score breakdown" tabindex="-1" data-drawer style="outline: none; position: absolute; top: 0; right: 0; bottom: 0; width: min(600px, 100%); overflow-y: auto; background: var(--color-bg); border-left: 1px solid var(--color-divider); box-shadow: var(--shadow-lg); padding: var(--space-6);">
         <div style="display: flex; align-items: baseline; gap: var(--space-3);">
           <div style="margin-right: auto;">
             <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Rank {{ drawer.rank }} · {{ drawer.windowLabel }}</div>
@@ -855,7 +899,7 @@
     </div>
   </sc-if>
 
-  <footer style="padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-divider); display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; opacity: 0.7;">
+  <footer style="padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-divider); display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; color: var(--lt-muted);">
     <span>{{ shortcutHint }}</span>
     <span style="margin-left: auto;"><a href="Tests.dc.html">Service &amp; scoring tests</a></span>
   </footer>
@@ -941,6 +985,23 @@ class Component extends DCLogic {
 
   componentWillUnmount() {
     document.removeEventListener('keydown', this.onKey);
+  }
+
+  // Drawer focus hand-off: move focus into the dialog when it opens, and back to the
+  // row or podium button that opened it when it closes (Escape, Close or backdrop).
+  componentDidUpdate() {
+    const had = !!this.drawerWasOpen; // the host passes no prevState, so track it here
+    const has = !!this.state.drawer;
+    this.drawerWasOpen = has;
+    if (!had && has) {
+      const el = document.querySelector('[data-drawer]');
+      if (el) el.focus();
+    } else if (had && !has && this.drawerOpener) {
+      const key = this.drawerOpener;
+      this.drawerOpener = null;
+      const el = Array.from(document.querySelectorAll('[data-open-key]')).find((n) => n.getAttribute('data-open-key') === key);
+      if (el) el.focus();
+    }
   }
 
   findLoginClass(classId) {
@@ -1239,8 +1300,10 @@ class Component extends DCLogic {
     }
   };
 
-  openDrawer = async (studentId) => {
+  // Remember which control opened the drawer so closing it can hand focus back.
+  openDrawer = async (studentId, openKey) => {
     if (this.state.present) return;
+    this.drawerOpener = openKey || null;
     try {
       const ex = await this.api.getExplanation({ ...this.query(), studentId, caller: { role: 'instructor' } });
       if (this.state.present) return;
@@ -1316,7 +1379,7 @@ class Component extends DCLogic {
       label: r.label,
       active: s.loginRole === r.key,
       rule: s.loginRole === r.key ? 'var(--color-accent)' : 'transparent',
-      color: s.loginRole === r.key ? 'var(--color-text)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
+      color: s.loginRole === r.key ? 'var(--color-text)' : 'var(--lt-muted)',
       onClick: () => this.setState({ loginRole: r.key, loginError: null }),
     }));
     const klass = opts ? opts.classes.find((c) => c.id === s.loginClassId) : null;
@@ -1349,7 +1412,7 @@ class Component extends DCLogic {
       label: t.label,
       active: s.tab === t.key,
       rule: s.tab === t.key ? 'var(--color-accent)' : 'transparent',
-      color: s.tab === t.key ? 'var(--color-text)' : 'color-mix(in srgb, var(--color-text) 65%, transparent)',
+      color: s.tab === t.key ? 'var(--color-text)' : 'var(--lt-muted)',
       onClick: () => this.setState({ tab: t.key, loading: true, drawer: null }, this.loadTab),
     }));
   }
@@ -1378,14 +1441,16 @@ class Component extends DCLogic {
         monogram: this.monogram(r.display_name),
         score: this.fmt(r.score),
         deltaText: this.rankDeltaText(r.rank_delta),
-        flag: [r.tied ? 'tied' : null, r.capped ? 'capped at 100' : null].filter(Boolean).join(' · '),
+        flag: this.flagText(r),
         border: i === 0 ? 'var(--color-accent)' : 'var(--color-divider)',
         topRule: i === 0 ? '3px' : '1px',
         lift: i === 0 ? '-14px' : '0px',
         avatarSize: i === 0 ? '84px' : '64px',
         monogramSize: i === 0 ? '30px' : '22px',
         delay: `${i * 90}ms`,
-        onClick: () => this.openDrawer(r.student_id),
+        key: `podium:${r.student_id}`,
+        label: this.openLabel(r, this.flagText(r)),
+        onClick: () => this.openDrawer(r.student_id, `podium:${r.student_id}`),
       }));
   }
 
@@ -1397,29 +1462,34 @@ class Component extends DCLogic {
       monogram: this.monogram(r.display_name),
       score: this.fmt(r.score),
       barWidth: `${Math.max(2, (r.score / (best || 100)) * 100)}%`,
-      barFill: r.rank <= 3 ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-accent) 45%, transparent)',
-      rankColor: r.rank <= 3 ? 'var(--color-accent)' : 'var(--color-text)',
+      barFill: r.rank <= 3 ? 'var(--lt-accent-text)' : 'var(--lt-bar-low)',
+      rankColor: r.rank <= 3 ? 'var(--lt-accent-text)' : 'var(--color-text)',
       bg: r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
       rawText: s.rawOn && !s.present ? `raw ${this.fmt(r.raw)}` : '',
       factorText: s.rawOn && !s.present ? `×${this.fmt(r.factor, 2)}` : '',
       deltaText: this.rankDeltaText(r.rank_delta),
-      deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
+      deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'var(--lt-muted)',
       gapUpText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to the place above`,
       gapDownText: r.gap_to_below == null ? 'nobody below' : `${this.fmt(r.gap_to_below)} clear below`,
-      flag: [
-        r.tied ? 'tied' : null,
-        r.capped ? 'capped at 100' : null,
-        r.missing && r.missing.length ? 'no entry' : null,
-      ].filter(Boolean).join(' · '),
+      flag: this.flagText(r, true),
       delay: `${Math.min(i, 12) * 35}ms`,
-      onClick: () => this.openDrawer(r.student_id),
-      onKeyDown: (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          this.openDrawer(r.student_id);
-        }
-      },
+      key: `row:${r.student_id}`,
+      label: this.openLabel(r, this.flagText(r, true)),
+      onClick: () => this.openDrawer(r.student_id, `row:${r.student_id}`),
     }));
+  }
+
+  flagText(r, withMissing = false) {
+    return [
+      r.tied ? 'tied' : null,
+      r.capped ? 'capped at 100' : null,
+      withMissing && r.missing && r.missing.length ? 'no entry' : null,
+    ].filter(Boolean).join(' · ');
+  }
+
+  // Accessible name of the control that opens a student's breakdown: rank, name, score, flags.
+  openLabel(r, flag) {
+    return `Rank ${r.rank}, ${r.display_name}, score ${this.fmt(r.score)}${flag ? `, ${flag}` : ''}. Open score breakdown`;
   }
 
   buildCriteriaChips(s, boot) {
@@ -1884,6 +1954,7 @@ class Component extends DCLogic {
       showRiskControls: !!boot && !s.loading && s.tab === 'risk',
       weekLabel: week ? `Week ${week.week_number}` : '',
       weekNumber: week ? week.week_number : 1,
+      weekValueText: week ? `Week ${week.week_number} of ${boot.weeks.length}` : '',
       weekRange: week ? `${week.start_date} – ${week.end_date}${weekHasData ? '' : ' · nothing recorded yet'}` : '',
       windowOpts,
       criteriaChips,
