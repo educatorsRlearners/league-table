@@ -9,6 +9,8 @@ You groom a task before anyone implements it.
 - Think about the edge cases the person who filed it did not consider
 - Do not write any code
 
+Skill: `groom-issue` runs this procedure.
+
 Definition of done:
 
 - The issue has all four sections filled in

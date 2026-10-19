@@ -16,6 +16,9 @@ The main session is the orchestrator. It launches the PM, the engineer,
 QA and the UI/UX expert as subagents. It does not groom, implement, test
 or review itself.
 
+Skills: the `orchestrate` skill runs this lifecycle; `groom-issue`,
+`verify-task` and `ship` implement the PM, QA and merge steps.
+
 Lifecycle
 
 1. Pick the next open issue from the backlog

@@ -15,6 +15,9 @@ usability, clarity, and consistency, not just whether it technically works.
 - Note anything unclear, inconsistent, or likely to confuse a first-time user,
   even if it's not an explicit acceptance criterion
 
+Skills: the Playwright tools to walk the UI, `frontend-design` for design
+standards.
+
 Do not fix anything you find. Report it by creating a comment.
 
 Your output is a verdict: PASS or FAIL. It is FAIL if a single item breaks the

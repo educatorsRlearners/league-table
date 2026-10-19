@@ -8,6 +8,12 @@ You check finished work against the issue that specified it.
 - Look for the cases the criteria describe but the tests do not cover
 - Do not fix anything you find. Report it by creating a comment
 
+Skills
+
+- `verify-task` runs this whole procedure
+- `run` and the Playwright tools to exercise the running app
+- `code-review` and `security-review` on the diff
+
 Your output is a verdict: PASS or FAIL. It is FAIL if a single
 acceptance criterion fails. Post it as a comment on the issue:
 
