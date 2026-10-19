@@ -101,7 +101,7 @@
       <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
       <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">{{ identityLabel }}</span>
       <sc-if value="{{ present }}" hint-placeholder-val="{{ false }}">
-        <button class="btn btn-primary" onClick="{{ onTogglePresent }}" style="min-height: 44px;" title="Leave Present mode (P)">Exit Present</button>
+        <button class="btn btn-primary" data-present-exit onClick="{{ onTogglePresent }}" style="min-height: 44px;" title="Leave Present mode (P)">Exit Present</button>
       </sc-if>
       <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
       <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" aria-label="Toggle theme" style="min-height: 44px; font-size: 18px;">{{ themeLabel }}</button>
@@ -173,7 +173,7 @@
       </div>
 
       <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
-        <button onClick="{{ onTogglePresent }}" aria-pressed="{{ present }}" title="Hide hours, factors and raw scores for the projector (P)" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ presentBg }}; border: 1px solid {{ presentBorder }}; color: var(--color-text);">Present</button>
+        <button data-present-toggle onClick="{{ onTogglePresent }}" aria-pressed="{{ present }}" title="Hide hours, factors and raw scores for the projector (P)" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ presentBg }}; border: 1px solid {{ presentBorder }}; color: var(--color-text);">Present</button>
         <sc-if value="{{ showInstructorTools }}" hint-placeholder-val="{{ true }}">
           <button onClick="{{ onToggleRaw }}" aria-pressed="{{ rawOn }}" title="Instructor only — compare the adjusted order with the raw order" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ rawBg }}; border: 1px solid {{ rawBorder }}; color: var(--color-text);">Raw view</button>
         </sc-if>
@@ -1058,16 +1058,27 @@ class Component extends DCLogic {
   togglePresent = () => {
     const s = this.state;
     if (!s.loggedIn || s.role === 'student') return;
-    if (s.present) return this.setState({ present: false });
+    if (s.present) return this.setState({ present: false }, () => this.focusPresent('[data-present-toggle]'));
     const leaveTab = s.tab !== 'league';
     this.setState(
       {
         present: true, drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false,
         ...(leaveTab ? { tab: 'league', loading: true } : {}),
       },
-      leaveTab ? this.loadTab : undefined,
+      () => {
+        this.focusPresent('[data-present-exit]');
+        if (leaveTab) this.loadTab();
+      },
     );
   };
+
+  // Keep keyboard focus on a live control when Present toggles: the control
+  // that had focus is removed, so move it to the one that replaces it.
+  focusPresent(selector) {
+    const go = () => { const el = document.querySelector(selector); if (el) el.focus(); };
+    go();
+    requestAnimationFrame(go);
+  }
 
   stepWeek(d) {
     const { boot, weekIdx } = this.state;
