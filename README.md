@@ -85,6 +85,7 @@ All endpoints take a Bearer token (see [Auth](#auth)). The full contract is in [
 | `POST /classes/{id}/commitments/baselines/{baselineId}/decide` | instructor | Approve (picking the effective week) or reject a pending baseline |
 | `GET /classes/{id}/commitments/weekly-updates` | instructor | Every weekly update for the class, most recent first |
 | `POST /classes/{id}/commitments/weekly-updates/{updateId}/reverse` | instructor | Reverse a weekly update |
+| `GET /classes/{id}/commitments/change-log?studentId=` | instructor | Every commitment change (submit, approve, reject, weekly set, reversal) with actor, time and old/new hours, newest first; reversing a weekly update restores the value it replaced |
 | `GET /instructor/digest?week=` | instructor | New/still/cleared flags across every class, for a chosen week (default: each class's latest complete week) compared against the week before it |
 | `GET /classes/{id}/students/{sid}/risk` | instructor (with notes), or the student themselves (notes hidden) | Level, five signals with evidence, metrics, thresholds, history |
 | `POST /classes/{id}/students/{sid}/notes` | instructor | Log private outreach (body trimmed, empty rejected) |

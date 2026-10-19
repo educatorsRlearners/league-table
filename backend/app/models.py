@@ -240,6 +240,17 @@ class WeeklyUpdate(BaseModel):
     reversed_at: str | None = None
 
 
+class ChangeLogEntry(BaseModel):
+    id: str
+    actor_id: str
+    action: Literal["baseline.submit", "baseline.approve", "baseline.reject", "weekly.set", "weekly.reverse"]
+    student_id: str
+    week_id: str | None = None
+    old_values: dict[str, float | int | None] | None = None
+    new_values: dict[str, float | int | None] | None = None
+    at: str
+
+
 class Commitments(BaseModel):
     studentId: str
     baseline: Baseline | None = None

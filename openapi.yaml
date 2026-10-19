@@ -437,6 +437,43 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /classes/{classId}/commitments/change-log:
+    get:
+      tags: [commitments]
+      summary: Commitment change log, newest first
+      description: |
+        Every baseline submission, approval, rejection, weekly update and
+        reversal, with who made it, when, and the old and new hours. Entries
+        are written in the same transaction as the change they describe, and
+        are not back-filled for data that predates the log. Auth: instructor
+        only; students receive 403.
+      parameters:
+        - $ref: '#/components/parameters/ClassId'
+        - name: studentId
+          in: query
+          required: false
+          description: Only this student's entries. An unknown id returns an empty list.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Change log entries, newest first (empty list when nothing has changed)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChangeLogEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Unknown class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /classes/{classId}/commitments/baselines/{baselineId}/decide:
     post:
       tags: [commitments]
@@ -1145,6 +1182,36 @@ components:
         entered_at: { type: string, format: date-time }
         reversed_by: { type: string, nullable: true }
         reversed_at: { type: string, format: date-time, nullable: true }
+
+    ChangeLogEntry:
+      type: object
+      required: [id, actor_id, action, student_id, old_values, new_values, at]
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        action:
+          type: string
+          enum: [baseline.submit, baseline.approve, baseline.reject, weekly.set, weekly.reverse]
+        student_id: { type: string }
+        week_id: { type: string, nullable: true, description: Null for baseline actions }
+        old_values:
+          type: object
+          nullable: true
+          description: Hours before the change, or null when none applied
+          properties:
+            work: { type: number }
+            childcare: { type: number }
+            eldercare: { type: number }
+        new_values:
+          type: object
+          nullable: true
+          description: Hours after the change; baseline.approve also carries effective_from_week
+          properties:
+            work: { type: number }
+            childcare: { type: number }
+            eldercare: { type: number }
+            effective_from_week: { type: integer }
+        at: { type: string, format: date-time }
 
     Commitments:
       type: object

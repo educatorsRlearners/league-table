@@ -333,7 +333,7 @@ We assume a REST API with JSON responses, and FastAPI provides exactly that. It 
 | `GET /classes/{classId}/risk-settings` | Instructor | Per-class risk thresholds and active signals |
 | `PUT /classes/{classId}/risk-settings` | Instructor | Saves per-class risk thresholds and active signals |
 
-Weeks are addressed by week id in queries (e.g. `?week=w5`) and by `week_number` in commitment payloads. Not yet in the API: commitment writes (`PUT /me/commitments/baseline`, `PUT /me/commitments/weeks/{week_number}`), the approvals queue, reversal, the change log, and access-code sign-in — the browser demo covers those flows through its in-memory mock, and they remain the next endpoints to build.
+Weeks are addressed by week id in queries (e.g. `?week=w5`) and by `week_number` in commitment payloads. The change log is served by `GET /classes/{classId}/commitments/change-log` (instructor only, optional `?studentId=`, newest first). Not yet in the API: access-code sign-in — the browser demo covers that flow through its in-memory mock, and it remains the next endpoint to build.
 
 **Service requirements**
 
