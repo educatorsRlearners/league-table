@@ -85,6 +85,16 @@ _LOG_FIELDS = ("id", "actor_id", "action", "student_id", "week_id", "old_values"
 _NOTE_FIELDS = ("id", "instructor_id", "class_id", "student_id", "body", "created_at")
 
 
+_LOG_HOURS_KEYS = {"work": "work_hours", "childcare": "childcare_hours", "eldercare": "eldercare_hours"}
+
+
+def _log_hours_keys(values: dict | None) -> dict | None:
+    """Present stored log hours under the API's `*_hours` keys (rows keep the short keys)."""
+    if values is None:
+        return None
+    return {_LOG_HOURS_KEYS.get(k, k): v for k, v in values.items()}
+
+
 def _row_to_dict(row, fields: tuple[str, ...]) -> dict:
     return {f: getattr(row, f) for f in fields}
 
@@ -236,7 +246,11 @@ class SqlAlchemyStore:
             if student_id:
                 query = query.where(ChangeLogRow.student_id == student_id)
             rows = session.scalars(query.order_by(ChangeLogRow.pk.desc())).all()
-            return [_row_to_dict(r, _LOG_FIELDS) for r in rows]
+            entries = [_row_to_dict(r, _LOG_FIELDS) for r in rows]
+        for entry in entries:
+            for key in ("old_values", "new_values"):
+                entry[key] = _log_hours_keys(entry[key])
+        return entries
 
     # commitments
 

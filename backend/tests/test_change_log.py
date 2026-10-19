@@ -13,6 +13,10 @@ def hours(work=0, childcare=0, eldercare=0):
     return {"work": work, "childcare": childcare, "eldercare": eldercare}
 
 
+def log_hours(work=0, childcare=0, eldercare=0):
+    return {"work_hours": work, "childcare_hours": childcare, "eldercare_hours": eldercare}
+
+
 def client(app, token):
     c = TestClient(app)
     c.headers.update({"Authorization": f"Bearer {token}"})
@@ -72,7 +76,7 @@ def test_baseline_submit_approve_reject_entries(app, instructor, clock, s10):
     assert entry["action"] == "baseline.submit"
     assert entry["actor_id"] == "s10" and entry["student_id"] == "s10"
     assert entry["week_id"] is None and entry["old_values"] is None
-    assert entry["new_values"] == hours(10, 2, 0)
+    assert entry["new_values"] == log_hours(10, 2, 0)
     assert entry["id"]
     assert entry["at"] == datetime.fromtimestamp(clock(), tz=UTC).isoformat()
 
@@ -81,7 +85,7 @@ def test_baseline_submit_approve_reject_entries(app, instructor, clock, s10):
     assert newest["action"] == "baseline.approve" and newest["actor_id"] == "i1"
     assert newest["student_id"] == "s10" and newest["week_id"] is None
     assert newest["new_values"]["effective_from_week"] == 3
-    assert newest["new_values"]["work"] == 10
+    assert newest["new_values"]["work_hours"] == 10
 
     s13 = client(app, "s13")
     bid2 = put_baseline(s13, "s13", work=5)
@@ -96,7 +100,7 @@ def test_resubmitted_baseline_records_previous_hours(s10, instructor):
     put_baseline(s10, "s10", work=10)
     put_baseline(s10, "s10", work=15)
     newest = log(instructor)[0]
-    assert newest["old_values"] == hours(10, 0, 0) and newest["new_values"] == hours(15, 0, 0)
+    assert newest["old_values"] == log_hours(10, 0, 0) and newest["new_values"] == log_hours(15, 0, 0)
 
 
 def test_weekly_set_old_values_and_chain(app, instructor):
@@ -105,7 +109,7 @@ def test_weekly_set_old_values_and_chain(app, instructor):
     assert put_week(s13, "s13", work=4).status_code == 200
     entry = log(instructor, studentId="s13")[0]
     assert entry["action"] == "weekly.set" and entry["old_values"] is None
-    assert entry["new_values"] == hours(4, 0, 0) and entry["week_id"]
+    assert entry["new_values"] == log_hours(4, 0, 0) and entry["week_id"]
     assert entry["actor_id"] == "s13"
 
     s10 = approved_baseline(app, instructor)
@@ -113,10 +117,10 @@ def test_weekly_set_old_values_and_chain(app, instructor):
     put_week(s10, "s10", work=30)
     second, first = log(instructor, studentId="s10")[:2]
     assert first["action"] == second["action"] == "weekly.set"
-    assert first["old_values"] == hours(10, 0, 0)  # baseline in effect
-    assert first["new_values"] == hours(20, 0, 0)
+    assert first["old_values"] == log_hours(10, 0, 0)  # baseline in effect
+    assert first["new_values"] == log_hours(20, 0, 0)
     assert second["old_values"] == first["new_values"]
-    assert second["new_values"] == hours(30, 0, 0)
+    assert second["new_values"] == log_hours(30, 0, 0)
 
 
 def test_reverse_entry_and_restores_earlier_weekly_value(app, instructor):
@@ -131,13 +135,29 @@ def test_reverse_entry_and_restores_earlier_weekly_value(app, instructor):
     entry = log(instructor)[0]
     assert entry["action"] == "weekly.reverse" and entry["actor_id"] == "i1"
     assert entry["student_id"] == "s10" and entry["week_id"]
-    assert entry["old_values"] == hours(30, 0, 0)
-    assert entry["new_values"] == hours(20, 0, 0)
+    assert entry["old_values"] == log_hours(30, 0, 0)
+    assert entry["new_values"] == log_hours(20, 0, 0)
 
     wk, comm = week16(s10, "s10")
     assert wk["hours"] == hours(20, 0, 0) and wk["source"] == "weekly"
     live = [u for u in comm["weeklyUpdates"] if u["week_number"] == 16 and u["reversed_at"] is None]
     assert [u["work_hours"] for u in live] == [20]
+
+
+def test_reversing_a_superseded_update_is_409_and_not_logged(app, instructor):
+    s10 = approved_baseline(app, instructor)
+    put_week(s10, "s10", work=20)
+    comm = s10.get("/me/commitments", params=params("s10")).json()
+    first = next(u for u in comm["weeklyUpdates"] if u["week_number"] == 16)
+    put_week(s10, "s10", work=30)  # replaces the first update
+    before = log(instructor)
+
+    resp = instructor.post(f"/classes/c1/commitments/weekly-updates/{first['id']}/reverse")
+    assert resp.status_code == 409
+    assert "replaced by a later edit" in resp.text
+    assert log(instructor) == before
+    wk, _ = week16(s10, "s10")
+    assert wk["hours"] == hours(30, 0, 0)
 
 
 def test_reverse_falls_back_to_baseline_and_ranking_is_restored(app, instructor):
@@ -152,7 +172,7 @@ def test_reverse_falls_back_to_baseline_and_ranking_is_restored(app, instructor)
     instructor.post(f"/classes/c1/commitments/weekly-updates/{upd['id']}/reverse")
 
     entry = log(instructor)[0]
-    assert entry["old_values"] == hours(30, 0, 0) and entry["new_values"] == hours(10, 0, 0)
+    assert entry["old_values"] == log_hours(30, 0, 0) and entry["new_values"] == log_hours(10, 0, 0)
     wk, _ = week16(s10, "s10")
     assert wk["hours"] == hours(10, 0, 0) and wk["source"] == "baseline"
     after = instructor.get("/classes/c1/ranking", params=ranking).json()
@@ -181,7 +201,7 @@ def test_reverse_without_approved_baseline_gives_zero_hours(app, instructor):
     instructor.post(f"/classes/c1/commitments/weekly-updates/{upd['id']}/reverse")
     entry = log(instructor)[0]
     assert entry["action"] == "weekly.reverse"
-    assert entry["new_values"] == hours(0, 0, 0)
+    assert entry["new_values"] == log_hours(0, 0, 0)
     wk, _ = week16(s13, "s13")
     assert wk["hours"] == hours(0, 0, 0) and wk["source"] == "none"
 
@@ -201,7 +221,7 @@ def test_edit_after_reversal_creates_new_update(app, instructor):
     new = next(u for u in updates if u["id"] != first["id"])
     assert new["reversed_at"] is None and new["work_hours"] == 25
     newest = log(instructor)[0]
-    assert newest["action"] == "weekly.set" and newest["old_values"] == hours(10, 0, 0)
+    assert newest["action"] == "weekly.set" and newest["old_values"] == log_hours(10, 0, 0)
 
 
 def test_entries_newest_first_and_filter_by_student(app, instructor, clock):

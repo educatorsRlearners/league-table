@@ -1199,17 +1199,17 @@ components:
           nullable: true
           description: Hours before the change, or null when none applied
           properties:
-            work: { type: number }
-            childcare: { type: number }
-            eldercare: { type: number }
+            work_hours: { type: number }
+            childcare_hours: { type: number }
+            eldercare_hours: { type: number }
         new_values:
           type: object
           nullable: true
           description: Hours after the change; baseline.approve also carries effective_from_week
           properties:
-            work: { type: number }
-            childcare: { type: number }
-            eldercare: { type: number }
+            work_hours: { type: number }
+            childcare_hours: { type: number }
+            eldercare_hours: { type: number }
             effective_from_week: { type: integer }
         at: { type: string, format: date-time }
 

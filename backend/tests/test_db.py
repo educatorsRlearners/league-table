@@ -36,7 +36,7 @@ def test_change_log_table_is_created_and_round_trips(tmp_path):
 
     reopened = SqlAlchemyStore(database_url=url, class_ids=["c1"])
     [entry] = reopened.list_change_log("c1")
-    assert entry["action"] == "baseline.submit" and entry["new_values"]["work"] == 4
+    assert entry["action"] == "baseline.submit" and entry["new_values"]["work_hours"] == 4
 
 
 def test_old_weekly_updates_table_gains_superseded_by_column(tmp_path):
