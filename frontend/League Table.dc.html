@@ -1820,16 +1820,16 @@ class Component extends DCLogic {
     const { weightRows, draftTotal } = this.buildWeightRows(s, boot);
     const { paramRows, dp } = this.buildParamRows(s);
 
-    const drawer = this.buildDrawer(s.present ? null : s.drawer);
+    const drawer = this.buildDrawer(s.drawer);
 
     const me = this.buildMeSection(s.me, s);
     const digest = this.buildDigestSection(s.digest);
-    const record = this.buildRecordSection(s.present ? null : s.record);
+    const record = this.buildRecordSection(s.record);
     const standing = this.buildStandingSection(s.standing);
     const commitmentsView = this.buildCommitmentsSection(s.commitments, s);
     const approvals = this.buildApprovalsSection(s);
     const thresholds = this.buildThresholdsSection(s, boot);
-    const explainer = this.buildExplainerSection(s.present ? null : s.explainer);
+    const explainer = this.buildExplainerSection(s.explainer);
 
     const issues = s.issues || [];
     const weeksWithData = boot ? boot.weeksWithData : [];
@@ -1911,7 +1911,7 @@ class Component extends DCLogic {
       thresholds,
       noteDraft: s.noteDraft,
       drawer,
-      weightsOpen: s.weightsOpen && !s.present,
+      weightsOpen: s.weightsOpen,
       weightRows,
       paramRows,
       paramsSummary: dp ? `A student with 20 weighted hours scores ×${Math.min(1 + dp.rate * 20, dp.cap).toFixed(2)}; the cap bites at ${((dp.cap - 1) / (dp.rate || 1)).toFixed(0)} hours.` : '',
@@ -1956,7 +1956,7 @@ class Component extends DCLogic {
         await this.api.saveRiskSettings(s.classId, s.draftThresholds);
         this.setState({ thresholdsOpen: false, record: null }, this.loadDigest);
       },
-      onToggleWeights: () => !s.present && this.setState((st) => ({ weightsOpen: !st.weightsOpen, draftWeights: st.weights, draftParams: st.boot.settings })),
+      onToggleWeights: () => this.setState((st) => ({ weightsOpen: !st.weightsOpen, draftWeights: st.weights, draftParams: st.boot.settings })),
       onCloseWeights: () => this.setState({ weightsOpen: false }),
       onOpenExplainer: async () => {
         const data = await this.api.getExplainer(s.classId);
