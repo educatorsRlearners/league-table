@@ -210,7 +210,7 @@
         </sc-if>
       </div>
 
-      <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
+      <div style="display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-left: auto;">
         <button data-present-toggle onClick="{{ onTogglePresent }}" aria-pressed="{{ present }}" title="Hide hours, factors and raw scores for the projector (P)" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ presentBg }}; border: 1px solid {{ presentBorder }}; color: var(--color-text);">Present</button>
         <sc-if value="{{ showInstructorTools }}" hint-placeholder-val="{{ true }}">
           <button onClick="{{ onToggleRaw }}" aria-pressed="{{ rawOn }}" title="Instructor only — compare the adjusted order with the raw order" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ rawBg }}; border: 1px solid {{ rawBorder }}; color: var(--color-text);">Raw view</button>
@@ -1435,15 +1435,13 @@ class Component extends DCLogic {
       .slice(0, 3)
       .map((r, i) => ({ r, i }))
       .sort((a, b) => [1, 0, 2][a.i] - [1, 0, 2][b.i])
-      .map(({ r, i }) => {
-       const flag = [r.tied ? 'tied' : null, r.capped ? 'capped at 100' : null].filter(Boolean).join(' · ');
-       return {
+      .map(({ r, i }) => ({
         rank: r.rank,
         name: r.display_name,
         monogram: this.monogram(r.display_name),
         score: this.fmt(r.score),
         deltaText: this.rankDeltaText(r.rank_delta),
-        flag,
+        flag: this.flagText(r),
         border: i === 0 ? 'var(--color-accent)' : 'var(--color-divider)',
         topRule: i === 0 ? '3px' : '1px',
         lift: i === 0 ? '-14px' : '0px',
@@ -1451,21 +1449,14 @@ class Component extends DCLogic {
         monogramSize: i === 0 ? '30px' : '22px',
         delay: `${i * 90}ms`,
         key: `podium:${r.student_id}`,
-        label: this.openLabel(r, flag),
+        label: this.openLabel(r, this.flagText(r)),
         onClick: () => this.openDrawer(r.student_id, `podium:${r.student_id}`),
-       };
-      });
+      }));
   }
 
   buildVisibleRows(rows, best, s, topN) {
     const visible = s.showAll ? rows : rows.slice(0, topN);
-    return visible.map((r, i) => {
-     const flag = [
-        r.tied ? 'tied' : null,
-        r.capped ? 'capped at 100' : null,
-        r.missing && r.missing.length ? 'no entry' : null,
-      ].filter(Boolean).join(' · ');
-     return {
+    return visible.map((r, i) => ({
       rank: r.rank,
       name: r.display_name,
       monogram: this.monogram(r.display_name),
@@ -1480,13 +1471,20 @@ class Component extends DCLogic {
       deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'var(--lt-muted)',
       gapUpText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to the place above`,
       gapDownText: r.gap_to_below == null ? 'nobody below' : `${this.fmt(r.gap_to_below)} clear below`,
-      flag,
+      flag: this.flagText(r, true),
       delay: `${Math.min(i, 12) * 35}ms`,
       key: `row:${r.student_id}`,
-      label: this.openLabel(r, flag),
+      label: this.openLabel(r, this.flagText(r, true)),
       onClick: () => this.openDrawer(r.student_id, `row:${r.student_id}`),
-     };
-    });
+    }));
+  }
+
+  flagText(r, withMissing = false) {
+    return [
+      r.tied ? 'tied' : null,
+      r.capped ? 'capped at 100' : null,
+      withMissing && r.missing && r.missing.length ? 'no entry' : null,
+    ].filter(Boolean).join(' · ');
   }
 
   // Accessible name of the control that opens a student's breakdown: rank, name, score, flags.
