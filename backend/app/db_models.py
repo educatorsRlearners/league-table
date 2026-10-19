@@ -60,6 +60,9 @@ class WeeklyUpdateRow(Base):
     entered_at: Mapped[str] = mapped_column(String)
     reversed_by: Mapped[str | None] = mapped_column(String, nullable=True)
     reversed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    # id of the later update that replaced this one for the same week. The row is
+    # kept so reversing the later update can restore these hours.
+    superseded_by: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class NoteRow(Base):
@@ -72,3 +75,18 @@ class NoteRow(Base):
     student_id: Mapped[str] = mapped_column(String, index=True)
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(String)
+
+
+class ChangeLogRow(Base):
+    __tablename__ = "change_log"
+
+    pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    class_id: Mapped[str] = mapped_column(String, index=True)
+    actor_id: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column(String)
+    student_id: Mapped[str] = mapped_column(String, index=True)
+    week_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    old_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    new_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    at: Mapped[str] = mapped_column(String)

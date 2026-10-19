@@ -11,6 +11,7 @@ from app.deps import get_ctx, need_class
 from app.models import (
     Baseline,
     BaselineDecisionRequest,
+    ChangeLogEntry,
     CommitmentHoursInput,
     Commitments,
     Digest,
@@ -75,7 +76,7 @@ def save_baseline(classId: str = Query(alias="classId"), studentId: str = Query(
     if caller.role != "student" or caller.studentId != studentId:
         raise HTTPException(status_code=403, detail="Only the student may submit their own baseline.")
     need_class(ctx, classId)
-    ctx.store.save_baseline(class_id=classId, student_id=studentId, hours=body.model_dump(),
+    ctx.store.save_baseline(class_id=classId, student_id=studentId, hours=body.model_dump(), actor_id=studentId,
                             submitted_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
     ctx.service._cache.pop(classId, None)
     snap = need_class(ctx, classId)
@@ -98,7 +99,7 @@ def save_weekly_update(weekNumber: int, classId: str = Query(alias="classId"), s
         raise HTTPException(status_code=400,
                             detail=f"Only week {' or '.join(str(n) for n in editable)} can be edited right now.")
     ctx.store.save_weekly_update(class_id=classId, student_id=studentId, week_id=week.id, week_number=weekNumber,
-                                 hours=body.model_dump(), entered_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
+                                 hours=body.model_dump(), actor_id=studentId, entered_at=datetime.fromtimestamp(ctx.clock(), tz=UTC).isoformat())
     ctx.service._cache.pop(classId, None)
     snap = need_class(ctx, classId)
     return _commitments_payload(ctx, snap, studentId)
@@ -130,6 +131,14 @@ def list_weekly_updates(classId: str, caller: Caller = Depends(require_instructo
          if u["student_id"] in students_by_id else u["student_id"]}
         for u in reversed(rows)
     ]
+
+
+@router.get("/classes/{classId}/commitments/change-log", response_model=list[ChangeLogEntry],
+            tags=["commitments"], responses={401: {}, 403: {}, 404: {}})
+def get_change_log(classId: str, studentId: str | None = Query(default=None, alias="studentId"),
+                   caller: Caller = Depends(require_instructor), ctx=Depends(get_ctx)):
+    need_class(ctx, classId)
+    return ctx.store.list_change_log(classId, studentId)
 
 
 @router.post("/classes/{classId}/commitments/baselines/{baselineId}/decide", response_model=Baseline,

@@ -20,18 +20,20 @@ import threading
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.engine import Engine
 
 from app.db import Base, make_engine, make_session_factory
 from app.db_models import (
     BaselineRow,
+    ChangeLogRow,
     LeagueSettingsRow,
     NoteRow,
     RiskSettingsRow,
     WeeklyUpdateRow,
 )
 from app.risk import DEFAULT_ACTIVE, DEFAULT_THRESHOLDS
+from app.scoring import resolve_hours
 
 
 def default_league_settings() -> dict:
@@ -56,9 +58,10 @@ class AppStore(Protocol):
     def list_baselines(self, class_id: str) -> list[dict]: ...
     def list_weekly_updates(self, class_id: str) -> list[dict]: ...
     def get_commitments(self, class_id: str, student_id: str) -> dict: ...
-    def save_baseline(self, *, class_id: str, student_id: str, hours: dict, submitted_at: str) -> dict: ...
+    def save_baseline(self, *, class_id: str, student_id: str, hours: dict, submitted_at: str,
+                      actor_id: str | None = None) -> dict: ...
     def save_weekly_update(self, *, class_id: str, student_id: str, week_id: str, week_number: int,
-                           hours: dict, entered_at: str) -> dict: ...
+                           hours: dict, entered_at: str, actor_id: str | None = None) -> dict: ...
     def list_pending_baselines(self, class_id: str) -> list[dict]: ...
     def decide_baseline(self, *, class_id: str, baseline_id: str, status: str, effective_from_week: int | None,
                         decided_by: str, decided_at: str) -> dict: ...
@@ -67,6 +70,7 @@ class AppStore(Protocol):
     def save_risk_settings(self, class_id: str, patch: dict) -> dict: ...
     def add_note(self, *, class_id: str, student_id: str, instructor_id: str, body: str, at: str | None = None) -> dict: ...
     def list_notes(self, class_id: str, student_id: str | None, instructor_id: str) -> list[dict]: ...
+    def list_change_log(self, class_id: str, student_id: str | None = None) -> list[dict]: ...
 
 
 _BASELINE_FIELDS = (
@@ -77,7 +81,18 @@ _UPDATE_FIELDS = (
     "id", "student_id", "week_id", "week_number", "work_hours",
     "childcare_hours", "eldercare_hours", "entered_at", "reversed_by", "reversed_at",
 )
+_LOG_FIELDS = ("id", "actor_id", "action", "student_id", "week_id", "old_values", "new_values", "at")
 _NOTE_FIELDS = ("id", "instructor_id", "class_id", "student_id", "body", "created_at")
+
+
+_LOG_HOURS_KEYS = {"work": "work_hours", "childcare": "childcare_hours", "eldercare": "eldercare_hours"}
+
+
+def _log_hours_keys(values: dict | None) -> dict | None:
+    """Present stored log hours under the API's `*_hours` keys (rows keep the short keys)."""
+    if values is None:
+        return None
+    return {_LOG_HOURS_KEYS.get(k, k): v for k, v in values.items()}
 
 
 def _row_to_dict(row, fields: tuple[str, ...]) -> dict:
@@ -104,8 +119,16 @@ class SqlAlchemyStore:
         self._lock = threading.RLock()
         self._engine = engine or make_engine(database_url)
         Base.metadata.create_all(self._engine)
+        self._add_missing_columns()
         self._Session = make_session_factory(self._engine)
         self._seed(class_ids or [], seed or {})
+
+    def _add_missing_columns(self) -> None:
+        """create_all adds tables but not columns; upgrade files made before superseded_by."""
+        columns = {c["name"] for c in inspect(self._engine).get_columns("weekly_updates")}
+        if "superseded_by" not in columns:
+            with self._engine.begin() as conn:
+                conn.execute(text("ALTER TABLE weekly_updates ADD COLUMN superseded_by VARCHAR"))
 
     # session helper
 
@@ -183,6 +206,52 @@ class SqlAlchemyStore:
             session.refresh(row)
             return self._league_dict(row)
 
+    # change log
+
+    @staticmethod
+    def _hours_dict(row) -> dict:
+        return {"work": row.work_hours, "childcare": row.childcare_hours, "eldercare": row.eldercare_hours}
+
+    def _add_log(self, session, *, class_id: str, actor_id: str, action: str, student_id: str,
+                 week_id: str | None, old_values: dict | None, new_values: dict | None, at: str) -> None:
+        """Stage a log entry in the caller's session so it commits with the change."""
+        existing_ids = session.scalars(select(ChangeLogRow.id).where(ChangeLogRow.class_id == class_id)).all()
+        session.add(ChangeLogRow(
+            id=_next_id(list(existing_ids), f"{class_id}-log"), class_id=class_id, actor_id=actor_id,
+            action=action, student_id=student_id, week_id=week_id, old_values=old_values,
+            new_values=new_values, at=at,
+        ))
+
+    def _hours_in_effect(self, session, class_id: str, student_id: str, week_number: int) -> dict:
+        """resolve_hours over the student's live rows (autoflush makes pending changes visible)."""
+        approved = session.scalars(
+            select(BaselineRow).where(BaselineRow.class_id == class_id, BaselineRow.student_id == student_id,
+                                      BaselineRow.status == "approved").order_by(BaselineRow.pk)
+        ).all()
+        updates = session.scalars(
+            select(WeeklyUpdateRow).where(
+                WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
+                WeeklyUpdateRow.superseded_by.is_(None),
+            ).order_by(WeeklyUpdateRow.pk)
+        ).all()
+        return resolve_hours(
+            baseline=_row_to_dict(approved[-1], _BASELINE_FIELDS) if approved else None,
+            weekly_updates=[_row_to_dict(u, _UPDATE_FIELDS) for u in updates],
+            week_number=week_number,
+        )
+
+    def list_change_log(self, class_id: str, student_id: str | None = None) -> list[dict]:
+        with self._lock, self._session() as session:
+            query = select(ChangeLogRow).where(ChangeLogRow.class_id == class_id)
+            if student_id:
+                query = query.where(ChangeLogRow.student_id == student_id)
+            rows = session.scalars(query.order_by(ChangeLogRow.pk.desc())).all()
+            entries = [_row_to_dict(r, _LOG_FIELDS) for r in rows]
+        for entry in entries:
+            for key in ("old_values", "new_values"):
+                entry[key] = _log_hours_keys(entry[key])
+        return entries
+
     # commitments
 
     def list_baselines(self, class_id: str) -> list[dict]:
@@ -195,7 +264,9 @@ class SqlAlchemyStore:
     def list_weekly_updates(self, class_id: str) -> list[dict]:
         with self._lock, self._session() as session:
             rows = session.scalars(
-                select(WeeklyUpdateRow).where(WeeklyUpdateRow.class_id == class_id).order_by(WeeklyUpdateRow.pk)
+                select(WeeklyUpdateRow)
+                .where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.superseded_by.is_(None))
+                .order_by(WeeklyUpdateRow.pk)
             ).all()
             return [_row_to_dict(r, _UPDATE_FIELDS) for r in rows]
 
@@ -212,14 +283,20 @@ class SqlAlchemyStore:
             active_baseline = _row_to_dict(approved[-1], _BASELINE_FIELDS) if approved else None
             updates = session.scalars(
                 select(WeeklyUpdateRow)
-                .where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id)
+                .where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
+                       WeeklyUpdateRow.superseded_by.is_(None))
                 .order_by(WeeklyUpdateRow.pk)
             ).all()
             return {"baseline": baseline, "activeBaseline": active_baseline,
                     "weeklyUpdates": [_row_to_dict(u, _UPDATE_FIELDS) for u in updates]}
 
-    def save_baseline(self, *, class_id: str, student_id: str, hours: dict, submitted_at: str) -> dict:
+    def save_baseline(self, *, class_id: str, student_id: str, hours: dict, submitted_at: str,
+                      actor_id: str | None = None) -> dict:
         with self._lock, self._session() as session:
+            previous = session.scalars(
+                select(BaselineRow).where(BaselineRow.class_id == class_id, BaselineRow.student_id == student_id,
+                                          BaselineRow.status != "superseded").order_by(BaselineRow.pk.desc())
+            ).first()
             existing_ids = session.scalars(
                 select(BaselineRow.id).where(BaselineRow.class_id == class_id)
             ).all()
@@ -230,30 +307,42 @@ class SqlAlchemyStore:
                 submitted_at=submitted_at, decided_by=None, decided_at=None,
             )
             session.add(row)
+            self._add_log(session, class_id=class_id, actor_id=actor_id or student_id, action="baseline.submit",
+                          student_id=student_id, week_id=None,
+                          old_values=self._hours_dict(previous) if previous else None,
+                          new_values=self._hours_dict(row), at=submitted_at)
             session.commit()
             return _row_to_dict(row, _BASELINE_FIELDS)
 
     def save_weekly_update(self, *, class_id: str, student_id: str, week_id: str, week_number: int,
-                           hours: dict, entered_at: str) -> dict:
+                           hours: dict, entered_at: str, actor_id: str | None = None) -> dict:
         with self._lock, self._session() as session:
-            row = session.scalar(
+            before = self._hours_in_effect(session, class_id, student_id, week_number)
+            current = session.scalar(
                 select(WeeklyUpdateRow).where(
                     WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
                     WeeklyUpdateRow.week_number == week_number, WeeklyUpdateRow.reversed_at.is_(None),
+                    WeeklyUpdateRow.superseded_by.is_(None),
                 )
             )
-            if row is None:
-                existing_ids = session.scalars(
-                    select(WeeklyUpdateRow.id).where(WeeklyUpdateRow.class_id == class_id)
-                ).all()
-                row = WeeklyUpdateRow(id=_next_id(list(existing_ids), f"{class_id}-u"), class_id=class_id,
-                                      student_id=student_id, week_id=week_id, week_number=week_number,
-                                      reversed_by=None, reversed_at=None)
-                session.add(row)
-            row.work_hours = hours.get("work", 0) or 0
-            row.childcare_hours = hours.get("childcare", 0) or 0
-            row.eldercare_hours = hours.get("eldercare", 0) or 0
-            row.entered_at = entered_at
+            existing_ids = session.scalars(
+                select(WeeklyUpdateRow.id).where(WeeklyUpdateRow.class_id == class_id)
+            ).all()
+            row = WeeklyUpdateRow(
+                id=_next_id(list(existing_ids), f"{class_id}-u"), class_id=class_id, student_id=student_id,
+                week_id=week_id, week_number=week_number, reversed_by=None, reversed_at=None,
+                work_hours=hours.get("work", 0) or 0, childcare_hours=hours.get("childcare", 0) or 0,
+                eldercare_hours=hours.get("eldercare", 0) or 0, entered_at=entered_at,
+            )
+            session.add(row)
+            if current is not None:
+                # Keep the earlier value (hidden from listings) so a reversal can restore it.
+                current.superseded_by = row.id
+            applies = before["source"] in ("baseline", "weekly")
+            self._add_log(session, class_id=class_id, actor_id=actor_id or student_id, action="weekly.set",
+                          student_id=student_id, week_id=week_id,
+                          old_values=dict(before["hours"]) if applies else None,
+                          new_values=self._hours_dict(row), at=entered_at)
             session.commit()
             session.refresh(row)
             return _row_to_dict(row, _UPDATE_FIELDS)
@@ -277,6 +366,7 @@ class SqlAlchemyStore:
                 raise KeyError(baseline_id)
             if row.status != "pending":
                 raise ValueError(f"Baseline '{baseline_id}' has already been decided.")
+            old_values = None
             if status == "approved":
                 previously_approved = session.scalars(
                     select(BaselineRow).where(
@@ -284,12 +374,21 @@ class SqlAlchemyStore:
                         BaselineRow.status == "approved",
                     )
                 ).all()
+                if previously_approved:
+                    old_values = self._hours_dict(previously_approved[-1])
                 for prior in previously_approved:
                     prior.status = "superseded"
                 row.effective_from_week = effective_from_week
             row.status = status
             row.decided_by = decided_by
             row.decided_at = decided_at
+            new_values = self._hours_dict(row)
+            if status == "approved":
+                new_values["effective_from_week"] = effective_from_week
+            self._add_log(session, class_id=class_id, actor_id=decided_by,
+                          action="baseline.approve" if status == "approved" else "baseline.reject",
+                          student_id=row.student_id, week_id=None, old_values=old_values,
+                          new_values=new_values, at=decided_at)
             session.commit()
             session.refresh(row)
             return _row_to_dict(row, _BASELINE_FIELDS)
@@ -303,8 +402,22 @@ class SqlAlchemyStore:
                 raise KeyError(update_id)
             if row.reversed_at:
                 raise ValueError(f"Weekly update '{update_id}' has already been reversed.")
+            if row.superseded_by:
+                raise ValueError(f"Weekly update '{update_id}' was replaced by a later edit.")
+            old_values = self._hours_dict(row)
             row.reversed_by = reversed_by
             row.reversed_at = reversed_at
+            # Restore the value this update had replaced, if any.
+            replaced = session.scalar(
+                select(WeeklyUpdateRow).where(WeeklyUpdateRow.class_id == class_id,
+                                              WeeklyUpdateRow.superseded_by == row.id)
+            )
+            if replaced is not None:
+                replaced.superseded_by = None
+            now = self._hours_in_effect(session, class_id, row.student_id, row.week_number)
+            self._add_log(session, class_id=class_id, actor_id=reversed_by, action="weekly.reverse",
+                          student_id=row.student_id, week_id=row.week_id, old_values=old_values,
+                          new_values=dict(now["hours"]), at=reversed_at)
             session.commit()
             session.refresh(row)
             return _row_to_dict(row, _UPDATE_FIELDS)
