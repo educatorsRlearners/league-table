@@ -100,6 +100,9 @@
       </sc-if>
       <span style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); font-variant-numeric: lining-nums tabular-nums;">{{ lastUpdatedText }}</span>
       <span class="tag tag-outline" style="font-variant-numeric: lining-nums tabular-nums;">{{ identityLabel }}</span>
+      <sc-if value="{{ present }}" hint-placeholder-val="{{ false }}">
+        <button class="btn btn-primary" data-present-exit onClick="{{ onTogglePresent }}" style="min-height: 44px;" title="Leave Present mode (P)">Exit Present</button>
+      </sc-if>
       <button class="btn btn-ghost" onClick="{{ onRefresh }}" style="min-height: 44px;">Refresh</button>
       <button class="btn btn-ghost" onClick="{{ onToggleTheme }}" aria-label="Toggle theme" style="min-height: 44px; font-size: 18px;">{{ themeLabel }}</button>
       <button class="btn btn-ghost" onClick="{{ onLogout }}" style="min-height: 44px;">Log out</button>
@@ -163,12 +166,17 @@
         <sc-for list="{{ criteriaChips }}" as="chip" hint-placeholder-count="5">
           <button onClick="{{ chip.onClick }}" aria-pressed="{{ chip.active }}" title="{{ chip.hint }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ chip.bg }}; border: 1px solid {{ chip.border }}; color: {{ chip.color }};">{{ chip.label }}</button>
         </sc-for>
-        <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights &amp; adjustment</button>
-        <button class="btn btn-ghost" onClick="{{ onOpenExplainer }}" style="min-height: 44px;">Formula</button>
+        <sc-if value="{{ showInstructorTools }}" hint-placeholder-val="{{ true }}">
+          <button class="btn btn-ghost" onClick="{{ onToggleWeights }}" style="min-height: 44px;">Weights &amp; adjustment</button>
+          <button class="btn btn-ghost" onClick="{{ onOpenExplainer }}" style="min-height: 44px;">Formula</button>
+        </sc-if>
       </div>
 
       <div style="display: flex; align-items: center; gap: var(--space-2); margin-left: auto;">
-        <button onClick="{{ onToggleRaw }}" aria-pressed="{{ rawOn }}" title="Instructor only — compare the adjusted order with the raw order" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ rawBg }}; border: 1px solid {{ rawBorder }}; color: var(--color-text);">Raw view</button>
+        <button data-present-toggle onClick="{{ onTogglePresent }}" aria-pressed="{{ present }}" title="Hide hours, factors and raw scores for the projector (P)" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ presentBg }}; border: 1px solid {{ presentBorder }}; color: var(--color-text);">Present</button>
+        <sc-if value="{{ showInstructorTools }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ onToggleRaw }}" aria-pressed="{{ rawOn }}" title="Instructor only — compare the adjusted order with the raw order" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ rawBg }}; border: 1px solid {{ rawBorder }}; color: var(--color-text);">Raw view</button>
+        </sc-if>
         <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6;">Names</span>
         <sc-for list="{{ nameModes }}" as="nm" hint-placeholder-count="3">
           <button onClick="{{ nm.onClick }}" aria-pressed="{{ nm.active }}" style="min-height: 44px; padding: 0 var(--space-3); cursor: pointer; border-radius: var(--radius-md); font-family: var(--font-heading); font-size: 14px; background: {{ nm.bg }}; border: 1px solid {{ nm.border }}; color: var(--color-text);">{{ nm.label }}</button>
@@ -880,6 +888,7 @@ class Component extends DCLogic {
     nameMode: this.props.nameMode || 'full',
     theme: this.props.startTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
     rawOn: this.props.showRaw ?? false,
+    present: false,
     showAll: false,
     drawer: null,
     weightsOpen: false,
@@ -968,7 +977,7 @@ class Component extends DCLogic {
     this.setState({
       loggedIn: false, role: null, identity: null, loginError: null,
       boot: null, rows: [], me: null, digest: null, standing: null, commitments: null, pendingBaselines: null,
-      weeklyUpdates: null, record: null, drawer: null,
+      weeklyUpdates: null, record: null, drawer: null, present: false,
     });
   };
 
@@ -1029,6 +1038,7 @@ class Component extends DCLogic {
   onKey = (e) => {
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     const { boot, tab } = this.state;
+    if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey) return this.togglePresent();
     if (e.key === 'Escape') return this.setState({ drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false });
     if (!boot) return;
     if (e.key === 'ArrowLeft') return this.stepWeek(-1);
@@ -1041,6 +1051,34 @@ class Component extends DCLogic {
       this.setState({ criteriaKeys: boot.criteria.map((c) => c.key) }, this.loadRanking);
     }
   };
+
+  // Present mode is a view-only flag: it never touches rawOn, so leaving it
+  // restores Raw view as it was. Entering it closes everything that could show
+  // hours, factors or approvals and leaves any tab other than the league table.
+  togglePresent = () => {
+    const s = this.state;
+    if (!s.loggedIn || s.role === 'student') return;
+    if (s.present) return this.setState({ present: false }, () => this.focusPresent('[data-present-toggle]'));
+    const leaveTab = s.tab !== 'league';
+    this.setState(
+      {
+        present: true, drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false,
+        ...(leaveTab ? { tab: 'league', loading: true } : {}),
+      },
+      () => {
+        this.focusPresent('[data-present-exit]');
+        if (leaveTab) this.loadTab();
+      },
+    );
+  };
+
+  // Keep keyboard focus on a live control when Present toggles: the control
+  // that had focus is removed, so move it to the one that replaces it.
+  focusPresent(selector) {
+    const go = () => { const el = document.querySelector(selector); if (el) el.focus(); };
+    go();
+    requestAnimationFrame(go);
+  }
 
   stepWeek(d) {
     const { boot, weekIdx } = this.state;
@@ -1202,8 +1240,10 @@ class Component extends DCLogic {
   };
 
   openDrawer = async (studentId) => {
+    if (this.state.present) return;
     try {
       const ex = await this.api.getExplanation({ ...this.query(), studentId, caller: { role: 'instructor' } });
+      if (this.state.present) return;
       this.setState({ drawer: ex });
     } catch (err) {
       this.handleApiError(err, { loading: this.state.loading });
@@ -1302,10 +1342,10 @@ class Component extends DCLogic {
       { key: 'me', label: 'My breakdown', roles: ['student'] },
       { key: 'standing', label: 'My standing', roles: ['student'] },
       { key: 'commitments', label: 'My commitments', roles: ['student'] },
-      { key: 'risk', label: 'Risk digest', roles: ['instructor', 'admin'] },
-      { key: 'approvals', label: 'Approvals', roles: ['instructor', 'admin'] },
+      { key: 'risk', label: 'Risk digest', roles: ['instructor', 'admin'], instructorOnly: true },
+      { key: 'approvals', label: 'Approvals', roles: ['instructor', 'admin'], instructorOnly: true },
     ];
-    return allTabs.filter((t) => t.roles.includes(s.role)).map((t) => ({
+    return allTabs.filter((t) => t.roles.includes(s.role) && !(s.present && t.instructorOnly)).map((t) => ({
       label: t.label,
       active: s.tab === t.key,
       rule: s.tab === t.key ? 'var(--color-accent)' : 'transparent',
@@ -1360,8 +1400,8 @@ class Component extends DCLogic {
       barFill: r.rank <= 3 ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-accent) 45%, transparent)',
       rankColor: r.rank <= 3 ? 'var(--color-accent)' : 'var(--color-text)',
       bg: r.rank <= 3 ? 'color-mix(in srgb, var(--color-accent) 6%, transparent)' : 'transparent',
-      rawText: s.rawOn ? `raw ${this.fmt(r.raw)}` : '',
-      factorText: s.rawOn ? `×${this.fmt(r.factor, 2)}` : '',
+      rawText: s.rawOn && !s.present ? `raw ${this.fmt(r.raw)}` : '',
+      factorText: s.rawOn && !s.present ? `×${this.fmt(r.factor, 2)}` : '',
       deltaText: this.rankDeltaText(r.rank_delta),
       deltaColor: r.rank_delta > 0 ? 'var(--color-accent-700)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
       gapUpText: r.gap_to_next == null ? 'leads the class' : `${this.fmt(r.gap_to_next)} to the place above`,
@@ -1849,6 +1889,10 @@ class Component extends DCLogic {
       criteriaChips,
       nameModes,
       rawOn: s.rawOn,
+      present: s.present,
+      showInstructorTools: !s.present,
+      presentBg: s.present ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+      presentBorder: s.present ? 'var(--color-accent)' : 'var(--color-divider)',
       rawBg: s.rawOn ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
       rawBorder: s.rawOn ? 'var(--color-accent)' : 'var(--color-divider)',
       podium,
@@ -1860,8 +1904,10 @@ class Component extends DCLogic {
       footnote: boot
         ? `${rows.length} students · ${s.criteriaKeys.length} of ${boot.criteria.length} criteria · ${this.windowLabel()}. Ranked on the adjusted score; students level on it are shown side by side and ordered by the higher raw score, then ${boot.tieBreakers.join(', then ')}. Any still level share a rank.`
         : '',
-      shortcutHint: isLeague
-        ? '← → week · 1–5 single criterion · 0 all criteria · Esc close'
+      shortcutHint: isLeague && s.present
+        ? '← → week · 1–5 single criterion · 0 all criteria · P exit Present'
+        : isLeague
+        ? '← → week · 1–5 single criterion · 0 all criteria · P present · Esc close'
         : s.tab === 'me' ? '← → week · Esc close'
           : s.tab === 'standing' ? 'Your own view — classmates never see this screen'
             : s.tab === 'commitments' ? 'Your own view — classmates never see this screen'
@@ -1883,6 +1929,7 @@ class Component extends DCLogic {
       weightTotalText: `Draft weight total ${Math.round(draftTotal)} — rescaled to 100 on apply`,
       explainer,
       onToggleTheme: () => this.setState((st) => ({ theme: st.theme === 'light' ? 'dark' : 'light' })),
+      onTogglePresent: this.togglePresent,
       onToggleRaw: () => this.setState((st) => ({ rawOn: !st.rawOn })),
       onPrevWeek: () => this.stepWeek(-1),
       onNextWeek: () => this.stepWeek(1),
@@ -1924,7 +1971,7 @@ class Component extends DCLogic {
       onCloseWeights: () => this.setState({ weightsOpen: false }),
       onOpenExplainer: async () => {
         const data = await this.api.getExplainer(s.classId);
-        this.setState({ explainer: data });
+        if (!this.state.present) this.setState({ explainer: data });
       },
       onCloseExplainer: () => this.setState({ explainer: null }),
       onResetWeights: () => {
