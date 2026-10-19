@@ -1,4 +1,4 @@
-.PHONY: help install run test test-integration e2e lint
+.PHONY: help install run test test-integration e2e check-ports lint
 
 help: ## List the available commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-8s %s\n", $$1, $$2}'
@@ -19,6 +19,9 @@ e2e: ## Run the Playwright browser e2e tests against docker-compose (requires Do
 	# Drives your installed Brave browser (e2e/browser.js) instead of downloading
 	# Playwright's own Chromium. No Brave found: `cd e2e && npx playwright install chromium`.
 	cd e2e && npm install && npm test
+
+check-ports: ## Fail if a test compose override re-publishes the dev stack's host ports (needs only the docker CLI)
+	python3 scripts/check-compose-ports.py
 
 lint: ## Run ruff and mypy over the backend
 	cd backend && uv run ruff check app tests && uv run mypy app
