@@ -1,4 +1,4 @@
-.PHONY: help install run test test-integration e2e check-ports lint
+.PHONY: help install run test test-integration e2e check-ports lint check
 
 help: ## List the available commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-8s %s\n", $$1, $$2}'
@@ -25,3 +25,5 @@ check-ports: ## Fail if a test compose override re-publishes the dev stack's hos
 
 lint: ## Run ruff and mypy over the backend
 	cd backend && uv run ruff check app tests && uv run mypy app
+
+check: lint test check-ports ## Run lint, the unit tests and the port guard, as CI does on every pull request
