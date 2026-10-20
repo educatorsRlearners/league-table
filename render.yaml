@@ -1,0 +1,33 @@
+# Render Blueprint: dev and prod demo deployments of the same Docker image.
+# DATABASE_URL is a Neon connection string, entered in the Render dashboard
+# when the Blueprint is applied (sync: false keeps it out of git).
+# Deploys are triggered by GitHub Actions through each service's deploy hook,
+# so autoDeploy is off.
+services:
+  - type: web
+    name: league-table-dev
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /login/options
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        sync: false
+
+  - type: web
+    name: league-table-prod
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /login/options
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        sync: false
