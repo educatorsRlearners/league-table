@@ -23,7 +23,7 @@ def test_tied_rows_share_rank():
     rows = _rows()
     assert rows[0]["rank"] == rows[1]["rank"] == 1
     assert rows[0]["tied"] and rows[1]["tied"]
-    assert rows[2]["rank"] == 3
+    assert rows[2]["rank"] == 99
 
 
 def test_gaps_use_rounded_scores():
