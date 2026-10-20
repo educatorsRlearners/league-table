@@ -1,0 +1,60 @@
+name: Deploy dev
+
+# Runs only after the CI workflow finishes on a push to main, and only when it
+# passed, so a red main never reaches the dev service.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy dev
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SERVICE_URL: https://league-table-dev.onrender.com
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_DEV }}
+        run: |
+          set +x
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK_DEV secret is not set" >&2
+            exit 1
+          fi
+          # Output is discarded so the hook URL and response never reach the log.
+          curl --fail --silent --show-error --output /dev/null \
+            --max-time 60 --retry 3 -X POST "$RENDER_DEPLOY_HOOK"
+          echo "Deploy hook triggered for dev"
+
+      - name: Wait for the service to be healthy
+        run: |
+          set +x
+          # Free services rebuild and cold-start, so allow up to 10 minutes.
+          # The old instance may answer 200 until the new one swaps in, so
+          # give the deploy a head start before the first probe.
+          sleep 60
+          deadline=$((SECONDS + 600))
+          until [ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 30 "$SERVICE_URL/login/options")" = "200" ]; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Timed out waiting for $SERVICE_URL/login/options" >&2
+              exit 1
+            fi
+            echo "Not healthy yet, retrying in 15s"
+            sleep 15
+          done
+          echo "$SERVICE_URL is healthy"

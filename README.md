@@ -110,6 +110,30 @@ For example:
 curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?week=w5"
 ```
 
+## Deployment
+
+Two Render services (Docker, free plan, Frankfurt) run the app against Neon Postgres:
+
+| Environment | URL |
+| --- | --- |
+| Dev | <https://league-table-dev.onrender.com> |
+| Prod | <https://league-table-prod.onrender.com> |
+
+Demo logins (pick them on the login screen, or send the token as a Bearer token):
+
+- `demo-instructor` — the instructor
+- `demo-amara` — a student in `c1` (also `demo-rosa`)
+- `demo-camila` — a student in `c2`
+
+This is demo data only; it resets when the seed is re-applied. The free services sleep after about 15 minutes idle, so the first request can take up to a minute.
+
+How deploys work (auto-deploy on Render is off; GitHub Actions calls Render deploy hooks):
+
+- **Dev** deploys automatically after the CI workflow passes on `main` (`.github/workflows/deploy-dev.yml`).
+- **Prod** deploys manually: Actions > Deploy to production > Run workflow (`.github/workflows/deploy-prod.yml`). It uses the `production` environment, where required reviewers can be added.
+- Both wait for `/login/options` to return 200 (up to 10 minutes) and fail if the service is unhealthy.
+- The hook URLs live in the repository secrets `RENDER_DEPLOY_HOOK_DEV` and `RENDER_DEPLOY_HOOK_PROD`.
+
 ## Project layout
 
 | Path | What is in it |
