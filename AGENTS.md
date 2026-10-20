@@ -6,6 +6,8 @@ uv run python <PYTHON-FILE>
 
 Regularly commit
 
+CI runs `make check` (lint, unit tests, compose port guard) on every pull request. Run `make check` before pushing.
+
 Use the plugins found in .claude/ 
 
 ## Project docs
