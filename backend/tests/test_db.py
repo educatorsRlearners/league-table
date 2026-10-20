@@ -61,3 +61,35 @@ def test_resolve_database_url_leaves_explicit_driver_alone():
     assert resolve_database_url("postgresql+psycopg2://user:pw@host:5432/db") == (
         "postgresql+psycopg2://user:pw@host:5432/db"
     )
+
+
+def test_make_engine_enables_pre_ping_for_postgres():
+    from app.db import make_engine
+
+    engine = make_engine("postgresql://user:pw@localhost:5432/db")  # lazy: no connection
+    assert engine.pool._pre_ping is True
+
+
+def test_make_engine_sqlite_does_not_pre_ping(tmp_path):
+    from app.db import make_engine
+
+    assert make_engine(f"sqlite:///{tmp_path / 'x.db'}").pool._pre_ping is False
+    assert make_engine("sqlite:///:memory:").pool._pre_ping is False
+
+
+def test_pre_ping_replaces_stale_pooled_connection():
+    """A connection that fails its ping is discarded and a fresh one is used."""
+    from sqlalchemy import create_engine, text
+
+    # Same flag make_engine sets for Postgres, exercised on SQLite so no live DB is needed.
+    engine = create_engine("sqlite://", pool_pre_ping=True)
+    with engine.connect() as c:
+        c.execute(text("select 1"))
+    stale = engine.pool.connect()
+    stale_dbapi = stale.dbapi_connection
+    stale.close()  # back to the pool
+    stale_dbapi.close()  # server drops it while idle
+
+    with engine.connect() as c:
+        assert c.execute(text("select 1")).scalar() == 1
+        assert c.connection.dbapi_connection is not stale_dbapi
