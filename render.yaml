@@ -3,11 +3,14 @@
 # when the Blueprint is applied (sync: false keeps it out of git).
 # Deploys are triggered by GitHub Actions through each service's deploy hook,
 # so autoDeploy is off.
+# Region is frankfurt: closest Render region to the Neon database (AWS eu-west-2,
+# London). It cannot be changed after a service is created.
 services:
   - type: web
     name: league-table-dev
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
     autoDeployTrigger: "off"
@@ -22,6 +25,7 @@ services:
     name: league-table-prod
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
     autoDeployTrigger: "off"
