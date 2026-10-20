@@ -49,6 +49,10 @@ def make_engine(url: str | None = None) -> Engine:
             # An in-memory SQLite DB is per-connection; pin the pool to a
             # single, shared connection so all sessions see the same data.
             engine_kwargs["poolclass"] = StaticPool
+    else:
+        # Neon scales to zero and drops idle connections server-side; ping
+        # on checkout so a dead pooled connection is replaced, not raised.
+        engine_kwargs["pool_pre_ping"] = True
     return create_engine(resolved, connect_args=connect_args, **engine_kwargs)
 
 
