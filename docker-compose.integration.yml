@@ -12,3 +12,4 @@ services:
   backend:
     ports: !override
       - "18000:8000"
+      - "8000:8000"
