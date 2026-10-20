@@ -151,3 +151,6 @@ src/testTestingRootWkspc/coverageWorkspace/.coverage
 
 # ignore ai artifacts generated and placed in this folder
 ai-artifacts/*
+
+# Playwright MCP browser-tool scratch output (console logs, page snapshots)
+.playwright-mcp/
