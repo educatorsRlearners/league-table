@@ -134,6 +134,34 @@ How deploys work (auto-deploy on Render is off; GitHub Actions calls Render depl
 - Both wait for `/login/options` to return 200 (up to 10 minutes) and fail if the service is unhealthy.
 - The hook URLs live in the repository secrets `RENDER_DEPLOY_HOOK_DEV` and `RENDER_DEPLOY_HOOK_PROD`.
 
+## Observability
+
+The backend can export OpenTelemetry traces, metrics and logs over OTLP/HTTP to Grafana Cloud. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset the app configures and exports nothing.
+
+| Variable | Meaning |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP base URL, e.g. `https://otlp-gateway-prod-eu-west-2.grafana.net/otlp`. Setting it turns telemetry on. |
+| `GRAFANA_OTLP_INSTANCE_ID` | Grafana Cloud instance ID (the basic-auth username; not secret). |
+| `GRAFANA_OTLP_TOKEN` | Grafana Cloud access token (the password). **Secret.** Set it in the Render dashboard (service > Environment); `render.yaml` declares it with `sync: false` and never holds a value. The `Authorization: Basic` header is built in code, so no base64 step is needed. |
+| `OTEL_SERVICE_NAME` | Resource `service.name`; default `league-table`. `render.yaml` sets `league-table-dev` and `league-table-prod`. |
+| `DEPLOYMENT_ENV` | Resource `deployment.environment` (`dev` or `prod`). |
+
+What is emitted for the commitment journey (`PUT /me/commitments/weeks/{weekNumber}` and the `GET /me/commitments` page load):
+
+- **Traces**: one server span per request (named by route template) with child spans for the database queries. `/login/options` health checks are not traced.
+- **Logs**: one JSON line per request on stdout (also sent over OTLP) with `trace_id` and `span_id` matching the trace.
+- **Metrics** for routes under `/me/commitments`, labelled only by `http.route` and `http.status_class` (`2xx`/`4xx`/`5xx`): `league_table.requests`, `league_table.request.errors` (4xx and 5xx) and `league_table.request.duration` (seconds histogram).
+
+No student names or ids, note text, hours values, tokens or request bodies are recorded: query strings are dropped, URLs are replaced by the route template, and SQL is recorded as the parameterised statement without values. `backend/tests/test_telemetry.py` asserts this with sentinel values.
+
+Finding it in Grafana Cloud (Explore, pick the data source for each signal and filter `service_name` = `league-table-dev` or `league-table-prod`; `deployment_environment` tells dev from prod):
+
+- **Traces**: Explore > Tempo (`grafanacloud-<stack>-traces`) > Search, service name as above, span name `PUT /me/commitments/weeks/{weekNumber}`. Open a trace to see the database spans.
+- **Logs**: Explore > Loki (`grafanacloud-<stack>-logs`), query `{service_name="league-table-prod"} | json`; the `trace_id` field links to the trace.
+- **Metrics**: Explore > Prometheus (`grafanacloud-<stack>-prom`), e.g. `sum by (http_route, http_status_class) (rate(league_table_requests_total[5m]))`, `league_table_request_errors_total`, and `histogram_quantile(0.95, sum by (le) (rate(league_table_request_duration_seconds_bucket[5m])))`. Metrics are pushed about once a minute.
+
+Free-tier note: the free Render services sleep when idle, so telemetry from a sleeping service only appears after it wakes.
+
 ## Project layout
 
 | Path | What is in it |

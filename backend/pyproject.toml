@@ -4,6 +4,10 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.1",
+    "opentelemetry-instrumentation-fastapi>=0.66b1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.66b1",
+    "opentelemetry-sdk>=1.45.1",
     "psycopg[binary]>=3.3.6",
     "sqlalchemy>=2.0.54",
     "uvicorn[standard]>=0.53.0",
@@ -29,6 +33,8 @@ markers = [
     "integration: exercises the docker-compose stack over real HTTP/Postgres (requires Docker)",
 ]
 filterwarnings = [
+    # The SDK LoggingHandler is flagged as deprecated in favour of a separate package; kept to stay minimal.
+    "ignore:`LoggingHandler` in `opentelemetry-sdk` is deprecated:DeprecationWarning",
     # Starlette's own test client uses a deprecated anyio alias; nothing to fix on our side.
     # Remove once Starlette releases a version that no longer does.
     "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient",

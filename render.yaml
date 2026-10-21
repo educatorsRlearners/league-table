@@ -3,6 +3,8 @@
 # when the Blueprint is applied (sync: false keeps it out of git).
 # Deploys are triggered by GitHub Actions through each service's deploy hook,
 # so autoDeploy is off.
+# Telemetry (see README, Observability): GRAFANA_OTLP_TOKEN is sync: false and is
+# set in the Render dashboard; the other telemetry values are not secret.
 # Region is frankfurt: closest Render region to the Neon database (AWS eu-west-2,
 # London). It cannot be changed after a service is created.
 services:
@@ -20,6 +22,16 @@ services:
         value: "8000"
       - key: DATABASE_URL
         sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: https://otlp-gateway-prod-eu-west-2.grafana.net/otlp
+      - key: GRAFANA_OTLP_INSTANCE_ID
+        value: "1885253"
+      - key: GRAFANA_OTLP_TOKEN
+        sync: false
+      - key: OTEL_SERVICE_NAME
+        value: league-table-dev
+      - key: DEPLOYMENT_ENV
+        value: dev
 
   - type: web
     name: league-table-prod
@@ -35,3 +47,13 @@ services:
         value: "8000"
       - key: DATABASE_URL
         sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: https://otlp-gateway-prod-eu-west-2.grafana.net/otlp
+      - key: GRAFANA_OTLP_INSTANCE_ID
+        value: "1885253"
+      - key: GRAFANA_OTLP_TOKEN
+        sync: false
+      - key: OTEL_SERVICE_NAME
+        value: league-table-prod
+      - key: DEPLOYMENT_ENV
+        value: prod
