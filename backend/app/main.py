@@ -28,6 +28,7 @@ def create_app(
     clock: Callable[[], float] = time.time,
     frontend_dir: Path | None = FRONTEND_DIR,
     database_url: str | None = None,
+    telemetry_exporters=None,
 ) -> FastAPI:
     if db is None or store is None:
         from app.toy_seed import build_toy
@@ -71,6 +72,10 @@ def create_app(
         return schema
 
     app.openapi = _openapi  # type: ignore[method-assign]
+
+    from app.telemetry import setup_telemetry
+
+    app.state.telemetry = setup_telemetry(app, getattr(store, "_engine", None), exporters=telemetry_exporters)
 
     if frontend_dir is not None and Path(frontend_dir).exists():
         @app.get("/", include_in_schema=False)
