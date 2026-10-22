@@ -24,5 +24,12 @@ League Table is a live class scoreboard: a FastAPI backend with a Postgres-backe
 - [Task template](_docs/task_template.md): the four sections every groomed issue has
 - Project skills in [.claude/skills/](.claude/skills/): `orchestrate`, `groom-issue`, `verify-task`, `ship`
 - [API contract](openapi.yaml): the OpenAPI spec the backend and frontend share
+- [Features](_docs/features.md): the full feature list
+- [Architecture and layout](_docs/architecture.md): how the pieces fit, project layout
+- [API and auth](_docs/api.md): endpoints and demo tokens
+- [Deployment](_docs/deployment.md): Render services, demo logins, CD
+- [Observability](_docs/observability.md): telemetry, Grafana, the demo fault switch
+- [Testing](_docs/testing.md): every suite and its command
+- [Status](_docs/status.md): what is built and what remains
 - [Backend README](backend/README.md): backend setup, `DATABASE_URL`, integration tests
 - `make help` lists the run, test, lint, integration and e2e commands

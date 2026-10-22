@@ -6,7 +6,7 @@ Alert rules for the deployed demo, exported from Grafana Cloud (Alerting, More, 
 
 [`commitment-submissions-failing-dev.yaml`](commitment-submissions-failing-dev.yaml)
 
-Fires when **3 or more** `PUT /me/commitments/weeks/{weekNumber}` requests on the dev service return a 5xx within 5 minutes, and stays that way for 2 minutes. It uses the journey metric `league_table_requests_total` (see the Observability section of the main README).
+Fires when **3 or more** `PUT /me/commitments/weeks/{weekNumber}` requests on the dev service return a 5xx within 5 minutes, and stays that way for 2 minutes. It uses the journey metric `league_table_requests_total` (see [Observability](../../_docs/observability.md)).
 
 | Setting | Value |
 |---|---|
@@ -20,7 +20,7 @@ The rule carries no student data: it counts requests by route template and statu
 
 ### Evidence
 
-On 2026-10-22 the rule was shown firing and resolving on the dev service by turning on the demo fault switch (`FAULT_COMMITMENT_ERRORS=1`, see the main README) and submitting weekly commitments, which each returned 500.
+On 2026-10-22 the rule was shown firing and resolving on the dev service by turning on the demo fault switch (`FAULT_COMMITMENT_ERRORS=1`, see [the demo fault switch](../../_docs/observability.md#demo-fault-switch)) and submitting weekly commitments, which each returned 500.
 
 - Grafana Alert activity showed the rule in the `league-table` folder go from Pending to Firing.
 - Notification emails received, in order: `[FIRING:1] Commitment submissions failing (dev) league-table`, and after the switch was turned off, `[RESOLVED] Commitment submissions failing (dev) league-table`.
