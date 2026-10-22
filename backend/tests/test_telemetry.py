@@ -252,3 +252,30 @@ def test_otlp_exporters_post_to_signal_paths_with_basic_auth():
     expected = "Basic " + base64.b64encode(b"42:tok").decode()
     assert {p for p, _ in seen} == {"/otlp/v1/traces", "/otlp/v1/logs", "/otlp/v1/metrics"}
     assert {a for _, a in seen} == {expected}
+
+
+def _fault_client(app):
+    client = TestClient(app, raise_server_exceptions=False)
+    client.headers.update({"Authorization": "Bearer s10"})
+    return client
+
+
+def test_fault_switch_is_a_real_5xx_in_span_log_and_metric(traced_app, cap, monkeypatch):
+    monkeypatch.setenv("FAULT_COMMITMENT_ERRORS", "true")
+    r = _fault_client(traced_app).put("/me/commitments/weeks/16", params={"classId": "c1", "studentId": "s10"},
+                                      json={"work": 10, "childcare": 0, "eldercare": 0})
+    assert r.status_code == 500
+    span = server_span(cap)
+    assert span.status.status_code.name == "ERROR"
+    assert any(e.name == "exception" for e in span.events)
+    lines = cap.json_lines()
+    req = [ln for ln in lines if ln["logger"] == "league_table.request"]
+    assert len(req) == 1 and req[0]["http_status_class"] == "5xx" and req[0]["http_route"] == PUT_ROUTE
+    fault = [ln for ln in lines if ln["logger"] == "league_table.fault"]
+    assert fault and "FAULT_COMMITMENT_ERRORS" in json.dumps(fault)
+    assert "s10" not in json.dumps(fault) and "c1" not in json.dumps(fault)
+    points = cap.metric_points()
+    reqs = {(p.attributes["http.route"], p.attributes["http.status_class"]): p for p in points["league_table.requests"]}
+    assert reqs[(PUT_ROUTE, "5xx")].value == 1
+    errs = {(p.attributes["http.route"], p.attributes["http.status_class"]): p for p in points["league_table.request.errors"]}
+    assert errs[(PUT_ROUTE, "5xx")].value == 1
