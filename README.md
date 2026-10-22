@@ -2,206 +2,86 @@
 
 # League Table
 
-**A live scoreboard for a university class.** Rank students each week on the criteria the instructor chooses, adjust fairly for the hours they spend on work and care, and show every student exactly how their score was worked out.
+> A live scoreboard that ranks a university class fairly and shows every student how the score was worked out.
 
-[![Python](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![uv](https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
-[![Tested with pytest](https://img.shields.io/badge/tested%20with-pytest-0A9EDC?logo=pytest&logoColor=white)](https://pytest.org)
-[![Data](https://img.shields.io/badge/data-demo%20%2F%20mock-B08A3E)](#status)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-<img src="_docs/images/league-table.jpg" alt="The League Table showing a podium of the top three students above a ranked list with score bars and rank movement" width="900">
-
-<sub>Seeded demo data: PHYS 204 · Mechanics and DATA 118 · Intro to Data.</sub>
+[![CI](https://github.com/educatorsRlearners/league-table/actions/workflows/ci.yml/badge.svg)](https://github.com/educatorsRlearners/league-table/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/educatorsRlearners/league-table)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org)
 
 </div>
 
-## Features
+Instructors rank students each week on criteria they choose. A plain ranking punishes students who also work or care for children and elders. League Table asks each student for weekly hours of work, child care and elder care, converts them to weighted hours, and multiplies the score by a capped factor (by default one point per weighted hour, at most x1.25; scores stop at 100). A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
 
-- **Podium and ranked list** with score bars, movement since last week and the points to the place above. Switch between a single week, a cumulative average and a rolling average, pick criteria, and re-weight them.
-- **Fair to outside commitments:** reported weekly hours of work, child care and elder care are combined into weighted hours and multiply the score by a capped factor (by default one point per weighted hour, at most ×1.25). Scores stop at 100.
-- **Explainable scores:** open a breakdown to see each criterion's contribution, the raw score, weighted hours, the factor, the adjusted score and a note when it was capped at 100. Everyone can read the formula and current numbers in the explainer.
-- **Private:** classmates see only the final adjusted score and rank, never another student's hours, factor or raw score. Students can only open their own breakdown, commitments and standing.
-- **Fair to missing data:** a criterion with no entry is left out and the remaining weights are rescaled, so absence of data is never scored as zero.
-- **Ties:** students level on adjusted score are ordered by raw score, then the configured tie-breakers; any still level share a rank (1, 1, 3).
-- **Privacy toggle:** show full names, initials or nicknames in one click.
-- **Risk digest:** the instructor sees newly, still and cleared flags across every class they teach, each traced to five evidence-backed signals (downward trend, missed engagement, low projected grade, heavy commitments, missing data). Step through any week with the same control used on the league table; each week is always compared against the one before it.
-- **Outreach notes:** log private, timestamped notes on a student's risk record. Notes never travel to a student.
-- **Student standing:** each student sees only their own level, the signals that are on, and where to get help — no ranks, no classmates, no notes.
-- **Server-side rules:** scoring, the adjustment, ranking, risk and roles all run on the backend.
+The page shows a podium of the top three, a ranked list with score bars and movement since last week, and a breakdown of each score. Classmates see only the final adjusted score and rank. Instructors also see a weekly risk digest with five evidence-backed signals and can log private outreach notes. The backend enforces scoring, ranking, risk and roles.
 
-## Quick start
+<div align="center">
+<img src="_docs/images/league-table.jpg" alt="The League Table showing a podium of the top three students above a ranked list with score bars and rank movement" width="900">
+</div>
 
-You need [uv](https://docs.astral.sh/uv/) and `make`.
+## Installation
+
+Install [uv](https://docs.astral.sh/uv/) and `make`, then run:
 
 ```sh
-make install   # install backend dependencies
-make run       # serve the app at http://localhost:8000
-make test      # run the backend tests
+make install
 ```
 
-Then open <http://localhost:8000>. The interactive API docs are at <http://localhost:8000/docs>.
+## Usage example
 
-`make run` serves both the API and the frontend from one origin. The page talks to the FastAPI service next to it over HTTP with Bearer auth (see [Auth](#auth)) for everything — scoring, ranking, risk and roles all run on the server, seeded with two demo classes of 24 students each.
-
-## How it works
-
-```mermaid
-flowchart LR
-  UI["Browser<br/>frontend/League Table.dc.html"] -->|"httpApi.js<br/>Authorization: Bearer"| API["FastAPI<br/>backend/"]
-  API --> S["Scoring, adjustment, ranking,<br/>risk, cache and roles"]
-  S --> DS["DataSource<br/>read-only scores"]
-  S --> AS["AppStore<br/>settings, commitments, risk, notes"]
-  DS --> M["Toy scores<br/>seeded demo classes"]
-  DS -.-> G["Google Sheets adapter<br/>planned"]
-  AS --> SQ["SQLAlchemy store<br/>SQLite by default, DATABASE_URL-configured"]
-  SQ -.-> PG["Postgres, etc.<br/>same store, different URL"]
-  TESTS["Tests.dc.html<br/>(browser suite)"] -.->|"reference logic only,<br/>not the shipped UI path"| MOCK["api.js + mockSource.js<br/>scoring.js, risk.js"]
+```sh
+make run
 ```
 
-- The contract is [`openapi.yaml`](openapi.yaml). `frontend/services/httpApi.js` is the live client the shipped page uses; `frontend/services/api.js` + `mockSource.js` are a client-side reference implementation of the same contract, exercised only by the browser test suite (`tests.js`/`Tests.dc.html`), not by the running app. A contract test checks the running app against `openapi.yaml`.
-- Scores come through a read-only `DataSource`. Today that is two seeded toy classes of 24 students, 16 weeks and 5 criteria each, including a tie, a missing entry, a perfect week, a zero week and a late joiner. Entries run through all 16 weeks, so week 16 is the landing week.
-- Everything the service owns lives in the read-write `AppStore`: league settings, baselines, weekly updates, risk settings and snapshots, and instructor notes. It's backed by SQLAlchemy against whatever `DATABASE_URL` points at (SQLite in memory by default, so a fresh, empty store every run; set `DATABASE_URL` to a file (`sqlite:///./league_table.db`) or another SQLAlchemy-supported database such as Postgres for persistence).
-- Reads are cached for 60 seconds. If the source fails, the last good snapshot is served and marked stale. Refresh is rate-limited to once every 10 seconds.
-- Problems in the data, such as an unknown student ID, are listed instead of breaking the table.
+Open <http://localhost:8000>. The API docs are at <http://localhost:8000/docs>. The app seeds two demo classes of 24 students each (PHYS 204 and DATA 118).
 
-## API
+Pick a role on the login screen, or send a Bearer token:
 
-All endpoints take a Bearer token (see [Auth](#auth)). The full contract is in [`openapi.yaml`](openapi.yaml).
-
-| Endpoint | Who | Purpose |
-| --- | --- | --- |
-| `GET /login/options` | public (no token) | Classes and student rosters (id + display name only) for the login picker |
-| `GET /classes` | instructor | Classes the instructor teaches |
-| `GET /classes/{id}/bootstrap` | signed in (students: own class) | Weeks, criteria, weights, settings, accounts, source and issues in one call |
-| `GET /classes/{id}/ranking?week=&criteria=&window=` | signed in (students: own class; rows scoped) | Ranked adjusted scores for a week, cumulative or rolling window |
-| `GET /classes/{id}/students/{sid}/explanation` | instructor, or the student themselves | The full breakdown, including hours, factor and cap |
-| `GET /classes/{id}/explainer` | signed in | The formula and current parameters, with no personal data |
-| `GET /me/commitments?classId=&studentId=` | instructor, or the student themselves | Active + pending baseline, weekly updates, hours/factor/source by week, and which weeks are editable |
-| `PUT /me/commitments/baseline?classId=&studentId=` | the student themselves | Submit/change the semester baseline (0-80h per type, half-hour steps, ≤120 total); pending until an instructor decides |
-| `PUT /me/commitments/weeks/{weekNumber}?classId=&studentId=` | the student themselves | Replace one week's hours; only the current or previous calendar week is editable |
-| `GET /classes/{id}/commitments/pending` | instructor | Queue of pending baselines awaiting a decision |
-| `POST /classes/{id}/commitments/baselines/{baselineId}/decide` | instructor | Approve (picking the effective week) or reject a pending baseline |
-| `GET /classes/{id}/commitments/weekly-updates` | instructor | Every weekly update for the class, most recent first |
-| `POST /classes/{id}/commitments/weekly-updates/{updateId}/reverse` | instructor | Reverse a weekly update |
-| `GET /classes/{id}/commitments/change-log?studentId=` | instructor | Every commitment change (submit, approve, reject, weekly set, reversal) with actor, time and old/new hours (`work_hours`, `childcare_hours`, `eldercare_hours`), newest first; reversing a weekly update restores the value it replaced |
-| `GET /instructor/digest?week=` | instructor | New/still/cleared flags across every class, for a chosen week (default: each class's latest complete week) compared against the week before it |
-| `GET /classes/{id}/students/{sid}/risk` | instructor (with notes), or the student themselves (notes hidden) | Level, five signals with evidence, metrics, thresholds, history |
-| `POST /classes/{id}/students/{sid}/notes` | instructor | Log private outreach (body trimmed, empty rejected) |
-| `GET`/`PUT /classes/{id}/risk-settings` | instructor | Per-class risk thresholds and active signals |
-| `GET /me/standing?classId=&studentId=` | the student themselves | Own level, active signals and help — nothing else |
-| `PUT /classes/{id}/settings` | instructor | Criterion weights and adjustment parameters (weights normalised to 100) |
-| `GET /classes/{id}/status`, `POST /classes/{id}/refresh` | signed in | Data freshness and cache refresh (rate-limited, stale fallback) |
-
-## Auth
-
-Every endpoint needs `Authorization: Bearer <token>`; the server derives the role (instructor/student), student ID and class membership from it and enforces ownership with 403s. There is still no real sign-in (university sign-in later) — the frontend's login screen is a demo picker: choose Instructor, Student or Admin (Admin currently opens the same view as Instructor — it's a role stub, since its real job per the spec is server configuration, not a browser screen) and, for Student, a class and a name from the roster, which sets the Bearer token client-side. The roster it lists comes from `GET /login/options`, the one endpoint that doesn't require a token. The nav is scoped to the signed-in role, and the choice is session-only (not persisted across reloads).
-
-The demo accepts opaque tokens:
-
-- `i1` — the instructor
-- `s01` — a student in `c1` (likewise any `sNN` → `c1`, `tNN` → `c2`)
-- `student:<sid>:<cid>` / `instructor:<iid>` forms (e.g. `student:s01:c1`)
-
-For example:
+- `i1`: the instructor
+- `s01`: a student in class `c1`
 
 ```sh
 curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?week=w5"
 ```
 
-## Deployment
+Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`) or `demo-camila` (class `c2`). The free services sleep when idle, so the first request can take up to a minute.
 
-Two Render services (Docker, free plan, Frankfurt) run the app against Neon Postgres:
+More: [features](_docs/features.md), [API and auth](_docs/api.md), [architecture](_docs/architecture.md), [deployment](_docs/deployment.md), [observability and the fault switch](_docs/observability.md).
 
-| Environment | URL |
-| --- | --- |
-| Dev | <https://league-table-dev.onrender.com> |
-| Prod | <https://league-table-prod.onrender.com> |
+## Development setup
 
-Demo logins (pick them on the login screen, or send the token as a Bearer token):
+```sh
+make check      # lint, backend tests, compose port guard; CI runs this
+make test-all   # every suite; needs Docker and Node
+```
 
-- `demo-instructor` — the instructor
-- `demo-amara` — a student in `c1` (also `demo-rosa`)
-- `demo-camila` — a student in `c2`
+[Testing](_docs/testing.md) describes each suite. [Status](_docs/status.md) lists what is built and what remains. [Backend README](backend/README.md) covers `DATABASE_URL` and integration tests. [Product spec](_docs/spec.md) defines the scoring rules.
 
-This is demo data only. The seed adds any missing demo rows at startup and never overwrites existing ones, so changes made in the app persist across restarts and deploys until the database is cleared. The free services sleep after about 15 minutes idle, so the first request can take up to a minute.
+## Release history
 
-How deploys work (auto-deploy on Render is off; GitHub Actions calls Render deploy hooks):
+* 2026-10-22 ADD Alert rule for failing commitment submissions, with a demo fault switch to trigger it (#82, #83)
+* 2026-10-21 ADD OpenTelemetry traces, metrics and logs for the commitment journey (#78)
+* 2026-10-20 ADD Render Blueprint for dev and prod; CD deploys dev after CI and prod on manual dispatch (#74, #77)
+* 2026-10-20 ADD CI on every pull request and `make test-all` (#63, #70)
+* 2026-10-20 CHANGE Reconnect to Neon after scale-to-zero with `pool_pre_ping` (#76)
+* 2026-10-20 FIX Pin Render services to Frankfurt (#75)
+* 2026-10-19 ADD WCAG 2.2 AA login screen and league table (#53)
+* 2026-10-19 ADD Minimal Present mode that hides hours, factors and approvals (#52)
+* 2026-10-19 ADD Instructor-only commitment change log with reversal restore (#51)
+* 2026-10-19 ADD Guard against compose overrides re-publishing dev-stack ports (#50)
+* 2026-10-19 FIX Replace, not append, ports in compose test overrides (#40)
 
-- **Dev** deploys automatically after the CI workflow passes on `main` (`.github/workflows/deploy-dev.yml`).
-- **Prod** deploys manually: Actions > Deploy to production > Run workflow (`.github/workflows/deploy-prod.yml`). It uses the `production` environment, where required reviewers can be added.
-- Both wait for `/login/options` to return 200 (up to 10 minutes) and fail if the service is unhealthy.
-- The hook URLs live in the repository secrets `RENDER_DEPLOY_HOOK_DEV` and `RENDER_DEPLOY_HOOK_PROD`.
+## Meta
 
-## Observability
+Evan Simpson, [@educatorsRlearners](https://github.com/educatorsRlearners)
 
-The backend can export OpenTelemetry traces, metrics and logs over OTLP/HTTP to Grafana Cloud. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset the app configures and exports nothing.
+Distributed under the MIT license. See [LICENSE](LICENSE).
 
-| Variable | Meaning |
-| --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP base URL, e.g. `https://otlp-gateway-prod-eu-west-2.grafana.net/otlp`. Setting it turns telemetry on. |
-| `GRAFANA_OTLP_INSTANCE_ID` | Grafana Cloud instance ID (the basic-auth username; not secret). |
-| `GRAFANA_OTLP_TOKEN` | Grafana Cloud access token (the password). **Secret.** Set it in the Render dashboard (service > Environment); `render.yaml` declares it with `sync: false` and never holds a value. The `Authorization: Basic` header is built in code, so no base64 step is needed. |
-| `OTEL_SERVICE_NAME` | Resource `service.name`; default `league-table`. `render.yaml` sets `league-table-dev` and `league-table-prod`. |
-| `DEPLOYMENT_ENV` | Resource `deployment.environment` (`dev` or `prod`). |
+## Contributing
 
-What is emitted for the commitment journey (`PUT /me/commitments/weeks/{weekNumber}` and the `GET /me/commitments` page load):
+1. Fork the repository (<https://github.com/educatorsRlearners/league-table/fork>).
+2. Create a branch (`git checkout -b feat/42-my-change`).
+3. Commit your changes (`git commit -am 'Feature: Describe the change (#42)'`).
+4. Push to the branch (`git push origin feat/42-my-change`).
+5. Open a pull request.
 
-- **Traces**: one server span per request (named by route template) with child spans for the database queries. `/login/options` health checks are not traced.
-- **Logs**: one JSON line per request on stdout (also sent over OTLP) with `trace_id` and `span_id` matching the trace.
-- **Metrics** for routes under `/me/commitments`, labelled only by `http.route` and `http.status_class` (`2xx`/`4xx`/`5xx`): `league_table.requests`, `league_table.request.errors` (4xx and 5xx) and `league_table.request.duration` (seconds histogram).
-
-No student names or ids, note text, hours values, tokens or request bodies are recorded: query strings are dropped, URLs are replaced by the route template, and SQL is recorded as the parameterised statement without values. `backend/tests/test_telemetry.py` asserts this with sentinel values.
-
-Finding it in Grafana Cloud (Explore, pick the data source for each signal and filter `service_name` = `league-table-dev` or `league-table-prod`; `deployment_environment` tells dev from prod):
-
-- **Traces**: Explore > Tempo (`grafanacloud-<stack>-traces`) > Search, service name as above, span name `PUT /me/commitments/weeks/{weekNumber}`. Open a trace to see the database spans.
-- **Logs**: Explore > Loki (`grafanacloud-<stack>-logs`), query `{service_name="league-table-prod"} | json`; the `trace_id` field links to the trace.
-- **Metrics**: Explore > Prometheus (`grafanacloud-<stack>-prom`), e.g. `sum by (http_route, http_status_class) (rate(league_table_requests_total[5m]))`, `league_table_request_errors_total`, and `histogram_quantile(0.95, sum by (le) (rate(league_table_request_duration_seconds_bucket[5m])))`. Metrics are pushed about once a minute.
-
-Free-tier note: the free Render services sleep when idle, so telemetry from a sleeping service only appears after it wakes.
-
-## Demo fault switch
-
-`FAULT_COMMITMENT_ERRORS` is a **demo-only** switch for showing the alerting on a real, repeatable fault. It is off by default. Set to `1` or `true` (case-insensitive), `PUT /me/commitments/weeks/{weekNumber}` raises an unhandled error before anything is written and answers HTTP 500; the span is marked as an error, the `league_table.request` log line has `http_status_class` `5xx`, and `league_table_requests_total` counts it under `5xx`. Unset, empty, `0`, `false` or anything else leaves behaviour unchanged, and no other route is affected. It is read from the environment on every request and cannot be toggled through the API. Never leave it on in production outside a demo.
-
-To turn it on or off in Render: open the service > Environment, set `FAULT_COMMITMENT_ERRORS` to `1` (or delete it / set it to `0`), save, then restart the service so the new value takes effect.
-
-## Project layout
-
-| Path | What is in it |
-| --- | --- |
-| [`frontend/`](frontend) | The page and its services layer: `httpApi.js` (the live client, used by the page) plus `api.js`/`mockSource.js`/`scoring.js`/`risk.js` (a reference implementation exercised only by the browser test suite `tests.js`) |
-| [`backend/`](backend) | The FastAPI service and its pytest suite. See [`backend/README.md`](backend/README.md) |
-| [`openapi.yaml`](openapi.yaml) | The API contract |
-| [`_docs/spec.md`](_docs/spec.md) | The product spec: goals, scoring rules, data model and phasing |
-
-## Testing
-
-- **Everything:** `make test-all` is the single command for every automated suite. It runs, in order, `make test`, `make check-ports`, `make test-integration` and `make e2e`, and stops at the first failure. It needs Docker running and Node installed (the first two steps do not). Expect about 1 minute (the first two steps take a few seconds) with images already built; the first run is slower while images build and `npm install` runs. The browser-only frontend tests (`Tests.dc.html`) are not included (#62). `make check` is the fast, Docker-free subset CI runs.
-- **Before you push:** `make check` runs lint, the backend tests and the compose port guard (`make lint`, `make test`, `make check-ports`), stopping at the first failure. CI runs the same `make check` steps on every pull request and on every push to `main`.
-- **Backend:** `make test` runs the pytest suite, covering every endpoint, the scoring and adjustment rules, privacy scoping, the risk engine and digest, notes, the seeded edge cases and the OpenAPI contract.
-- **Lint:** `make lint` runs ruff and mypy over the backend (both are dev dependencies).
-- **Frontend:** the scoring, risk and mock-client tests run in the browser at <http://localhost:8000/Tests.dc.html> while the app is running (no headless runner yet, so there is no `make` target for them). These exercise the reference `scoring.js`/`risk.js`/`api.js` logic, not `httpApi.js`; the shipped page's real HTTP integration is covered by the backend's own endpoint tests plus manual/browser verification.
-
-## Status
-
-This is an early version, built on demo data.
-
-- [x] FastAPI backend implementing the whole OpenAPI contract, on toy scores and a SQLAlchemy-backed store (SQLite by default, `DATABASE_URL`-configured)
-- [x] Frontend wired to the real backend over HTTP (`httpApi.js`) instead of the in-browser mock
-- [x] Table, podium, week, cumulative and rolling windows, weights, breakdowns
-- [x] Commitments-based adjustment with a capped factor, the 100 ceiling and raw-score tie-breaks
-- [x] Risk digest, risk records with evidence and history, instructor notes, student standing
-- [x] Roles and privacy scoping enforced on the server
-- [x] Student self-service for commitments (baseline submission, weekly updates) with instructor approval, effective-week choice and reversal
-- [ ] Animated reveal, replay, streaks and badges
-- [ ] Google Sheets adapter, data check against a real sheet, and a Postgres `AppStore` in production
-- [ ] University sign-in (JWT issuance), privacy review, retention and backups before real students use it
-
-See the phasing in [`_docs/spec.md`](_docs/spec.md) for the plan.
-
-## License
-
-[MIT](LICENSE)
+Tasks are GitHub issues. [Process](_docs/process.md) describes the task lifecycle; [AGENTS.md](AGENTS.md) holds the working rules.
