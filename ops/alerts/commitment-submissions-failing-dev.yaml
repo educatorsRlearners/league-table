@@ -1,0 +1,60 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: commitments
+      folder: league-table
+      interval: 1m
+      rules:
+        - uid: eg20hav10h6o0f
+          title: Commitment submissions failing (dev)
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: sum(increase(league_table_requests_total{http_route="/me/commitments/weeks/{weekNumber}", http_status_class="5xx", deployment_environment="dev"}[5m]))
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 2
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 2m
+          annotations:
+            summary: 3 or more weekly-commitment submissions on dev failed in 5 minutes.
+          labels: {}
+          isPaused: false
+          notification_settings:
+            receiver: Evan Simpson
