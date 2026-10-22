@@ -20,17 +20,26 @@ The page shows a podium of the top three, a ranked list with score bars and move
 
 ## Installation
 
-Install [uv](https://docs.astral.sh/uv/) and `make`, then run:
+Choose one route.
+
+**Docker.** Install Docker, then start the database and the app with one command from the repository root:
+
+```sh
+docker compose up --build
+```
+
+The app runs at <http://localhost:8000> on Postgres, and the `db-data` volume keeps its data. Stop it with `docker compose down`.
+
+**Local.** Install [uv](https://docs.astral.sh/uv/) and `make`, then run two commands:
 
 ```sh
 make install
-```
-
-## Usage example
-
-```sh
 make run
 ```
+
+`make run` serves the app at <http://localhost:8000> on in-memory SQLite, so each run starts empty and reseeds.
+
+## Usage example
 
 Open <http://localhost:8000>. The API docs are at <http://localhost:8000/docs>. The app seeds two demo classes of 24 students each (PHYS 204 and DATA 118).
 
