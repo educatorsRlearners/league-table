@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.auth import Caller, get_caller, instructor_id_of, require_instructor
 from app.deps import get_ctx, need_class
+from app.faults import maybe_fail_commitment
 from app.models import (
     Baseline,
     BaselineDecisionRequest,
@@ -90,6 +91,7 @@ def save_weekly_update(weekNumber: int, classId: str = Query(alias="classId"), s
                        caller: Caller = Depends(get_caller), ctx=Depends(get_ctx)):
     if caller.role != "student" or caller.studentId != studentId:
         raise HTTPException(status_code=403, detail="Only the student may edit their own hours.")
+    maybe_fail_commitment()
     snap = need_class(ctx, classId)
     week = next((w for w in snap.weeks if w.week_number == weekNumber), None)
     if week is None:

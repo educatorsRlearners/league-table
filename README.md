@@ -162,6 +162,12 @@ Finding it in Grafana Cloud (Explore, pick the data source for each signal and f
 
 Free-tier note: the free Render services sleep when idle, so telemetry from a sleeping service only appears after it wakes.
 
+## Demo fault switch
+
+`FAULT_COMMITMENT_ERRORS` is a **demo-only** switch for showing the alerting on a real, repeatable fault. It is off by default. Set to `1` or `true` (case-insensitive), `PUT /me/commitments/weeks/{weekNumber}` raises an unhandled error before anything is written and answers HTTP 500; the span is marked as an error, the `league_table.request` log line has `http_status_class` `5xx`, and `league_table_requests_total` counts it under `5xx`. Unset, empty, `0`, `false` or anything else leaves behaviour unchanged, and no other route is affected. It is read from the environment on every request and cannot be toggled through the API. Never leave it on in production outside a demo.
+
+To turn it on or off in Render: open the service > Environment, set `FAULT_COMMITMENT_ERRORS` to `1` (or delete it / set it to `0`), save, then restart the service so the new value takes effect.
+
 ## Project layout
 
 | Path | What is in it |
