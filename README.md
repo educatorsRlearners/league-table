@@ -125,7 +125,7 @@ Demo logins (pick them on the login screen, or send the token as a Bearer token)
 - `demo-amara` — a student in `c1` (also `demo-rosa`)
 - `demo-camila` — a student in `c2`
 
-This is demo data only; it resets when the seed is re-applied. The free services sleep after about 15 minutes idle, so the first request can take up to a minute.
+This is demo data only. The seed adds any missing demo rows at startup and never overwrites existing ones, so changes made in the app persist across restarts and deploys until the database is cleared. The free services sleep after about 15 minutes idle, so the first request can take up to a minute.
 
 How deploys work (auto-deploy on Render is off; GitHub Actions calls Render deploy hooks):
 
