@@ -273,7 +273,10 @@ def test_fault_switch_is_a_real_5xx_in_span_log_and_metric(traced_app, cap, monk
     assert len(req) == 1 and req[0]["http_status_class"] == "5xx" and req[0]["http_route"] == PUT_ROUTE
     fault = [ln for ln in lines if ln["logger"] == "league_table.fault"]
     assert fault and "FAULT_COMMITMENT_ERRORS" in json.dumps(fault)
-    assert "s10" not in json.dumps(fault) and "c1" not in json.dumps(fault)
+    # Check only the human text: trace_id/span_id are random hex and can contain "c1".
+    text = " ".join(str(ln.get("message", "")) + str(ln.get("exception", "")) for ln in fault)
+    assert "FAULT_COMMITMENT_ERRORS" in text
+    assert "s10" not in text and "c1" not in text and "work" not in text
     points = cap.metric_points()
     reqs = {(p.attributes["http.route"], p.attributes["http.status_class"]): p for p in points["league_table.requests"]}
     assert reqs[(PUT_ROUTE, "5xx")].value == 1
