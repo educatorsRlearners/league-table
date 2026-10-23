@@ -154,3 +154,8 @@ ai-artifacts/*
 
 # Playwright MCP browser-tool scratch output (console logs, page snapshots)
 .playwright-mcp/
+
+# Playwright e2e output (traces, screenshots, reports)
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/

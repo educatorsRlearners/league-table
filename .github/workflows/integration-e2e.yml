@@ -1,0 +1,145 @@
+name: Integration and e2e
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up uv with Python 3.13
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Show Docker Compose version
+        run: docker compose version
+
+      - name: Install dependencies
+        run: make install
+
+      # The test fixtures remove the stack on exit, so follow its logs into a
+      # file while it runs and print that file if the tests fail.
+      - name: Start compose log follower
+        run: |
+          nohup setsid bash -c '
+            until [ -n "$(docker compose -p league_table_it -f docker-compose.yml -f docker-compose.integration.yml ps -q backend 2>/dev/null)" ] && [ -n "$(docker compose -p league_table_it -f docker-compose.yml -f docker-compose.integration.yml ps -q db 2>/dev/null)" ]; do sleep 1; done
+            docker compose -p league_table_it -f docker-compose.yml -f docker-compose.integration.yml logs -f --no-color backend db
+          ' > "$RUNNER_TEMP/compose.log" 2>&1 < /dev/null &
+
+      # Runs `uv run pytest -m integration tests/test_integration_docker.py`.
+      # pytest exits 5 when nothing is collected, which fails the job.
+      - name: Integration tests
+        run: make test-integration
+
+      - name: Print compose logs
+        if: failure()
+        run: |
+          sleep 3
+          pkill -f 'logs -f --no-color backend db' || true
+          if [ -s "$RUNNER_TEMP/compose.log" ]; then
+            cat "$RUNNER_TEMP/compose.log"
+          else
+            echo "no logs captured: the compose stack never started"
+          fi
+
+      - name: Tear down the compose stack
+        if: always()
+        run: |
+          docker compose -p league_table_it -f docker-compose.yml -f docker-compose.integration.yml down -v --remove-orphans
+          pkill -f 'logs -f --no-color backend db' || true
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Show Docker Compose version
+        run: docker compose version
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Show which browser the suite will launch
+        working-directory: e2e
+        run: |
+          node -e '
+            const { findBrave } = require("./browser");
+            const { chromium } = require("@playwright/test");
+            const brave = findBrave();
+            console.log(brave ? "Brave found, launching: " + brave : "No Brave found, launching Playwright bundled Chromium: " + chromium.executablePath());
+          '
+
+      # The test fixtures remove the stack on exit, so follow its logs into a
+      # file while it runs and print that file if the tests fail.
+      - name: Start compose log follower
+        run: |
+          nohup setsid bash -c '
+            until [ -n "$(docker compose -p league_table_e2e -f docker-compose.yml -f docker-compose.e2e.yml ps -q backend 2>/dev/null)" ] && [ -n "$(docker compose -p league_table_e2e -f docker-compose.yml -f docker-compose.e2e.yml ps -q db 2>/dev/null)" ]; do sleep 1; done
+            docker compose -p league_table_e2e -f docker-compose.yml -f docker-compose.e2e.yml logs -f --no-color backend db
+          ' > "$RUNNER_TEMP/compose.log" 2>&1 < /dev/null &
+
+      # global-setup.js brings the compose stack up, global-teardown.js takes it down.
+      - name: Playwright e2e tests
+        working-directory: e2e
+        run: npm test
+
+      - name: Print compose logs
+        if: failure()
+        run: |
+          sleep 3
+          pkill -f 'logs -f --no-color backend db' || true
+          if [ -s "$RUNNER_TEMP/compose.log" ]; then
+            cat "$RUNNER_TEMP/compose.log"
+          else
+            echo "no logs captured: the compose stack never started"
+          fi
+
+      - name: Tear down the compose stack
+        if: always()
+        run: |
+          docker compose -p league_table_e2e -f docker-compose.yml -f docker-compose.e2e.yml down -v --remove-orphans
+          pkill -f 'logs -f --no-color backend db' || true
+
+      - name: Upload Playwright traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: playwright-traces
+          path: e2e/test-results/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Working tree must be clean
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
