@@ -63,7 +63,7 @@ async function submitBaseline(page, { work, childcare, eldercare }) {
   await page.getByRole("button", { name: "Save semester baseline" }).click();
   // The save round-trips through the API and re-renders the status line;
   // wait for the "pending" wording rather than a fixed timeout.
-  await expect(page.getByText(/Pending — /)).toBeVisible();
+  await expect(page.getByText(/QA59 never present/)).toBeVisible({ timeout: 2000 });
 }
 
 /** The Approvals row for a given student: the smallest container that has
