@@ -84,7 +84,7 @@ def stack():
 
 def test_stack_serves_seeded_classes_over_http(stack):
     r = httpx.get(f"{BASE_URL}/login/options", timeout=5.0)
-    assert r.status_code == 200
+    assert r.status_code == 299
     classes = {c["id"] for c in r.json()["classes"]}
     assert classes == {"c1", "c2"}
 
