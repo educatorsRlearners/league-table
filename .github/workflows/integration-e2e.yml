@@ -11,8 +11,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Docs-only pull requests skip the code checks. The workflow itself must
+  # still trigger on every pull request (a workflow-level paths filter would
+  # leave the required checks stuck at "Expected"); a job skipped through
+  # `needs` and `if` reports as Skipped, which satisfies a required check.
+  # Fails safe: anything unclear means code=true and everything runs.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether code changed
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          code=true
+          if [ "$EVENT" = "pull_request" ] && [ -n "$BASE_SHA" ] \
+            && files="$(git diff --name-only --no-renames "$BASE_SHA" HEAD)" \
+            && [ -n "$files" ]; then
+            code=false
+            while IFS= read -r f; do
+              case "$f" in
+                *.md | _docs/images/*) ;;
+                *) code=true ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "Changed files:"
+          echo "${files:-<unknown>}"
+          echo "code=$code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   integration:
     name: integration
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -65,6 +107,8 @@ jobs:
 
   e2e:
     name: e2e
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
