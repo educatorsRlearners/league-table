@@ -74,20 +74,6 @@ make test-all   # every suite; needs Docker and Node
 
 [Testing](_docs/testing.md) describes each suite. [Status](_docs/status.md) lists what is built and what remains. [Backend README](backend/README.md) covers `DATABASE_URL` and integration tests. [Product spec](_docs/spec.md) defines the scoring rules.
 
-## Release history
-
-* 2026-10-22 ADD Alert rule for failing commitment submissions, with a demo fault switch to trigger it (#82, #83)
-* 2026-10-21 ADD OpenTelemetry traces, metrics, and logs for the commitment journey (#80)
-* 2026-10-20 ADD Render Blueprint for dev and prod; CD deploys dev after CI and prod on manual dispatch (#74, #77)
-* 2026-10-20 ADD CI on every pull request and `make test-all` (#63, #70)
-* 2026-10-20 CHANGE Reconnect to Neon after scale-to-zero with `pool_pre_ping` (#76)
-* 2026-10-20 FIX Pin Render services to Frankfurt (#75)
-* 2026-10-19 ADD WCAG 2.2 AA login screen and league table (#53)
-* 2026-10-19 ADD Minimal Present mode that hides hours, factors, and approvals (#52)
-* 2026-10-19 ADD Instructor-only commitment change log with reversal restore (#51)
-* 2026-10-19 ADD Guard against compose overrides re-publishing dev-stack ports (#50)
-* 2026-10-19 FIX Replace, not append, ports in compose test overrides (#40)
-
 ## Meta
 
 Evan Simpson, [@educatorsRlearners](https://github.com/educatorsRlearners)
