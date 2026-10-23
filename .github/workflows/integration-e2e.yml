@@ -98,17 +98,22 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       # System libraries live outside the cache, so install them on every run.
-      # Each attempt is capped at 140 seconds and there is one retry, so a
-      # stalled apt or CDN fetch costs at most about 5 minutes, then fails.
+      # Each attempt is capped at 110 seconds and there is one retry, so a
+      # stalled apt mirror costs at most 4 minutes, then fails. Killing npx
+      # leaves its apt-get child holding the dpkg lock, so clear it first.
       - name: Install Playwright system dependencies
         timeout-minutes: 5
         working-directory: e2e
         run: |
           for attempt in 1 2; do
-            if timeout --kill-after=10 140 npx playwright install-deps chromium; then
+            if timeout --kill-after=10 110 npx playwright install-deps chromium; then
               exit 0
             fi
             echo "::warning::Playwright install-deps attempt $attempt failed or timed out"
+            sudo pkill -KILL -x apt-get || true
+            sudo pkill -KILL -x dpkg || true
+            sleep 2
+            sudo dpkg --configure -a || true
           done
           echo "::error::Playwright install-deps failed after 2 attempts"
           exit 1
@@ -120,7 +125,7 @@ jobs:
         working-directory: e2e
         run: |
           for attempt in 1 2; do
-            if timeout --kill-after=10 140 npx playwright install chromium; then
+            if timeout --kill-after=10 110 npx playwright install chromium; then
               exit 0
             fi
             echo "::warning::Playwright browser download attempt $attempt failed or timed out"
