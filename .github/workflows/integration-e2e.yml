@@ -110,6 +110,7 @@ jobs:
           node -e '
             const { findBrave } = require("./browser");
             const { chromium } = require("@playwright/test");
+            process.exit(1);
             const brave = findBrave();
             chromium.launch(brave ? { executablePath: brave } : {})
               .then((b) => b.close())
