@@ -58,3 +58,4 @@ def make_engine(url: str | None = None) -> Engine:
 
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(bind=engine, expire_on_commit=False)
+# qa103 comment
