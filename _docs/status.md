@@ -18,3 +18,4 @@ League Table is an early version built on demo data.
 - [ ] University sign-in (JWT issuance), privacy review, retention, and backups before real students use it
 
 The phasing in [`spec.md`](spec.md) holds the plan.
+
