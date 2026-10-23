@@ -4,7 +4,7 @@ Telemetry export and the switch that demonstrates the alert. The alert rule live
 
 ## Observability
 
-The backend can export OpenTelemetry traces, metrics and logs over OTLP/HTTP to Grafana Cloud. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset the app configures and exports nothing.
+The backend can export OpenTelemetry traces, metrics, and logs over OTLP/HTTP to Grafana Cloud. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset the app configures and exports nothing.
 
 | Variable | Meaning |
 | --- | --- |
@@ -18,11 +18,11 @@ What is emitted for the commitment journey (`PUT /me/commitments/weeks/{weekNumb
 
 - **Traces**: one server span per request (named by route template) with child spans for the database queries. `/login/options` health checks are not traced.
 - **Logs**: one JSON line per request on stdout (also sent over OTLP) with `trace_id` and `span_id` matching the trace.
-- **Metrics** for routes under `/me/commitments`, labelled only by `http.route` and `http.status_class` (`2xx`/`4xx`/`5xx`): `league_table.requests`, `league_table.request.errors` (4xx and 5xx) and `league_table.request.duration` (seconds histogram).
+- **Metrics** for routes under `/me/commitments`, labelled only by `http.route` and `http.status_class` (`2xx`/`4xx`/`5xx`): `league_table.requests`, `league_table.request.errors` (4xx and 5xx), and `league_table.request.duration` (seconds histogram).
 
-No student names or ids, note text, hours values, tokens or request bodies are recorded: query strings are dropped, URLs are replaced by the route template, and SQL is recorded as the parameterised statement without values. `backend/tests/test_telemetry.py` asserts this with sentinel values.
+No student names or ids, note text, hours values, tokens, or request bodies are recorded: query strings are dropped, URLs are replaced by the route template, and SQL is recorded as the parameterised statement without values. `backend/tests/test_telemetry.py` asserts this with sentinel values.
 
-Finding it in Grafana Cloud (Explore, pick the data source for each signal and filter `service_name` = `league-table-dev` or `league-table-prod`; `deployment_environment` tells dev from prod):
+Finding it in Grafana Cloud (Explore, pick the data source for each signal, and filter `service_name` = `league-table-dev` or `league-table-prod`; `deployment_environment` tells dev from prod):
 
 - **Traces**: Explore > Tempo (`grafanacloud-<stack>-traces`) > Search, service name as above, span name `PUT /me/commitments/weeks/{weekNumber}`. Open a trace to see the database spans.
 - **Logs**: Explore > Loki (`grafanacloud-<stack>-logs`), query `{service_name="league-table-prod"} | json`; the `trace_id` field links to the trace.
@@ -32,6 +32,6 @@ Free-tier note: the free Render services sleep when idle, so telemetry from a sl
 
 ## Demo fault switch
 
-`FAULT_COMMITMENT_ERRORS` is a **demo-only** switch that produces a real, repeatable fault to show the alerting. It is off by default. Set to `1` or `true` (case-insensitive), `PUT /me/commitments/weeks/{weekNumber}` raises an unhandled error before anything is written and answers HTTP 500; the span is marked as an error, the `league_table.request` log line has `http_status_class` `5xx`, and `league_table_requests_total` counts it under `5xx`. Unset, empty, `0`, `false` or anything else leaves behaviour unchanged, and no other route is affected. It is read from the environment on every request and cannot be toggled through the API. Never leave it on in production outside a demo. The alert rule that this fault triggers is documented in [`ops/alerts/README.md`](../ops/alerts/README.md).
+`FAULT_COMMITMENT_ERRORS` is a **demo-only** switch that produces a real, repeatable fault to show the alerting. It is off by default. Set to `1` or `true` (case-insensitive), `PUT /me/commitments/weeks/{weekNumber}` raises an unhandled error before anything is written and answers HTTP 500; the span is marked as an error, the `league_table.request` log line has `http_status_class` `5xx`, and `league_table_requests_total` counts it under `5xx`. Unset, empty, `0`, `false`, or anything else leaves behaviour unchanged, and no other route is affected. It is read from the environment on every request and cannot be toggled through the API. Never leave it on in production outside a demo. The alert rule that this fault triggers is documented in [`ops/alerts/README.md`](../ops/alerts/README.md).
 
 To turn it on or off in Render: open the service > Environment, set `FAULT_COMMITMENT_ERRORS` to `1` (or delete it / set it to `0`), save, then restart the service so the new value takes effect.
