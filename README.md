@@ -14,7 +14,7 @@
 
 </div>
 
-Instructors rank students each week on criteria they choose. A plain ranking punishes students who work or care for children and elders. League Table asks each student for weekly hours of work, child care, and elder care. It converts them to weighted hours. It then multiplies the score by a capped factor: one point per weighted hour by default, at most x1.25. Scores stop at 100. A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
+Instructors rank students each week on criteria they choose. A plain ranking punishes students who work or care for children and elders. League Table asks each student for weekly hours of work, child care, and elder care. It converts them to weighted hours. It then multiplies the score by a capped factor. Each weighted hour adds 0.01 to the factor, up to x1.25. Scores stop at 100. A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
 
 The page shows a podium of the top three, a ranked list with score bars and movement since last week, and a breakdown of each score. Classmates see only the final adjusted score and rank. Instructors see a weekly risk digest with five evidence-backed signals and log private outreach notes. After login, a student sees the class ranking and a full breakdown of their own score; an instructor sees every class they teach, each student's breakdown, and the risk digest. The backend enforces scoring, ranking, risk, and roles.
 
