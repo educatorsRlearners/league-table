@@ -7,6 +7,10 @@
 [![CI](https://github.com/educatorsRlearners/league-table/actions/workflows/ci.yml/badge.svg)](https://github.com/educatorsRlearners/league-table/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/educatorsRlearners/league-table)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)](#installation)
+[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://league-table-prod.onrender.com)
 
 </div>
 
