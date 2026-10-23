@@ -14,9 +14,9 @@
 
 </div>
 
-Instructors rank students each week on criteria they choose. A plain ranking punishes students who work or care for children and elders. League Table asks each student for weekly hours of work, child care and elder care. It converts them to weighted hours. It then multiplies the score by a capped factor: one point per weighted hour by default, at most x1.25. Scores stop at 100. A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
+Instructors rank students each week on criteria they choose. A plain ranking punishes students who work or care for children and elders. League Table asks each student for weekly hours of work, child care, and elder care. It converts them to weighted hours. It then multiplies the score by a capped factor: one point per weighted hour by default, at most x1.25. Scores stop at 100. A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
 
-The page shows a podium of the top three, a ranked list with score bars and movement since last week, and a breakdown of each score. Classmates see only the final adjusted score and rank. Instructors see a weekly risk digest with five evidence-backed signals and log private outreach notes. After login, a student sees the class ranking and a full breakdown of their own score; an instructor sees every class they teach, each student's breakdown and the risk digest. The backend enforces scoring, ranking, risk and roles.
+The page shows a podium of the top three, a ranked list with score bars and movement since last week, and a breakdown of each score. Classmates see only the final adjusted score and rank. Instructors see a weekly risk digest with five evidence-backed signals and log private outreach notes. After login, a student sees the class ranking and a full breakdown of their own score; an instructor sees every class they teach, each student's breakdown, and the risk digest. The backend enforces scoring, ranking, risk, and roles.
 
 <div align="center">
 <img src="_docs/images/league-table.jpg" alt="The League Table showing a podium of the top three students above a ranked list with score bars and rank movement" width="900">
@@ -53,7 +53,9 @@ Sign in on the login screen as `i1` (the instructor) or `s01` (a student in clas
 curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?week=w5"
 ```
 
-Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`) or `demo-camila` (class `c2`). The free services sleep when idle; the first request can take up to a minute.
+The demo tokens are public and unsigned; a production deployment needs signed identity tokens.
+
+Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`), or `demo-camila` (class `c2`). The free services sleep when idle; the first request can take up to a minute.
 
 Reference docs:
 
@@ -66,7 +68,7 @@ Reference docs:
 ## Development setup
 
 ```sh
-make check      # lint, backend tests, compose port guard; CI runs this
+make check      # lint, backend tests, and compose port guard; CI runs this
 make test-all   # every suite; needs Docker and Node
 ```
 
@@ -75,13 +77,13 @@ make test-all   # every suite; needs Docker and Node
 ## Release history
 
 * 2026-10-22 ADD Alert rule for failing commitment submissions, with a demo fault switch to trigger it (#82, #83)
-* 2026-10-21 ADD OpenTelemetry traces, metrics and logs for the commitment journey (#80)
+* 2026-10-21 ADD OpenTelemetry traces, metrics, and logs for the commitment journey (#80)
 * 2026-10-20 ADD Render Blueprint for dev and prod; CD deploys dev after CI and prod on manual dispatch (#74, #77)
 * 2026-10-20 ADD CI on every pull request and `make test-all` (#63, #70)
 * 2026-10-20 CHANGE Reconnect to Neon after scale-to-zero with `pool_pre_ping` (#76)
 * 2026-10-20 FIX Pin Render services to Frankfurt (#75)
 * 2026-10-19 ADD WCAG 2.2 AA login screen and league table (#53)
-* 2026-10-19 ADD Minimal Present mode that hides hours, factors and approvals (#52)
+* 2026-10-19 ADD Minimal Present mode that hides hours, factors, and approvals (#52)
 * 2026-10-19 ADD Instructor-only commitment change log with reversal restore (#51)
 * 2026-10-19 ADD Guard against compose overrides re-publishing dev-stack ports (#50)
 * 2026-10-19 FIX Replace, not append, ports in compose test overrides (#40)
