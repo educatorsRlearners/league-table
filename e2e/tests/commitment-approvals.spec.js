@@ -40,7 +40,7 @@ async function loginAsStudent(page, { classId, studentId }) {
   await page.locator("#login-class").selectOption(classId);
   await page.locator("#login-student").selectOption(studentId);
   await page.getByRole("button", { name: "Continue as this student" }).click();
-  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log outx" })).toBeVisible();
 }
 
 async function loginAsInstructor(page) {
