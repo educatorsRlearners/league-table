@@ -10,9 +10,9 @@
 
 </div>
 
-Instructors rank students each week on criteria they choose. A plain ranking punishes students who also work or care for children and elders. League Table asks each student for weekly hours of work, child care and elder care, converts them to weighted hours, and multiplies the score by a capped factor (by default one point per weighted hour, at most x1.25; scores stop at 100). A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
+Instructors rank students each week on criteria they choose. A plain ranking punishes students who work or care for children and elders. League Table asks each student for weekly hours of work, child care and elder care. It converts them to weighted hours. It then multiplies the score by a capped factor: one point per weighted hour by default, at most x1.25. Scores stop at 100. A criterion with no entry drops out and the remaining weights rescale, so missing data never counts as zero.
 
-The page shows a podium of the top three, a ranked list with score bars and movement since last week, and a breakdown of each score. Classmates see only the final adjusted score and rank. Instructors also see a weekly risk digest with five evidence-backed signals and can log private outreach notes. The backend enforces scoring, ranking, risk and roles.
+The page shows a podium of the top three, a ranked list with score bars and movement since last week, and a breakdown of each score. Classmates see only the final adjusted score and rank. Instructors see a weekly risk digest with five evidence-backed signals and log private outreach notes. After login, a student sees the class ranking and a full breakdown of their own score; an instructor sees every class they teach, each student's breakdown and the risk digest. The backend enforces scoring, ranking, risk and roles.
 
 <div align="center">
 <img src="_docs/images/league-table.jpg" alt="The League Table showing a podium of the top three students above a ranked list with score bars and rank movement" width="900">
@@ -20,9 +20,9 @@ The page shows a podium of the top three, a ranked list with score bars and move
 
 ## Installation
 
-Choose one route.
+Choose Docker or a local install.
 
-**Docker.** Install Docker, then start the database and the app with one command from the repository root:
+**Docker.** Install Docker, then start the database and the app from the repository root:
 
 ```sh
 docker compose up --build
@@ -43,18 +43,21 @@ make run
 
 Open <http://localhost:8000>. The API docs are at <http://localhost:8000/docs>. The app seeds two demo classes of 24 students each (PHYS 204 and DATA 118).
 
-Pick a role on the login screen, or send a Bearer token:
-
-- `i1`: the instructor
-- `s01`: a student in class `c1`
+Sign in on the login screen as `i1` (the instructor) or `s01` (a student in class `c1`), or call the API with the same value as a Bearer token:
 
 ```sh
 curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?week=w5"
 ```
 
-Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`) or `demo-camila` (class `c2`). The free services sleep when idle, so the first request can take up to a minute.
+Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`) or `demo-camila` (class `c2`). The free services sleep when idle; the first request can take up to a minute.
 
-More: [features](_docs/features.md), [API and auth](_docs/api.md), [architecture](_docs/architecture.md), [deployment](_docs/deployment.md), [observability and the fault switch](_docs/observability.md).
+Reference docs:
+
+- [Features](_docs/features.md)
+- [API and auth](_docs/api.md)
+- [Architecture](_docs/architecture.md)
+- [Deployment](_docs/deployment.md)
+- [Observability and the fault switch](_docs/observability.md)
 
 ## Development setup
 
@@ -68,7 +71,7 @@ make test-all   # every suite; needs Docker and Node
 ## Release history
 
 * 2026-10-22 ADD Alert rule for failing commitment submissions, with a demo fault switch to trigger it (#82, #83)
-* 2026-10-21 ADD OpenTelemetry traces, metrics and logs for the commitment journey (#78)
+* 2026-10-21 ADD OpenTelemetry traces, metrics and logs for the commitment journey (#80)
 * 2026-10-20 ADD Render Blueprint for dev and prod; CD deploys dev after CI and prod on manual dispatch (#74, #77)
 * 2026-10-20 ADD CI on every pull request and `make test-all` (#63, #70)
 * 2026-10-20 CHANGE Reconnect to Neon after scale-to-zero with `pool_pre_ping` (#76)
