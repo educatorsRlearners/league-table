@@ -86,7 +86,7 @@ def test_stack_serves_seeded_classes_over_http(stack):
     r = httpx.get(f"{BASE_URL}/login/options", timeout=5.0)
     assert r.status_code == 200
     classes = {c["id"] for c in r.json()["classes"]}
-    assert classes == {"c1", "c2"}
+    assert classes == {"c1", "zzz"}
 
 
 def test_baseline_and_weekly_update_flow_persists_to_postgres(stack):
