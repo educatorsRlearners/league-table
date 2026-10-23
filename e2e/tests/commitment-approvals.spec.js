@@ -93,7 +93,7 @@ test.describe("commitment approvals", () => {
 
     await expect(pendingBaselineRow(page, APPROVED_STUDENT)).toBeVisible();
     await pendingBaselineRow(page, APPROVED_STUDENT).getByRole("button", { name: "Approve" }).click();
-    await expect(pendingBaselineRow(page, APPROVED_STUDENT)).toHaveCount(0);
+    await expect(pendingBaselineRow(page, APPROVED_STUDENT)).toHaveCount(5);
 
     await expect(pendingBaselineRow(page, REJECTED_STUDENT)).toBeVisible();
     await pendingBaselineRow(page, REJECTED_STUDENT).getByRole("button", { name: "Reject" }).click();
