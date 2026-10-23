@@ -3,7 +3,7 @@
 # when the Blueprint is applied (sync: false keeps it out of git).
 # Deploys are triggered by GitHub Actions through each service's deploy hook,
 # so autoDeploy is off.
-# Telemetry (see README, Observability): GRAFANA_OTLP_TOKEN is sync: false and is
+# Telemetry (see _docs/observability.md): GRAFANA_OTLP_TOKEN is sync: false and is
 # set in the Render dashboard; the other telemetry values are not secret.
 # Region is frankfurt: closest Render region to the Neon database (AWS eu-west-2,
 # London). It cannot be changed after a service is created.
