@@ -103,3 +103,5 @@ Distributed under the MIT license. See [LICENSE](LICENSE).
 5. Open a pull request.
 
 Tasks are GitHub issues. [Process](_docs/process.md) describes the task lifecycle; [AGENTS.md](AGENTS.md) holds the working rules.
+
+# throwaway docs
