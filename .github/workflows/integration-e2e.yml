@@ -85,53 +85,61 @@ jobs:
         working-directory: e2e
         run: npm ci
 
-      - name: Resolve the Playwright version
-        id: playwright
-        working-directory: e2e
-        run: echo "version=$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache the Playwright browser
-        id: playwright-cache
-        uses: actions/cache@v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      # System libraries live outside the cache, so install them on every run.
-      # Each attempt is capped at 110 seconds and there is one retry, so a
-      # stalled apt mirror costs at most 4 minutes, then fails. Killing npx
-      # leaves its apt-get child holding the dpkg lock, so clear it first.
-      - name: Install Playwright system dependencies
+      # The browser download is about 8 seconds, so it is not cached: restoring
+      # a cache costs about the same and caches are not shared between PRs.
+      # Each attempt is capped at 110 seconds with one retry.
+      - name: Install Playwright Chromium
         timeout-minutes: 5
         working-directory: e2e
         run: |
           for attempt in 1 2; do
-            if timeout --kill-after=10 110 npx playwright install-deps chromium; then
-              exit 0
-            fi
+            timeout --kill-after=10 110 npx playwright install chromium && exit 0
+            echo "::warning::Playwright browser download attempt $attempt failed or timed out"
+          done
+          echo "::error::Playwright browser download failed after 2 attempts"
+          exit 1
+
+      # ubuntu-latest usually ships every library Chromium needs, so launch it
+      # first and skip the slow apt step.
+      - name: Check Chromium launches
+        id: chromium-check
+        continue-on-error: true
+        timeout-minutes: 2
+        working-directory: e2e
+        run: |
+          node -e '
+            const { findBrave } = require("./browser");
+            const { chromium } = require("@playwright/test");
+            const brave = findBrave();
+            chromium.launch(brave ? { executablePath: brave } : {})
+              .then((b) => b.close())
+              .then(() => console.log("Chromium launched"))
+              .catch((e) => { console.error(e.message); process.exit(1); });
+          '
+
+      # Fallback only: install system libraries, then check again. apt can
+      # stall on a bad mirror, so cap each attempt and retry once; killing npx
+      # leaves apt-get holding the dpkg lock, so clear it before the retry.
+      - name: Install Playwright system dependencies
+        if: steps.chromium-check.outcome == 'failure'
+        timeout-minutes: 5
+        working-directory: e2e
+        run: |
+          for attempt in 1 2; do
+            timeout --kill-after=10 110 npx playwright install-deps chromium && break
             echo "::warning::Playwright install-deps attempt $attempt failed or timed out"
             sudo pkill -KILL -x apt-get || true
             sudo pkill -KILL -x dpkg || true
             sleep 2
             sudo dpkg --configure -a || true
+            [ "$attempt" = 2 ] && { echo "::error::Playwright install-deps failed after 2 attempts"; exit 1; }
           done
-          echo "::error::Playwright install-deps failed after 2 attempts"
-          exit 1
-
-      # Only download the browser when the cache missed.
-      - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 5
-        working-directory: e2e
-        run: |
-          for attempt in 1 2; do
-            if timeout --kill-after=10 110 npx playwright install chromium; then
-              exit 0
-            fi
-            echo "::warning::Playwright browser download attempt $attempt failed or timed out"
-          done
-          echo "::error::Playwright browser download failed after 2 attempts"
-          exit 1
+          node -e '
+            const { findBrave } = require("./browser");
+            const { chromium } = require("@playwright/test");
+            const brave = findBrave();
+            chromium.launch(brave ? { executablePath: brave } : {}).then((b) => b.close());
+          '
 
       - name: Show which browser the suite will launch
         working-directory: e2e
