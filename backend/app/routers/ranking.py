@@ -16,7 +16,14 @@ from app.deps import (
     parse_weights,
 )
 from app.models import Explanation
-from app.service import DEFAULT_ROLLING_N, build_rows, resolved_weights, window_weeks
+from app.service import (
+    DEFAULT_COMMITMENT_CAP,
+    DEFAULT_COMMITMENT_RATE,
+    DEFAULT_ROLLING_N,
+    build_rows,
+    resolved_weights,
+    window_weeks,
+)
 
 router = APIRouter(tags=["ranking"])
 
@@ -39,6 +46,17 @@ def _resolve(snap, criteria_keys, weights):
         if unknown_w:
             raise HTTPException(status_code=422, detail=f"Unknown criterion: {', '.join(unknown_w)}")
     return keys, resolved_weights(snap, keys, weights)
+
+
+def _ranking_response(snap, *, class_id: str, week: str, window: str, rolling_n: int,
+                      keys: list[str], weights: dict, rows: list[dict]) -> JSONResponse:
+    return JSONResponse({
+        "classId": class_id, "weekId": week, "windowMode": window, "rollingN": rolling_n,
+        "criteriaKeys": keys, "weights": weights, "rows": rows,
+        "weekCount": len(window_weeks(snap.weeks, week, window, rolling_n)),
+        "lastUpdated": int(snap.at * 1000), "stale": snap.stale,
+        "issues": [i.model_dump() for i in snap.issues],
+    })
 
 
 def _scope(row: dict, caller: Caller) -> dict:
@@ -79,30 +97,24 @@ def get_ranking(
     criteria_keys = parse_criteria(criteria)
     weights_map = parse_weights(weights)
     keys, w = _resolve(snap, criteria_keys, weights_map)
+    shared = dict(class_id=classId, week=week, window=window, rolling_n=rollingN, keys=keys, weights=w)
     if week not in {ww.id for ww in snap.weeks}:
-        return JSONResponse({"classId": classId, "weekId": week, "windowMode": window, "rollingN": rollingN,
-                "criteriaKeys": keys, "weights": w, "rows": [], "weekCount": 0,
-                "lastUpdated": int(snap.at * 1000), "stale": snap.stale,
-                "issues": [i.model_dump() for i in snap.issues]})
+        return _ranking_response(snap, rows=[], **shared)
     rows = build_rows(snap, week_id=week, window_mode=window, rolling_n=rollingN,
                       weights=w, criteria_keys=keys, name_mode=nameMode)
     idx = next(i for i, ww in enumerate(snap.weeks) if ww.id == week)
-    prev_map = {}
+    prev_ranks = {}
     if idx > 0:
         prev = build_rows(snap, week_id=snap.weeks[idx - 1].id, window_mode=window,
                           rolling_n=rollingN, weights=w, criteria_keys=keys, name_mode=nameMode)
-        prev_map = {r["student_id"]: r["rank"] for r in prev}
-    decorated = []
-    for r in rows:
-        scoped = _scope({**r, "rank_delta": (prev_map[r["student_id"]] - r["rank"]
-                                             if r["student_id"] in prev_map else None),
-                         "missing": r.get("missingKeys", [])}, caller)
-        decorated.append(scoped)
-    return JSONResponse({"classId": classId, "weekId": week, "windowMode": window, "rollingN": rollingN,
-            "criteriaKeys": keys, "weights": w, "rows": decorated,
-            "weekCount": len(window_weeks(snap.weeks, week, window, rollingN)),
-            "lastUpdated": int(snap.at * 1000), "stale": snap.stale,
-            "issues": [i.model_dump() for i in snap.issues]})
+        prev_ranks = {r["student_id"]: r["rank"] for r in prev}
+    decorated = [
+        _scope({**r, "rank_delta": (prev_ranks[r["student_id"]] - r["rank"]
+                                    if r["student_id"] in prev_ranks else None),
+                "missing": r.get("missingKeys", [])}, caller)
+        for r in rows
+    ]
+    return _ranking_response(snap, rows=decorated, **shared)
 
 
 @router.get("/classes/{classId}/students/{studentId}/explanation", response_model=Explanation,
@@ -153,8 +165,8 @@ def get_explanation(
         "hours": focus["hours"],
         "hours_source": focus["hours_source"],
         "typeWeights": snap.settings.get("typeWeights", {}),
-        "rate": snap.settings.get("rate", 0.01),
-        "cap": snap.settings.get("cap", 1.25),
+        "rate": snap.settings.get("rate", DEFAULT_COMMITMENT_RATE),
+        "cap": snap.settings.get("cap", DEFAULT_COMMITMENT_CAP),
         "focusWeek": focus["week_number"],
         "parts": focus_parts,
         "weeks": [{"week_number": r["week_number"], "raw": r["raw"],

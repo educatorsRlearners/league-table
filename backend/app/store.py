@@ -99,6 +99,30 @@ def _row_to_dict(row, fields: tuple[str, ...]) -> dict:
     return {f: getattr(row, f) for f in fields}
 
 
+def _hours_columns(hours: dict) -> dict:
+    """Map a {work, childcare, eldercare} hours dict to row columns, treating missing or None as 0."""
+    return {
+        "work_hours": hours.get("work", 0) or 0,
+        "childcare_hours": hours.get("childcare", 0) or 0,
+        "eldercare_hours": hours.get("eldercare", 0) or 0,
+    }
+
+
+def _new_league_row(class_id: str) -> LeagueSettingsRow:
+    defaults = default_league_settings()
+    return LeagueSettingsRow(class_id=class_id, type_weights=defaults["typeWeights"], rate=defaults["rate"],
+                             cap=defaults["cap"], tie_breakers=defaults["tieBreakers"], weights=None)
+
+
+def _new_risk_row(class_id: str, settings: dict | None = None) -> RiskSettingsRow:
+    settings = settings or default_risk_settings()
+    return RiskSettingsRow(class_id=class_id, thresholds=settings["thresholds"], active=settings["active"])
+
+
+def _risk_dict(row: RiskSettingsRow) -> dict:
+    return {"thresholds": dict(row.thresholds), "active": dict(row.active)}
+
+
 def _next_id(existing_ids: list[str], prefix: str) -> str:
     seq = 0
     for existing in existing_ids:
@@ -148,8 +172,7 @@ class SqlAlchemyStore:
                         cap=settings["cap"], tie_breakers=settings["tieBreakers"], weights=weights,
                     ))
                 if session.get(RiskSettingsRow, cid) is None:
-                    rs = seed.get("risk_settings", {}).get(cid, default_risk_settings())
-                    session.add(RiskSettingsRow(class_id=cid, thresholds=rs["thresholds"], active=rs["active"]))
+                    session.add(_new_risk_row(cid, seed.get("risk_settings", {}).get(cid)))
                 for b in seed.get("baselines", {}).get(cid, []):
                     if session.scalar(select(BaselineRow).where(BaselineRow.id == b["id"])) is None:
                         session.add(BaselineRow(class_id=cid, **{k: b[k] for k in _BASELINE_FIELDS}))
@@ -164,15 +187,11 @@ class SqlAlchemyStore:
     def _get_or_create_league_row(self, session, class_id: str) -> LeagueSettingsRow:
         row = session.get(LeagueSettingsRow, class_id)
         if row is None:
-            defaults = default_league_settings()
-            row = LeagueSettingsRow(class_id=class_id, type_weights=defaults["typeWeights"],
-                                    rate=defaults["rate"], cap=defaults["cap"],
-                                    tie_breakers=defaults["tieBreakers"], weights=None)
+            row = _new_league_row(class_id)
             session.add(row)
             session.commit()
         if session.get(RiskSettingsRow, class_id) is None:
-            rs = default_risk_settings()
-            session.add(RiskSettingsRow(class_id=class_id, thresholds=rs["thresholds"], active=rs["active"]))
+            session.add(_new_risk_row(class_id))
             session.commit()
         return row
 
@@ -222,18 +241,21 @@ class SqlAlchemyStore:
             new_values=new_values, at=at,
         ))
 
+    @staticmethod
+    def _student_live_updates(class_id: str, student_id: str):
+        """Query for a student's weekly updates that have not been replaced by a later edit, oldest first."""
+        return (select(WeeklyUpdateRow)
+                .where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
+                       WeeklyUpdateRow.superseded_by.is_(None))
+                .order_by(WeeklyUpdateRow.pk))
+
     def _hours_in_effect(self, session, class_id: str, student_id: str, week_number: int) -> dict:
         """resolve_hours over the student's live rows (autoflush makes pending changes visible)."""
         approved = session.scalars(
             select(BaselineRow).where(BaselineRow.class_id == class_id, BaselineRow.student_id == student_id,
                                       BaselineRow.status == "approved").order_by(BaselineRow.pk)
         ).all()
-        updates = session.scalars(
-            select(WeeklyUpdateRow).where(
-                WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
-                WeeklyUpdateRow.superseded_by.is_(None),
-            ).order_by(WeeklyUpdateRow.pk)
-        ).all()
+        updates = session.scalars(self._student_live_updates(class_id, student_id)).all()
         return resolve_hours(
             baseline=_row_to_dict(approved[-1], _BASELINE_FIELDS) if approved else None,
             weekly_updates=[_row_to_dict(u, _UPDATE_FIELDS) for u in updates],
@@ -281,12 +303,7 @@ class SqlAlchemyStore:
             approved = [b for b in baselines if b.status == "approved"]
             baseline = _row_to_dict(baselines[-1], _BASELINE_FIELDS) if baselines else None
             active_baseline = _row_to_dict(approved[-1], _BASELINE_FIELDS) if approved else None
-            updates = session.scalars(
-                select(WeeklyUpdateRow)
-                .where(WeeklyUpdateRow.class_id == class_id, WeeklyUpdateRow.student_id == student_id,
-                       WeeklyUpdateRow.superseded_by.is_(None))
-                .order_by(WeeklyUpdateRow.pk)
-            ).all()
+            updates = session.scalars(self._student_live_updates(class_id, student_id)).all()
             return {"baseline": baseline, "activeBaseline": active_baseline,
                     "weeklyUpdates": [_row_to_dict(u, _UPDATE_FIELDS) for u in updates]}
 
@@ -302,8 +319,7 @@ class SqlAlchemyStore:
             ).all()
             row = BaselineRow(
                 id=_next_id(list(existing_ids), f"{class_id}-b"), class_id=class_id, student_id=student_id,
-                work_hours=hours.get("work", 0) or 0, childcare_hours=hours.get("childcare", 0) or 0,
-                eldercare_hours=hours.get("eldercare", 0) or 0, status="pending", effective_from_week=None,
+                **_hours_columns(hours), status="pending", effective_from_week=None,
                 submitted_at=submitted_at, decided_by=None, decided_at=None,
             )
             session.add(row)
@@ -331,8 +347,7 @@ class SqlAlchemyStore:
             row = WeeklyUpdateRow(
                 id=_next_id(list(existing_ids), f"{class_id}-u"), class_id=class_id, student_id=student_id,
                 week_id=week_id, week_number=week_number, reversed_by=None, reversed_at=None,
-                work_hours=hours.get("work", 0) or 0, childcare_hours=hours.get("childcare", 0) or 0,
-                eldercare_hours=hours.get("eldercare", 0) or 0, entered_at=entered_at,
+                **_hours_columns(hours), entered_at=entered_at,
             )
             session.add(row)
             if current is not None:
@@ -428,24 +443,22 @@ class SqlAlchemyStore:
         with self._lock, self._session() as session:
             row = session.get(RiskSettingsRow, class_id)
             if row is None:
-                defaults = default_risk_settings()
-                row = RiskSettingsRow(class_id=class_id, thresholds=defaults["thresholds"], active=defaults["active"])
+                row = _new_risk_row(class_id)
                 session.add(row)
                 session.commit()
-            return {"thresholds": dict(row.thresholds), "active": dict(row.active)}
+            return _risk_dict(row)
 
     def save_risk_settings(self, class_id: str, patch: dict) -> dict:
         with self._lock, self._session() as session:
             row = session.get(RiskSettingsRow, class_id)
             if row is None:
-                defaults = default_risk_settings()
-                row = RiskSettingsRow(class_id=class_id, thresholds=defaults["thresholds"], active=defaults["active"])
+                row = _new_risk_row(class_id)
                 session.add(row)
             row.thresholds = {**row.thresholds, **(patch.get("thresholds") or {})}
             row.active = {**row.active, **(patch.get("active") or {})}
             session.commit()
             session.refresh(row)
-            return {"thresholds": dict(row.thresholds), "active": dict(row.active)}
+            return _risk_dict(row)
 
     # notes
 

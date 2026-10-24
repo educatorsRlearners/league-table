@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -30,6 +31,9 @@ class AppContext:
 
     def now_ms(self) -> int:
         return int(self.clock() * 1000)
+
+    def now_iso(self) -> str:
+        return datetime.fromtimestamp(self.clock(), tz=UTC).isoformat()
 
 
 def get_ctx() -> AppContext:

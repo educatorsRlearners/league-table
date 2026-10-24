@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import threading
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 from app.datasource import DataSource, Snapshot, SourceUnavailable
@@ -29,8 +30,16 @@ CACHE_TTL_SECONDS = 60
 REFRESH_COOLDOWN_SECONDS = 10
 DEFAULT_ROLLING_N = 4
 LEVEL_ORDER = ["Not flagged", "Watch", "At risk", "High risk"]
+COMPLETE_WEEK_SHARE = 0.8  # a week is "complete" once it has this share of the busiest week's entries
+DEFAULT_TYPE_WEIGHTS = {"work": 1, "childcare": 1, "eldercare": 1}
+DEFAULT_COMMITMENT_RATE = 0.01
+DEFAULT_COMMITMENT_CAP = 1.25
 
 Clock = Callable[[], float]
+
+
+def _is_non_numeric(score) -> bool:
+    return not isinstance(score, (int, float)) or (isinstance(score, float) and math.isnan(score))
 
 
 def data_check(students, entries) -> list[Issue]:
@@ -39,7 +48,7 @@ def data_check(students, entries) -> list[Issue]:
     for e in entries:
         if e.student_id not in ids:
             issues.append(Issue(level="error", where=e.id, message=f'Unknown student ID "{e.student_id}"'))
-        elif not isinstance(e.earned, (int, float)) or (isinstance(e.earned, float) and (math.isnan(e.earned))):
+        elif _is_non_numeric(e.earned):
             issues.append(Issue(level="error", where=e.id, message=f"Non-numeric score for {e.student_id}"))
         elif e.possible is not None and e.earned > e.possible:
             issues.append(Issue(level="warning", where=e.id,
@@ -65,7 +74,7 @@ def latest_complete_week_id(snapshot: Snapshot) -> str | None:
     if not counts:
         return snapshot.weeks[0].id if snapshot.weeks else None
     peak = max(counts.values())
-    complete = [w for w in snapshot.weeks if counts.get(w.id, 0) >= peak * 0.8]
+    complete = [w for w in snapshot.weeks if counts.get(w.id, 0) >= peak * COMPLETE_WEEK_SHARE]
     any_weeks = [w for w in snapshot.weeks if w.id in counts]
     pool = complete or any_weeks
     return pool[-1].id if pool else None
@@ -115,16 +124,12 @@ def resolved_weights(snapshot: Snapshot, keys: list[str], override: dict | None)
     return normalise_weights({k: (base.get(k, 0) or 0) for k in keys})
 
 
-def _criteria_by_key(snapshot: Snapshot) -> dict:
-    return {c.key: c for c in snapshot.criteria}
-
-
 def student_weeks(snapshot: Snapshot, student, wks, criteria, criteria_keys: list[str], weights: dict):
     baseline = active_baseline(snapshot.baselines, student.id)
     updates = [u for u in snapshot.weekly_updates if u["student_id"] == student.id]
-    type_weights = snapshot.settings.get("typeWeights", {"work": 1, "childcare": 1, "eldercare": 1})
-    rate = snapshot.settings.get("rate", 0.01)
-    cap = snapshot.settings.get("cap", 1.25)
+    type_weights = snapshot.settings.get("typeWeights", DEFAULT_TYPE_WEIGHTS)
+    rate = snapshot.settings.get("rate", DEFAULT_COMMITMENT_RATE)
+    cap = snapshot.settings.get("cap", DEFAULT_COMMITMENT_CAP)
     out = []
     for w in wks:
         entries = [e for e in snapshot.entries
@@ -251,14 +256,16 @@ class LeagueService:
             except SourceUnavailable:
                 if cached is None:
                     raise
-                stale = Snapshot(at=cached.at, class_id=cached.class_id, students=cached.students,
-                                 criteria=cached.criteria, weeks=cached.weeks, entries=cached.entries,
-                                 baselines=cached.baselines, weekly_updates=cached.weekly_updates,
-                                 settings=cached.settings, issues=cached.issues, stale=True)
+                stale = replace(cached, stale=True)
                 self._cache[class_id] = stale
                 return stale
             self._cache[class_id] = fresh
             return fresh
+
+    def invalidate(self, class_id: str) -> None:
+        """Drop the cached snapshot so the next read sees fresh store writes."""
+        with self._lock:
+            self._cache.pop(class_id, None)
 
     def refresh(self, class_id: str) -> Snapshot:
         with self._lock:
