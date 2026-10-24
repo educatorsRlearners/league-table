@@ -27,6 +27,11 @@ const CACHE_TTL_MS = 60000;
 const REFRESH_COOLDOWN_MS = 10000;
 const DEFAULT_ROLLING_N = 4;
 const LEVEL_ORDER = ['Not flagged', 'Watch', 'At risk', 'High risk'];
+const COMPLETE_WEEK_SHARE = 0.8;   // a week is "complete" once it has this share of the busiest week's entries
+const DEFAULT_INSTRUCTOR_ID = 'i1';
+const EXPLAINER_TABLE_HOURS = [0, 10, 20, 25];
+const EXPLAINER_EXAMPLE = { raw: 80, hours: { work: 12, childcare: 6, eldercare: 0 } };
+const HELP_TEXT = 'Office hours are Tuesdays 2–4pm, and the advising team can be reached at advising@example.edu.';
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -38,6 +43,19 @@ export class ApiError extends Error {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
+
+const defaultWeightsOf = (criteria) => Object.fromEntries(criteria.map((c) => [c.key, c.default_weight]));
+const allKeysUnlessGiven = (criteriaKeys, criteria) =>
+  (criteriaKeys && criteriaKeys.length ? criteriaKeys : criteria.map((c) => c.key));
+
+/** The baseline that applies to a student, and their weekly updates. */
+const baselineOf = (snap, student) =>
+  snap.baselines.find((b) => b.student_id === student.id && b.status !== 'superseded') || null;
+const updatesOf = (snap, student) => snap.weeklyUpdates.filter((u) => u.student_id === student.id);
+
+function requireOwnStudent(caller, studentId, message) {
+  if (caller.role === 'student' && caller.studentId !== studentId) throw new ApiError(message, 403);
+}
 
 export function createApi({ source, store, latency = 'realistic', failRate = 0, now = () => Date.now() } = {}) {
   if (!source) throw new Error('createApi requires a DataSource');
@@ -109,7 +127,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
     for (const e of snap.entries) counts.set(e.week_id, (counts.get(e.week_id) || 0) + 1);
     if (!counts.size) return snap.weeks[0]?.id ?? null;
     const max = Math.max(...counts.values());
-    const complete = snap.weeks.filter((w) => (counts.get(w.id) || 0) >= max * 0.8);
+    const complete = snap.weeks.filter((w) => (counts.get(w.id) || 0) >= max * COMPLETE_WEEK_SHARE);
     const any = snap.weeks.filter((w) => counts.has(w.id));
     return (complete[complete.length - 1] || any[any.length - 1]).id;
   }
@@ -119,8 +137,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
   /** Weekly shape the risk engine needs: raw score, entry presence, totals by criterion. */
   function riskWeekly(snap, student, upToWeekNumber) {
     const criteria = snap.criteria;
-    const defaults = Object.fromEntries(criteria.map((c) => [c.key, c.default_weight]));
-    const w100 = normaliseWeights(snap.settings.weights || defaults);
+    const w100 = normaliseWeights(snap.settings.weights || defaultWeightsOf(criteria));
     return snap.weeks
       .filter((w) => w.week_number >= (student.joined_week || 1) && w.week_number <= upToWeekNumber)
       .map((w) => {
@@ -137,15 +154,22 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
   }
 
   function hoursAt(snap, student, weekNumber) {
-    const baseline = snap.baselines.find((b) => b.student_id === student.id && b.status !== 'superseded') || null;
-    const updates = snap.weeklyUpdates.filter((u) => u.student_id === student.id);
-    const { hours } = resolveHours({ baseline, weeklyUpdates: updates, weekNumber });
+    const { hours } = resolveHours({ baseline: baselineOf(snap, student), weeklyUpdates: updatesOf(snap, student), weekNumber });
     return weightedHours(hours, snap.settings.typeWeights);
   }
 
   function evaluationWeek(snap) {
     const id = latestCompleteWeek(snap);
     return (snap.weeks.find((w) => w.id === id) || snap.weeks[0]).week_number;
+  }
+
+  function evaluateStudentAt(snap, student, weekNumber, riskSettings) {
+    return evaluateSignals({
+      weekly: riskWeekly(snap, student, weekNumber),
+      hours: hoursAt(snap, student, weekNumber),
+      thresholds: riskSettings.thresholds,
+      active: riskSettings.active,
+    });
   }
 
   async function evaluateClass(classId, upToWeekNumber) {
@@ -155,11 +179,9 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
     return {
       week,
       settings: rs,
-      rows: snap.students.map((s) => {
-        const weekly = riskWeekly(snap, s, week);
-        const ev = evaluateSignals({ weekly, hours: hoursAt(snap, s, week), thresholds: rs.thresholds, active: rs.active });
-        return { student_id: s.id, display_name: s.display_name, week_number: week, ...ev };
-      }),
+      rows: snap.students.map((s) => ({
+        student_id: s.id, display_name: s.display_name, week_number: week, ...evaluateStudentAt(snap, s, week, rs),
+      })),
     };
   }
 
@@ -173,8 +195,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
   }
 
   function resolvedWeights(snap, keys, override) {
-    const defaults = Object.fromEntries(snap.criteria.map((c) => [c.key, c.default_weight]));
-    const base = override || snap.settings.weights || defaults;
+    const base = override || snap.settings.weights || defaultWeightsOf(snap.criteria);
     return normaliseWeights(Object.fromEntries(keys.map((k) => [k, base[k] ?? 0])));
   }
 
@@ -184,8 +205,8 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
    * each week's factor and cap apply to that week only.
    */
   function studentWeeks(snap, student, wks, criteria, criteriaKeys, weights) {
-    const baseline = snap.baselines.find((b) => b.student_id === student.id && b.status !== 'superseded') || null;
-    const updates = snap.weeklyUpdates.filter((u) => u.student_id === student.id);
+    const baseline = baselineOf(snap, student);
+    const updates = updatesOf(snap, student);
     const { typeWeights, rate, cap } = snap.settings;
 
     return wks
@@ -245,6 +266,45 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
     return rankRows(rows, snap.settings.tieBreakers || []);
   }
 
+  /** One class's digest block: students whose state changed since the prior week, worst first. */
+  async function digestGroup(klass, week, instructorId) {
+    const current = await evaluateClass(klass.id, week);
+    const prior = current.week > 1 ? await evaluateClass(klass.id, current.week - 1) : { rows: [], week: null };
+    const priorById = new Map(prior.rows.map((r) => [r.student_id, r]));
+    const noteCount = new Map();
+    for (const n of await store.listNotes(klass.id, null, instructorId)) {
+      noteCount.set(n.student_id, (noteCount.get(n.student_id) || 0) + 1);
+    }
+    const rows = current.rows
+      .map((r) => ({
+        student_id: r.student_id,
+        display_name: r.display_name,
+        level: r.level,
+        status: diffState(priorById.get(r.student_id), r),
+        priorLevel: priorById.get(r.student_id)?.level ?? null,
+        signals: r.signals.filter((s) => s.on).map((s) => s.label),
+        notes: noteCount.get(r.student_id) || 0,
+      }))
+      .filter((r) => r.status !== 'quiet')
+      .sort((a, b) => LEVEL_ORDER.indexOf(b.level) - LEVEL_ORDER.indexOf(a.level) || a.display_name.localeCompare(b.display_name));
+    return { classId: klass.id, className: klass.name, week: current.week, comparedWith: prior.week, rows };
+  }
+
+  /** Rank movement compares adjusted ranks week to week: positive means the student moved up. */
+  function previousRanks(snap, weekId, view) {
+    const idx = snap.weeks.findIndex((x) => x.id === weekId);
+    if (idx <= 0) return new Map();
+    const prev = buildRows(snap, { ...view, weekId: snap.weeks[idx - 1].id });
+    return new Map(prev.map((r) => [r.student_id, r.rank]));
+  }
+
+  function explainerExample(typeWeights, rate, cap) {
+    const { raw, hours } = EXPLAINER_EXAMPLE;
+    const h = weightedHours(hours, typeWeights);
+    const factor = commitmentFactor(h, rate, cap);
+    return { raw, hours, weighted_hours: h, factor, adjusted: adjust(raw, factor).adjusted };
+  }
+
   /** A student may never receive another student's raw score, factor or hours. */
   function scopeRow(row, caller) {
     const publicRow = {
@@ -271,7 +331,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
     },
 
     /** GET /classes */
-    async listClasses(instructorId = 'i1') {
+    async listClasses(instructorId = DEFAULT_INSTRUCTOR_ID) {
       await delay(80, 180);
       return source.listClasses(instructorId);
     },
@@ -279,8 +339,8 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
     async getBootstrap(classId = 'c1') {
       await delay(180, 420);
       const snap = await load(classId);
-      const classes = await source.listClasses('i1');
-      const defaults = Object.fromEntries(snap.criteria.map((c) => [c.key, c.default_weight]));
+      const classes = await source.listClasses(DEFAULT_INSTRUCTOR_ID);
+      const defaults = defaultWeightsOf(snap.criteria);
       return {
         klass: classes.find((c) => c.id === classId) || classes[0],
         classes,
@@ -310,17 +370,11 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
       if (caller.role === 'student' && caller.classId && caller.classId !== classId) {
         throw new ApiError('That class is not yours to read.', 403);
       }
-      const keys = criteriaKeys && criteriaKeys.length ? criteriaKeys : snap.criteria.map((c) => c.key);
+      const keys = allKeysUnlessGiven(criteriaKeys, snap.criteria);
       const w = resolvedWeights(snap, keys, weights);
-      const rows = buildRows(snap, { weekId, windowMode, rollingN, weights: w, criteriaKeys: keys, nameMode });
-
-      // Rank movement compares adjusted ranks week to week.
-      const idx = snap.weeks.findIndex((x) => x.id === weekId);
-      let prevRank = new Map();
-      if (idx > 0) {
-        const prev = buildRows(snap, { weekId: snap.weeks[idx - 1].id, windowMode, rollingN, weights: w, criteriaKeys: keys, nameMode });
-        prevRank = new Map(prev.map((r) => [r.student_id, r.rank]));
-      }
+      const view = { windowMode, rollingN, weights: w, criteriaKeys: keys, nameMode };
+      const rows = buildRows(snap, { weekId, ...view });
+      const prevRank = previousRanks(snap, weekId, view);
 
       const decorated = rows.map((r, i) => scopeRow({
         ...r,
@@ -348,12 +402,10 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
       classId = 'c1', studentId, weekId, windowMode = 'week', rollingN = DEFAULT_ROLLING_N,
       criteriaKeys, weights, nameMode = 'full', caller = { role: 'instructor' },
     }) {
-      if (caller.role === 'student' && caller.studentId !== studentId) {
-        throw new ApiError('A student may only open their own breakdown.', 403);
-      }
+      requireOwnStudent(caller, studentId, 'A student may only open their own breakdown.');
       await delay(100, 240);
       const snap = await load(classId);
-      const keys = criteriaKeys && criteriaKeys.length ? criteriaKeys : snap.criteria.map((c) => c.key);
+      const keys = allKeysUnlessGiven(criteriaKeys, snap.criteria);
       const w = resolvedWeights(snap, keys, weights);
       const rows = buildRows(snap, { weekId, windowMode, rollingN, weights: w, criteriaKeys: keys, nameMode });
       const i = rows.findIndex((r) => r.student_id === studentId);
@@ -398,21 +450,14 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
       const { typeWeights, rate, cap } = snap.settings;
       return {
         typeWeights, rate, cap,
-        table: [0, 10, 20, 25].map((h) => ({ hours: h, factor: commitmentFactor(h, rate, cap) })),
-        example: (() => {
-          const hours = { work: 12, childcare: 6, eldercare: 0 };
-          const h = weightedHours(hours, typeWeights);
-          const factor = commitmentFactor(h, rate, cap);
-          return { raw: 80, hours, weighted_hours: h, factor, adjusted: adjust(80, factor).adjusted };
-        })(),
+        table: EXPLAINER_TABLE_HOURS.map((h) => ({ hours: h, factor: commitmentFactor(h, rate, cap) })),
+        example: explainerExample(typeWeights, rate, cap),
       };
     },
 
     /** GET /me/commitments — own hours, status and factor by week. */
     async getCommitments({ classId = 'c1', studentId, caller = { role: 'instructor' } }) {
-      if (caller.role === 'student' && caller.studentId !== studentId) {
-        throw new ApiError('A student may only read their own commitments.', 403);
-      }
+      requireOwnStudent(caller, studentId, 'A student may only read their own commitments.');
       await delay(80, 180);
       const snap = await load(classId);
       const { baseline, weeklyUpdates } = await store.getCommitments(classId, studentId);
@@ -437,68 +482,34 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
      */
     async getDigest({ week, caller = { role: 'instructor' } } = {}) {
       await delay(200, 480);
-      const instructorId = caller.instructorId || 'i1';
+      const instructorId = caller.instructorId || DEFAULT_INSTRUCTOR_ID;
       const classes = await source.listClasses(instructorId);
       const groups = [];
-      for (const k of classes) {
-        const current = await evaluateClass(k.id, week);
-        const prior = current.week > 1 ? await evaluateClass(k.id, current.week - 1) : { rows: [], week: null };
-        const priorById = new Map(prior.rows.map((r) => [r.student_id, r]));
-        const notes = await store.listNotes(k.id, null, instructorId);
-        const noteCount = new Map();
-        for (const n of notes) noteCount.set(n.student_id, (noteCount.get(n.student_id) || 0) + 1);
-
-        groups.push({
-          classId: k.id,
-          className: k.name,
-          week: current.week,
-          comparedWith: prior.week,
-          rows: current.rows
-            .map((r) => ({
-              student_id: r.student_id,
-              display_name: r.display_name,
-              level: r.level,
-              status: diffState(priorById.get(r.student_id), r),
-              priorLevel: priorById.get(r.student_id)?.level ?? null,
-              signals: r.signals.filter((s) => s.on).map((s) => s.label),
-              notes: noteCount.get(r.student_id) || 0,
-            }))
-            .filter((r) => r.status !== 'quiet')
-            .sort((a, b) => LEVEL_ORDER.indexOf(b.level) - LEVEL_ORDER.indexOf(a.level) || a.display_name.localeCompare(b.display_name)),
-        });
-      }
+      for (const k of classes) groups.push(await digestGroup(k, week, instructorId));
       return { instructorId, groups, computedAt: new Date(now()).toISOString() };
     },
 
     /** GET /classes/{id}/students/{sid}/risk — instructor, or the student for their own. */
     async getRiskRecord({ classId = 'c1', studentId, caller = { role: 'instructor' } }) {
-      if (caller.role === 'student' && caller.studentId !== studentId) {
-        throw new ApiError('A student may only open their own standing.', 403);
-      }
+      requireOwnStudent(caller, studentId, 'A student may only open their own standing.');
       await delay(140, 340);
       const snap = await load(classId);
       const student = snap.students.find((s) => s.id === studentId);
       if (!student) throw new ApiError('No such student in this class.', 404);
       const rs = await store.getRiskSettings(classId);
       const week = evaluationWeek(snap);
-      const weekly = riskWeekly(snap, student, week);
-      const current = evaluateSignals({ weekly, hours: hoursAt(snap, student, week), thresholds: rs.thresholds, active: rs.active });
+      const current = evaluateStudentAt(snap, student, week, rs);
 
       // Level over the semester, so the instructor can see the direction of travel.
       const history = [];
       for (let w = Math.max(student.joined_week || 1, 2); w <= week; w++) {
-        const ev = evaluateSignals({
-          weekly: riskWeekly(snap, student, w),
-          hours: hoursAt(snap, student, w),
-          thresholds: rs.thresholds,
-          active: rs.active,
-        });
+        const ev = evaluateStudentAt(snap, student, w, rs);
         history.push({ week_number: w, level: ev.level, count: ev.signals_on.length });
       }
 
       return {
         classId,
-        className: (await source.listClasses('i1')).find((c) => c.id === classId)?.name ?? classId,
+        className: (await source.listClasses(DEFAULT_INSTRUCTOR_ID)).find((c) => c.id === classId)?.name ?? classId,
         student_id: studentId,
         display_name: student.display_name,
         week,
@@ -509,7 +520,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
         thresholds: rs.thresholds,
         history,
         // Notes are instructor-private and never travel to a student.
-        notes: caller.role === 'instructor' ? await store.listNotes(classId, studentId, caller.instructorId || 'i1') : [],
+        notes: caller.role === 'instructor' ? await store.listNotes(classId, studentId, caller.instructorId || DEFAULT_INSTRUCTOR_ID) : [],
       };
     },
 
@@ -518,7 +529,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
       if (caller.role !== 'instructor') throw new ApiError('Only an instructor can log outreach.', 403);
       if (!body || !body.trim()) throw new ApiError('A note needs some text.', 400);
       await delay(120, 260);
-      return store.addNote({ classId, studentId, instructorId: caller.instructorId || 'i1', body: body.trim() });
+      return store.addNote({ classId, studentId, instructorId: caller.instructorId || DEFAULT_INSTRUCTOR_ID, body: body.trim() });
     },
 
     /** GET /classes/{id}/risk-settings */
@@ -538,9 +549,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
 
     /** GET /me/standing — the student's own level and signals, nothing else. */
     async getMyStanding({ classId = 'c1', studentId, caller = { role: 'student' } }) {
-      if (caller.role === 'student' && caller.studentId !== studentId) {
-        throw new ApiError('A student may only read their own standing.', 403);
-      }
+      requireOwnStudent(caller, studentId, 'A student may only read their own standing.');
       const record = await this.getRiskRecord({ classId, studentId, caller: { role: 'student', studentId } });
       return {
         student_id: record.student_id,
@@ -549,7 +558,7 @@ export function createApi({ source, store, latency = 'realistic', failRate = 0, 
         level: record.level,
         signals: record.signals.filter((s) => s.on),
         metrics: record.metrics,
-        help: 'Office hours are Tuesdays 2–4pm, and the advising team can be reached at advising@example.edu.',
+        help: HELP_TEXT,
       };
     },
 
