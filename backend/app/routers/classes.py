@@ -117,7 +117,7 @@ def save_settings(classId: str, patch: LeagueSettingsPatch,
         data["weights"] = normalise_weights(data["weights"])
     saved = ctx.store.save_league_settings(classId, data)
     # bust cache so bootstrap/ranking use new settings
-    ctx.service._cache.pop(classId, None)
+    ctx.service.invalidate(classId)
     return {
         "weights": saved.get("weights"),
         "typeWeights": saved.get("typeWeights", {"work": 1, "childcare": 1, "eldercare": 1}),

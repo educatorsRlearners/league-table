@@ -262,6 +262,11 @@ class LeagueService:
             self._cache[class_id] = fresh
             return fresh
 
+    def invalidate(self, class_id: str) -> None:
+        """Drop the cached snapshot so the next read sees fresh store writes."""
+        with self._lock:
+            self._cache.pop(class_id, None)
+
     def refresh(self, class_id: str) -> Snapshot:
         with self._lock:
             now = self._clock()
