@@ -39,17 +39,51 @@ test.describe("risk digest", () => {
     await expect(record).toHaveCount(0);
   });
 
+  test("Escape closes the risk record from inside the note box without saving the draft", async ({ page }) => {
+    await page.getByRole("button", { name: new RegExp(`^${FLAGGED_STUDENT}`) }).click();
+    const record = page.getByRole("dialog", { name: "Risk record" });
+    const box = record.getByRole("textbox", { name: "Log outreach" });
+    await box.fill("Unsent draft");
+    await expect(box).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(record).toHaveCount(0);
+    await expect(page.getByText("Unsent draft")).toHaveCount(0);
+  });
+
+  test("closing the risk record while a note is still saving does not reopen it", async ({ page }) => {
+    // Hold the save back so the record is closed before the response arrives.
+    await page.route("**/students/*/notes", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await route.continue();
+    });
+
+    await page.getByRole("button", { name: new RegExp(`^${FLAGGED_STUDENT}`) }).click();
+    const record = page.getByRole("dialog", { name: "Risk record" });
+    await record.getByRole("textbox", { name: "Log outreach" }).fill(`Slow save (${Date.now()})`);
+    await record.getByRole("button", { name: "Save note" }).click();
+    await page.keyboard.press("Escape");
+    await expect(record).toHaveCount(0);
+
+    // Wait out the held-back save and the refresh that follows it; the record must stay closed.
+    await expect(page.getByRole("button", { name: new RegExp(`^${FLAGGED_STUDENT}.*\\d+ notes?`) })).toBeVisible();
+    await expect(record).toHaveCount(0);
+  });
+
   test("a note logged in the risk record is kept for the instructor and never shown to the student", async ({ page }) => {
     const note = `Spoke after class about attendance (${Date.now()})`;
 
     await page.getByRole("button", { name: new RegExp(`^${FLAGGED_STUDENT}`) }).click();
     const record = page.getByRole("dialog", { name: "Risk record" });
-    await record.getByRole("textbox", { name: "Log outreach" }).fill(note);
+    const box = record.getByRole("textbox", { name: "Log outreach" });
+    await box.fill(note);
     await record.getByRole("button", { name: "Save note" }).click();
+    // The box clears once the note is saved; the text is also mirrored in the box until then.
+    await expect(box).toHaveValue("");
     await expect(record.getByText(note)).toBeVisible();
 
-    // Escape is ignored while the note box has focus, so close with the button.
-    await record.getByRole("button", { name: "Close" }).click();
+    // Escape closes the record even while the note box has focus.
+    await page.keyboard.press("Escape");
     await expect(record).toHaveCount(0);
     await expect(page.getByRole("button", { name: new RegExp(`^${FLAGGED_STUDENT}.*\\d+ notes?`) })).toBeVisible();
     await logout(page);
