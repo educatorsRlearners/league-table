@@ -909,6 +909,16 @@
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;topN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:24,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;week&quot;,&quot;rolling&quot;,&quot;cumulative&quot;],&quot;default&quot;:&quot;rolling&quot;,&quot;tsType&quot;:&quot;'week' | 'rolling' | 'cumulative'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;rollingN&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;showRaw&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;nameMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;initials&quot;,&quot;nickname&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full' | 'initials' | 'nickname'&quot;,&quot;section&quot;:&quot;Privacy&quot;}}">
+const DEFAULT_ROLLING_N = 4;
+const zeroHours = () => ({ work: 0, childcare: 0, eldercare: 0 });
+const hoursDraftFrom = (row) => (row
+  ? { work: row.work_hours, childcare: row.childcare_hours, eldercare: row.eldercare_hours }
+  : zeroHours());
+const messageOf = (err) => (err && err.message) || String(err);
+
+// Each tab fills one of these; switching tabs clears the others so stale data never shows.
+const EMPTY_VIEWS = { rows: [], me: null, digest: null, standing: null, commitments: null, pendingBaselines: null };
+
 class Component extends DCLogic {
   state = {
     loggedIn: false,
@@ -943,8 +953,8 @@ class Component extends DCLogic {
     record: null,
     noteDraft: '',
     commitments: null,
-    commitDraft: { work: 0, childcare: 0, eldercare: 0 },
-    weekDraft: { work: 0, childcare: 0, eldercare: 0 },
+    commitDraft: zeroHours(),
+    weekDraft: zeroHours(),
     weekDraftNumber: null,
     commitError: null,
     pendingBaselines: null,
@@ -1081,7 +1091,7 @@ class Component extends DCLogic {
         studentId,
         caller: { role: 'student', studentId, classId: s.classId },
       });
-      this.setState({ loading: false, errorMsg: null, rows: [], me: null, digest: null, standing, commitments: null, pendingBaselines: null });
+      this.showView({ standing });
     } catch (err) {
       this.handleApiError(err);
     }
@@ -1153,7 +1163,7 @@ class Component extends DCLogic {
       classId: s.classId,
       weekId: s.boot.weeks[s.weekIdx].id,
       windowMode: s.windowMode,
-      rollingN: this.props.rollingN ?? 4,
+      rollingN: this.props.rollingN ?? DEFAULT_ROLLING_N,
       criteriaKeys: s.criteriaKeys,
       weights: s.weights,
       nameMode: s.nameMode,
@@ -1164,10 +1174,9 @@ class Component extends DCLogic {
     if (!this.state.boot) return;
     try {
       const res = await this.api.getRanking({ ...this.query(), caller: { role: 'instructor' } });
-      this.setState({
-        loading: false, errorMsg: null, rows: res.rows, weekCount: res.weekCount,
-        lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues, me: null, digest: null, standing: null,
-        commitments: null, pendingBaselines: null,
+      this.showView({
+        rows: res.rows, weekCount: res.weekCount,
+        lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues,
       });
     } catch (err) {
       this.handleApiError(err);
@@ -1184,7 +1193,7 @@ class Component extends DCLogic {
         this.api.getExplanation({ ...this.query(), studentId, caller }),
         this.api.getCommitments({ classId: s.classId, studentId, caller }),
       ]);
-      this.setState({ loading: false, errorMsg: null, rows: [], digest: null, standing: null, me: { ex, commitments }, commitments: null, pendingBaselines: null });
+      this.showView({ me: { ex, commitments } });
     } catch (err) {
       this.handleApiError(err, { me: null });
     }
@@ -1196,7 +1205,7 @@ class Component extends DCLogic {
     try {
       const week = s.boot.weeks[s.weekIdx].week_number;
       const digest = await this.api.getDigest({ week });
-      this.setState({ loading: false, errorMsg: null, rows: [], me: null, standing: null, digest, commitments: null, pendingBaselines: null });
+      this.showView({ digest });
     } catch (err) {
       this.handleApiError(err);
     }
@@ -1215,16 +1224,11 @@ class Component extends DCLogic {
       const existingWeek = weekNumber != null
         ? commitments.weeklyUpdates.find((u) => u.week_number === weekNumber && !u.reversed_at)
         : null;
-      this.setState({
-        loading: false, errorMsg: null, rows: [], me: null, digest: null, standing: null, pendingBaselines: null,
+      this.showView({
         commitments,
-        commitDraft: base
-          ? { work: base.work_hours, childcare: base.childcare_hours, eldercare: base.eldercare_hours }
-          : { work: 0, childcare: 0, eldercare: 0 },
+        commitDraft: hoursDraftFrom(base),
         weekDraftNumber: weekNumber,
-        weekDraft: existingWeek
-          ? { work: existingWeek.work_hours, childcare: existingWeek.childcare_hours, eldercare: existingWeek.eldercare_hours }
-          : { work: 0, childcare: 0, eldercare: 0 },
+        weekDraft: hoursDraftFrom(existingWeek),
         commitError: null,
       });
     } catch (err) {
@@ -1241,7 +1245,7 @@ class Component extends DCLogic {
       this.setState({ commitError: null });
       await this.loadCommitmentsTab();
     } catch (err) {
-      this.setState({ commitError: err.message || String(err) });
+      this.setState({ commitError: messageOf(err) });
     }
   };
 
@@ -1256,7 +1260,7 @@ class Component extends DCLogic {
       this.setState({ commitError: null });
       await this.loadCommitmentsTab();
     } catch (err) {
-      this.setState({ commitError: err.message || String(err) });
+      this.setState({ commitError: messageOf(err) });
     }
   };
 
@@ -1268,10 +1272,7 @@ class Component extends DCLogic {
         this.api.getPendingBaselines(s.classId),
         this.api.getWeeklyUpdates(s.classId),
       ]);
-      this.setState({
-        loading: false, errorMsg: null, rows: [], me: null, digest: null, standing: null, commitments: null,
-        pendingBaselines, weeklyUpdates, approvalsError: null,
-      });
+      this.showView({ pendingBaselines, weeklyUpdates, approvalsError: null });
     } catch (err) {
       this.handleApiError(err, { pendingBaselines: null, weeklyUpdates: null });
     }
@@ -1286,7 +1287,7 @@ class Component extends DCLogic {
       this.setState({ approvalsError: null });
       await this.loadApprovals();
     } catch (err) {
-      this.setState({ approvalsError: err.message || String(err) });
+      this.setState({ approvalsError: messageOf(err) });
     }
   };
 
@@ -1296,7 +1297,7 @@ class Component extends DCLogic {
       this.setState({ approvalsError: null });
       await this.loadApprovals();
     } catch (err) {
-      this.setState({ approvalsError: err.message || String(err) });
+      this.setState({ approvalsError: messageOf(err) });
     }
   };
 
@@ -1322,8 +1323,13 @@ class Component extends DCLogic {
     return n == null ? '—' : Number(n).toFixed(d);
   }
 
+  // Show one tab's data: clear every other tab's, and the loading and error state.
+  showView(view) {
+    this.setState({ loading: false, errorMsg: null, ...EMPTY_VIEWS, ...view });
+  }
+
   handleApiError(err, patch = {}) {
-    this.setState({ loading: false, errorMsg: err && err.message ? err.message : String(err), ...patch });
+    this.setState({ loading: false, errorMsg: messageOf(err), ...patch });
   }
 
   hoursPhrase(hours) {
@@ -1339,7 +1345,7 @@ class Component extends DCLogic {
   windowLabel() {
     const s = this.state;
     const week = s.boot ? s.boot.weeks[s.weekIdx] : null;
-    const n = this.props.rollingN ?? 4;
+    const n = this.props.rollingN ?? DEFAULT_ROLLING_N;
     if (s.windowMode === 'cumulative') return `Weeks 1–${week ? week.week_number : ''} cumulative`;
     if (s.windowMode === 'rolling') return `Rolling ${s.weekCount || n} weeks to week ${week ? week.week_number : ''}`;
     return `Week ${week ? week.week_number : ''}`;
@@ -1515,7 +1521,7 @@ class Component extends DCLogic {
   buildWindowOpts(s) {
     return [
       { key: 'week', label: 'Week' },
-      { key: 'rolling', label: `Rolling ${this.props.rollingN ?? 4}` },
+      { key: 'rolling', label: `Rolling ${this.props.rollingN ?? DEFAULT_ROLLING_N}` },
       { key: 'cumulative', label: 'Cumulative' },
     ].map((o) => ({
       label: o.label,

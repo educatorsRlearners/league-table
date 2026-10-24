@@ -238,11 +238,10 @@ function seedRiskSettings() {
 
 /** One prior piece of outreach, so the notes log is not empty on first open. */
 function seedNotes(classId) {
-  const p = classId === 'c1' ? 's' : 't';
   if (classId !== 'c1') return [];
   return [
-    { id: 'n1', instructor_id: 'i1', class_id: classId, student_id: `${p}13`, body: 'Emailed 3 Nov about the two missed problem sets. No reply yet.', created_at: '2025-11-03T11:20:00Z' },
-    { id: 'n2', instructor_id: 'i1', class_id: classId, student_id: `${p}13`, body: 'Met in office hours 7 Nov. Shift pattern changed at work. Follow up in two weeks.', created_at: '2025-11-07T15:05:00Z' },
+    { id: 'n1', instructor_id: 'i1', class_id: classId, student_id: 's13', body: 'Emailed 3 Nov about the two missed problem sets. No reply yet.', created_at: '2025-11-03T11:20:00Z' },
+    { id: 'n2', instructor_id: 'i1', class_id: classId, student_id: 's13', body: 'Met in office hours 7 Nov. Shift pattern changed at work. Follow up in two weeks.', created_at: '2025-11-07T15:05:00Z' },
   ];
 }
 
