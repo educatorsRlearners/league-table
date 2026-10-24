@@ -61,6 +61,12 @@ test.describe("league table", () => {
     await expect(page.getByText("Week 15", { exact: true })).toBeVisible();
   });
 
+  test("the rolling window shrinks, and is worded in the singular, at the start of the term", async ({ page }) => {
+    await expect(page.getByText(/Rolling 4 weeks to week 16/)).toBeVisible();
+    for (let i = 0; i < 15; i++) await page.keyboard.press("ArrowLeft");
+    await expect(page.getByText(/Rolling 1 week to week 1\b/)).toBeVisible();
+  });
+
   test("switches class", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1, name: "PHYS 204 · Mechanics" })).toBeVisible();
     await page.getByRole("button", { name: "DATA 118" }).click();

@@ -914,6 +914,7 @@ const zeroHours = () => ({ work: 0, childcare: 0, eldercare: 0 });
 const hoursDraftFrom = (row) => (row
   ? { work: row.work_hours, childcare: row.childcare_hours, eldercare: row.eldercare_hours }
   : zeroHours());
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const messageOf = (err) => (err && err.message) || String(err);
 
 // Each tab fills one of these; switching tabs clears the others so stale data never shows.
@@ -935,7 +936,6 @@ class Component extends DCLogic {
     classId: 'c1',
     boot: null,
     rows: [],
-    weekCount: 1,
     weekIdx: 0,
     windowMode: this.props.defaultWindow || 'rolling',
     criteriaKeys: [],
@@ -1107,10 +1107,12 @@ class Component extends DCLogic {
   };
 
   onKey = (e) => {
-    if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    const tag = e.target && e.target.tagName;
+    // Escape closes overlays even from a text box (a native <select> keeps it to close its own list).
+    if (e.key === 'Escape' && tag !== 'SELECT') return this.setState({ drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false });
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
     const { boot, tab } = this.state;
     if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey) return this.togglePresent();
-    if (e.key === 'Escape') return this.setState({ drawer: null, weightsOpen: false, explainer: null, record: null, thresholdsOpen: false });
     if (!boot) return;
     if (e.key === 'ArrowLeft') return this.stepWeek(-1);
     if (e.key === 'ArrowRight') return this.stepWeek(1);
@@ -1175,7 +1177,7 @@ class Component extends DCLogic {
     try {
       const res = await this.api.getRanking({ ...this.query(), caller: { role: 'instructor' } });
       this.showView({
-        rows: res.rows, weekCount: res.weekCount,
+        rows: res.rows,
         lastUpdated: res.lastUpdated, stale: res.stale, issues: res.issues,
       });
     } catch (err) {
@@ -1347,7 +1349,7 @@ class Component extends DCLogic {
     const week = s.boot ? s.boot.weeks[s.weekIdx] : null;
     const n = this.props.rollingN ?? DEFAULT_ROLLING_N;
     if (s.windowMode === 'cumulative') return `Weeks 1–${week ? week.week_number : ''} cumulative`;
-    if (s.windowMode === 'rolling') return `Rolling ${s.weekCount || n} weeks to week ${week ? week.week_number : ''}`;
+    if (s.windowMode === 'rolling') return `Rolling ${plural(Math.min(n, s.weekIdx + 1), 'week')} to week ${week ? week.week_number : ''}`;
     return `Week ${week ? week.week_number : ''}`;
   }
 
@@ -2024,7 +2026,9 @@ class Component extends DCLogic {
         try {
           await this.api.addNote({ classId: s.record.classId, studentId: s.record.student_id, body, caller: { role: 'instructor' } });
           const fresh = await this.api.getRiskRecord({ classId: s.record.classId, studentId: s.record.student_id, caller: { role: 'instructor' } });
-          this.setState({ record: fresh, noteDraft: '' }, this.loadDigest);
+          // The save is slow; if the record was closed meanwhile, do not reopen it.
+          const stillOpen = this.state.record && this.state.record.student_id === s.record.student_id;
+          this.setState(stillOpen ? { record: fresh, noteDraft: '' } : {}, this.loadDigest);
         } catch (err) {
           this.handleApiError(err, { loading: this.state.loading });
         }
