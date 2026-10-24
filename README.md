@@ -68,7 +68,7 @@ Reference docs:
 ## Development setup
 
 ```sh
-make check      # lint, backend tests, and compose port guard; CI runs this
+make check      # lint, backend and frontend tests, and compose port guard; CI runs this
 make test-all   # every suite; needs Docker and Node
 ```
 
