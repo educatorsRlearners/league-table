@@ -33,9 +33,13 @@ export const DEFAULT_ACTIVE = Object.fromEntries(SIGNAL_KEYS.map((k) => [k, true
 
 export const LEVELS = ['Not flagged', 'Watch', 'At risk', 'High risk'];
 
-/** A student's level is the count of distinct signals currently on. */
+const HIGHEST_LEVEL_INDEX = LEVELS.length - 1;
+const DECLINE_TOLERANCE = 1e-9;   // float slack so equal scores are not counted as a fall
+const TREND_WEEKS_SHOWN = 6;
+
+/** A student's level is the count of distinct signals currently on, topping out at the highest level. */
 export function levelFor(count) {
-  return count >= 3 ? 'High risk' : LEVELS[count] || 'Not flagged';
+  return LEVELS[Math.min(count, HIGHEST_LEVEL_INDEX)] || 'Not flagged';
 }
 
 const pct = (earned, possible) => (possible > 0 ? (100 * earned) / possible : null);
@@ -46,7 +50,7 @@ function declineRun(weekly) {
   const scored = weekly.filter((w) => w.raw != null);
   let run = 0;
   for (let i = scored.length - 1; i > 0; i--) {
-    if (scored[i].raw < scored[i - 1].raw - 1e-9) run += 1;
+    if (scored[i].raw < scored[i - 1].raw - DECLINE_TOLERANCE) run += 1;
     else break;
   }
   return run;
@@ -66,16 +70,16 @@ function missingRun(weekly) {
   return best;
 }
 
+/** The week's homework totals when an assignment was set that week, else null. */
+const homeworkSet = (w) => (w.byKey?.homework?.possible > 0 ? w.byKey.homework : null);
+
 /** Weeks where an assignment was set but nothing was handed in. */
 function missedAssignments(weekly) {
-  return weekly.filter((w) => {
-    const slot = w.byKey && w.byKey.homework;
-    return slot && slot.possible > 0 && slot.earned === 0;
-  }).length;
+  return weekly.filter((w) => homeworkSet(w)?.earned === 0).length;
 }
 
 function weeksSet(weekly) {
-  return weekly.filter((w) => w.byKey && w.byKey.homework && w.byKey.homework.possible > 0).length;
+  return weekly.filter((w) => homeworkSet(w)).length;
 }
 
 function totalsFor(weekly, key) {
@@ -90,6 +94,105 @@ function totalsFor(weekly, key) {
   return { earned, possible };
 }
 
+/** Instructor-readable reasons the engagement signal fired. */
+function engagementReasons({ missed, attendancePct, participationPct }, t) {
+  return [
+    attendancePct != null && attendancePct < t.attendancePct
+      ? `attendance ${round1(attendancePct)}% is under ${t.attendancePct}%` : null,
+    missed >= t.missedAssignments ? `${missed} assignments not handed in` : null,
+    participationPct != null && participationPct < t.participationPct
+      ? `participation ${round1(participationPct)}% is under ${t.participationPct}%` : null,
+  ].filter(Boolean);
+}
+
+const percentLabel = (value) => (value == null ? '—' : `${round1(value)}%`);
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** Each signal: is it on, a plain-language summary, and the data behind it. */
+const SIGNAL_DEFINITIONS = {
+  downward_trend(m, t) {
+    const on = m.run >= t.declineWeeks;
+    return {
+      on,
+      summary: on
+        ? `The weighted score has fallen ${m.run} weeks running.`
+        : `The score has fallen ${plural(m.run, 'week')} running; the threshold is ${t.declineWeeks}.`,
+      evidence: m.scored.slice(-TREND_WEEKS_SHOWN).map((w) => ({ label: `Week ${w.week_number}`, value: String(round1(w.raw)) })),
+    };
+  },
+
+  missed_engagement(m, t) {
+    const reasons = engagementReasons(m, t);
+    return {
+      on: reasons.length > 0,
+      summary: reasons.length ? `Triggered by ${reasons.join('; ')}.` : 'Attendance, homework and participation are all above their thresholds.',
+      evidence: [
+        { label: 'Assignments not handed in', value: `${m.missed} of ${m.setCount}` },
+        { label: 'Attendance to date', value: percentLabel(m.attendancePct) },
+        { label: 'Participation to date', value: percentLabel(m.participationPct) },
+      ],
+    };
+  },
+
+  low_projected_grade(m, t) {
+    return {
+      on: m.projected != null && m.projected < t.projectedGrade,
+      summary: m.projected == null
+        ? 'No scores yet, so no projection.'
+        : `The score to date averages ${round1(m.projected)}, against a pass threshold of ${t.projectedGrade}.`,
+      evidence: [
+        { label: 'Weeks counted', value: String(m.scored.length) },
+        { label: 'Projected grade', value: m.projected == null ? '—' : String(round1(m.projected)) },
+        { label: 'Pass threshold', value: String(t.projectedGrade) },
+      ],
+    };
+  },
+
+  heavy_commitments(m, t) {
+    const on = m.hours >= t.commitmentHours;
+    return {
+      on,
+      summary: on
+        ? `${round1(m.hours)} weighted hours of work and care a week, at or above the ${t.commitmentHours}-hour threshold.`
+        : `${round1(m.hours)} weighted hours a week, under the ${t.commitmentHours}-hour threshold.`,
+      evidence: [
+        { label: 'Weighted hours this week', value: String(round1(m.hours)) },
+        { label: 'Threshold', value: `${t.commitmentHours} hours` },
+      ],
+    };
+  },
+
+  missing_data(m, t) {
+    const on = m.gap >= t.missingWeeks;
+    return {
+      on,
+      summary: on
+        ? `${m.gap} consecutive weeks with no entries at all.`
+        : `The longest gap is ${plural(m.gap, 'week')}; the threshold is ${t.missingWeeks}.`,
+      evidence: m.weekly.slice(-TREND_WEEKS_SHOWN).map((w) => ({ label: `Week ${w.week_number}`, value: w.hasEntries ? 'recorded' : 'no entries' })),
+    };
+  },
+};
+
+/** The measurements every signal draws on, computed once per evaluation. */
+function measure(weekly, hours) {
+  const scored = weekly.filter((w) => w.raw != null);
+  const attendance = totalsFor(weekly, 'attendance');
+  const participation = totalsFor(weekly, 'participation');
+  return {
+    weekly,
+    scored,
+    hours,
+    run: declineRun(weekly),
+    missed: missedAssignments(weekly),
+    setCount: weeksSet(weekly),
+    attendancePct: pct(attendance.earned, attendance.possible),
+    participationPct: pct(participation.earned, participation.possible),
+    projected: scored.length ? scored.reduce((a, w) => a + w.raw, 0) / scored.length : null,
+    gap: missingRun(weekly),
+  };
+}
+
 /**
  * Evaluate the five signals for one student up to and including a week.
  *
@@ -99,81 +202,20 @@ function totalsFor(weekly, key) {
  */
 export function evaluateSignals({ weekly, hours = 0, thresholds = DEFAULT_THRESHOLDS, active = DEFAULT_ACTIVE }) {
   const t = { ...DEFAULT_THRESHOLDS, ...thresholds };
-  const scored = weekly.filter((w) => w.raw != null);
+  const m = measure(weekly, hours);
 
-  const run = declineRun(weekly);
-  const missed = missedAssignments(weekly);
-  const setCount = weeksSet(weekly);
-  const attendance = totalsFor(weekly, 'attendance');
-  const attendancePct = pct(attendance.earned, attendance.possible);
-  const participation = totalsFor(weekly, 'participation');
-  const participationPct = pct(participation.earned, participation.possible);
-  const projected = scored.length ? scored.reduce((a, w) => a + w.raw, 0) / scored.length : null;
-  const gap = missingRun(weekly);
-
-  const reasons = [
-    attendancePct != null && attendancePct < t.attendancePct
-      ? `attendance ${round1(attendancePct)}% is under ${t.attendancePct}%` : null,
-    missed >= t.missedAssignments ? `${missed} assignments not handed in` : null,
-    participationPct != null && participationPct < t.participationPct
-      ? `participation ${round1(participationPct)}% is under ${t.participationPct}%` : null,
-  ].filter(Boolean);
-
-  const definitions = {
-    downward_trend: {
-      on: run >= t.declineWeeks,
-      summary: run >= t.declineWeeks
-        ? `The weighted score has fallen ${run} weeks running.`
-        : `The score has fallen ${run} week${run === 1 ? '' : 's'} running; the threshold is ${t.declineWeeks}.`,
-      evidence: scored.slice(-6).map((w) => ({ label: `Week ${w.week_number}`, value: String(round1(w.raw)) })),
-    },
-    missed_engagement: {
-      on: reasons.length > 0,
-      summary: reasons.length ? `Triggered by ${reasons.join('; ')}.` : 'Attendance, homework and participation are all above their thresholds.',
-      evidence: [
-        { label: 'Assignments not handed in', value: `${missed} of ${setCount}` },
-        { label: 'Attendance to date', value: attendancePct == null ? '—' : `${round1(attendancePct)}%` },
-        { label: 'Participation to date', value: participationPct == null ? '—' : `${round1(participationPct)}%` },
-      ],
-    },
-    low_projected_grade: {
-      on: projected != null && projected < t.projectedGrade,
-      summary: projected == null
-        ? 'No scores yet, so no projection.'
-        : `The score to date averages ${round1(projected)}, against a pass threshold of ${t.projectedGrade}.`,
-      evidence: [
-        { label: 'Weeks counted', value: String(scored.length) },
-        { label: 'Projected grade', value: projected == null ? '—' : String(round1(projected)) },
-        { label: 'Pass threshold', value: String(t.projectedGrade) },
-      ],
-    },
-    heavy_commitments: {
-      on: hours >= t.commitmentHours,
-      summary: hours >= t.commitmentHours
-        ? `${round1(hours)} weighted hours of work and care a week, at or above the ${t.commitmentHours}-hour threshold.`
-        : `${round1(hours)} weighted hours a week, under the ${t.commitmentHours}-hour threshold.`,
-      evidence: [
-        { label: 'Weighted hours this week', value: String(round1(hours)) },
-        { label: 'Threshold', value: `${t.commitmentHours} hours` },
-      ],
-    },
-    missing_data: {
-      on: gap >= t.missingWeeks,
-      summary: gap >= t.missingWeeks
-        ? `${gap} consecutive weeks with no entries at all.`
-        : `The longest gap is ${gap} week${gap === 1 ? '' : 's'}; the threshold is ${t.missingWeeks}.`,
-      evidence: weekly.slice(-6).map((w) => ({ label: `Week ${w.week_number}`, value: w.hasEntries ? 'recorded' : 'no entries' })),
-    },
-  };
-
-  const signals = SIGNAL_KEYS.map((key) => ({
-    key,
-    label: SIGNAL_LABELS[key],
-    active: active[key] !== false,
-    on: active[key] !== false && definitions[key].on,
-    summary: definitions[key].summary,
-    evidence: definitions[key].evidence,
-  }));
+  const signals = SIGNAL_KEYS.map((key) => {
+    const isActive = active[key] !== false;
+    const definition = SIGNAL_DEFINITIONS[key](m, t);
+    return {
+      key,
+      label: SIGNAL_LABELS[key],
+      active: isActive,
+      on: isActive && definition.on,
+      summary: definition.summary,
+      evidence: definition.evidence,
+    };
+  });
 
   const on = signals.filter((s) => s.on);
   return {
@@ -181,15 +223,15 @@ export function evaluateSignals({ weekly, hours = 0, thresholds = DEFAULT_THRESH
     signals_on: on.map((s) => s.key),
     level: levelFor(on.length),
     /** So a borderline student is visible rather than hidden by their level. */
-    oneAway: on.length < 3 ? levelFor(on.length + 1) : null,
+    oneAway: on.length < HIGHEST_LEVEL_INDEX ? levelFor(on.length + 1) : null,
     metrics: {
-      declineRun: run,
-      missedAssignments: missed,
-      attendancePct: round1(attendancePct),
-      participationPct: round1(participationPct),
-      projected: round1(projected),
+      declineRun: m.run,
+      missedAssignments: m.missed,
+      attendancePct: round1(m.attendancePct),
+      participationPct: round1(m.participationPct),
+      projected: round1(m.projected),
       hours: round1(hours),
-      missingRun: gap,
+      missingRun: m.gap,
     },
   };
 }

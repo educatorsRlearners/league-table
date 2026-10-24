@@ -4,10 +4,13 @@
 
 export const ZERO_HOURS = { work: 0, childcare: 0, eldercare: 0 };
 
+const MAX_SCORE = 100;
+const CAP_TOLERANCE = 1e-9;   // float slack so a score of exactly 100 is not reported as capped
+
 export function normalise(earned, possible) {
   if (possible == null || possible <= 0) return null;
   if (earned == null) return null;
-  return (100 * earned) / possible;
+  return (MAX_SCORE * earned) / possible;
 }
 
 /** Sum raw entries into { [criterionKey]: {earned, possible} } for a window. */
@@ -100,7 +103,7 @@ export function commitmentFactor(h, rate, cap) {
 export function adjust(raw, factor) {
   if (raw == null) return { adjusted: null, capped: false };
   const value = raw * factor;
-  return { adjusted: Math.min(100, value), capped: value > 100 + 1e-9 };
+  return { adjusted: Math.min(MAX_SCORE, value), capped: value > MAX_SCORE + CAP_TOLERANCE };
 }
 
 /** Cumulative and rolling windows average the weekly adjusted scores. */
@@ -113,6 +116,17 @@ export function mean(values) {
 /* ------------------------------------------------------------- ranking */
 
 const round1 = (n) => Math.round(n * 10) / 10;
+
+/** A row's score as ranked: rounded to one place, so gaps match the rank grouping. */
+const rankedScore = (r) => (r.scoreRounded != null && r.scoreRounded >= 0 ? r.scoreRounded : round1(r.score));
+
+/** Points between two rows' ranked scores, never negative; null when either has no score. */
+function scoreGap(higher, lower) {
+  const a = rankedScore(higher);
+  const b = rankedScore(lower);
+  if (a == null || b == null) return null;
+  return Math.max(0, round1(a - b));
+}
 
 /**
  * Assign competition ranks (1, 1, 3) on the adjusted score. Students tied on
@@ -157,27 +171,16 @@ export function rankRows(rows, tieBreakers = []) {
 
 /** Points a student needs to add to reach the rank above them (rounded scores, matching rank grouping). */
 export function gapToNext(rows, index) {
-  const rounded = (r) => (r.scoreRounded != null && r.scoreRounded >= 0 ? r.scoreRounded : round1(r.score));
   for (let i = index - 1; i >= 0; i--) {
-    if (rows[i].rank < rows[index].rank) {
-      const a = rounded(rows[i]);
-      const b = rounded(rows[index]);
-      if (a == null || b == null) return null;
-      return Math.max(0, round1(a - b));
-    }
+    if (rows[i].rank < rows[index].rank) return scoreGap(rows[i], rows[index]);
   }
   return null;
 }
 
+/** Points a student is ahead of the nearest rank below them. */
 export function gapToBelow(rows, index) {
-  const rounded = (r) => (r.scoreRounded != null && r.scoreRounded >= 0 ? r.scoreRounded : round1(r.score));
   for (let i = index + 1; i < rows.length; i++) {
-    if (rows[i].rank > rows[index].rank) {
-      const a = rounded(rows[index]);
-      const b = rounded(rows[i]);
-      if (a == null || b == null) return null;
-      return Math.max(0, round1(a - b));
-    }
+    if (rows[i].rank > rows[index].rank) return scoreGap(rows[index], rows[i]);
   }
   return null;
 }
