@@ -26,15 +26,21 @@ The page shows a podium of the top three, a ranked list with score bars and move
 
 Choose Docker or a local install.
 
-**Docker.** Install Docker, then start the database and the app from the repository root:
+### Docker
+Install Docker, then start the database and the app from the repository root:
 
 ```sh
 docker compose up --build
 ```
 
-The app runs at <http://localhost:8000> on Postgres, and the `db-data` volume keeps its data. Stop it with `docker compose down`.
+The app runs at <http://localhost:8000> on Postgres, and the `db-data` volume keeps its data. Stop it with: 
 
-**Local.** Install [uv](https://docs.astral.sh/uv/) and `make`, then run two commands:
+```sh
+docker compose down
+```
+
+### Local   
+Install [uv](https://docs.astral.sh/uv/) and `make`, then run two commands:
 
 ```sh
 make install
@@ -55,7 +61,7 @@ curl -H "Authorization: Bearer i1" "http://localhost:8000/classes/c1/ranking?wee
 
 The demo tokens are public and unsigned; a production deployment needs signed identity tokens.
 
-Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`), or `demo-camila` (class `c2`). The free services sleep when idle; the first request can take up to a minute.
+Live demos run on Render with Neon Postgres: [dev](https://league-table-dev.onrender.com) and [prod](https://league-table-prod.onrender.com). Log in as `demo-instructor`, `demo-amara` (class `c1`), or `demo-camila` (class `c2`). The free services sleep when idle so the first request can take up to a minute.
 
 Reference docs:
 
