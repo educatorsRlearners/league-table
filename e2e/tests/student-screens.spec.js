@@ -29,6 +29,8 @@ test.describe("student screens", () => {
 
     await expect(page.getByRole("heading", { level: 2, name: STUDENT_NAME })).toBeVisible();
     await expect(page.getByText("Only you can see this", { exact: false })).toBeVisible();
+    // The window size comes from the selected week, not from the league table's state.
+    await expect(page.getByText(/Rolling 4 weeks to week 16/)).toBeVisible();
     await expect(page.getByText("in this class")).toBeVisible();
     await expect(page.getByRole("cell", { name: "Homework" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Quizzes" })).toBeVisible();
