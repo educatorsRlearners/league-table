@@ -26,6 +26,7 @@
 // goes through the real UI.
 
 const { test, expect } = require("@playwright/test");
+const { loginAsStudent, loginAsInstructor, logout } = require("./support/auth");
 
 const CLASS_ID = "c1";
 const APPROVED_STUDENT_ID = "s01";
@@ -33,27 +34,6 @@ const APPROVED_STUDENT = "Amara Okonkwo";
 const REJECTED_STUDENT_ID = "s02";
 const REJECTED_STUDENT = "Ben Halvorsen";
 const REJECTION_NOTE = "Rejected: hours look like a data-entry error, please resubmit.";
-
-async function loginAsStudent(page, { classId, studentId }) {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Student", exact: true }).click();
-  await page.locator("#login-class").selectOption(classId);
-  await page.locator("#login-student").selectOption(studentId);
-  await page.getByRole("button", { name: "Continue as this student" }).click();
-  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
-}
-
-async function loginAsInstructor(page) {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Instructor", exact: true }).click();
-  await page.getByRole("button", { name: "Continue as instructor" }).click();
-  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
-}
-
-async function logout(page) {
-  await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("button", { name: "Student", exact: true })).toBeVisible();
-}
 
 async function submitBaseline(page, { work, childcare, eldercare }) {
   await page.getByRole("button", { name: "My commitments" }).click();
