@@ -79,5 +79,13 @@ jobs:
       - name: Unit tests
         run: make test
 
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Frontend tests
+        run: make test-frontend
+
       - name: Compose port guard
         run: make check-ports

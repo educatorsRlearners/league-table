@@ -29,7 +29,7 @@ check-ports: ## Fail if a test compose override re-publishes the dev stack's hos
 lint: ## Run ruff and mypy over the backend
 	cd backend && uv run ruff check app tests && uv run mypy app
 
-check: lint test check-ports ## Run lint, the unit tests and the port guard, as CI does on every pull request
+check: lint test test-frontend check-ports ## Run lint, the unit tests, the frontend tests and the port guard, as CI does on every pull request
 
 test-all: ## Run every test suite: unit, frontend, port guard, integration, e2e (requires Docker + Node)
 	$(MAKE) test
