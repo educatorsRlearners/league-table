@@ -1,4 +1,4 @@
-.PHONY: help install run test test-integration e2e check-ports lint check test-all
+.PHONY: help install run test test-frontend test-integration e2e check-ports lint check test-all
 
 help: ## List the available commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-16s %s\n", $$1, $$2}'
@@ -11,6 +11,9 @@ run: ## Serve the app at http://localhost:8000 (API docs at /docs), auto-reloadi
 
 test: ## Run the backend tests
 	cd backend && uv run pytest
+
+test-frontend: ## Run the frontend scoring, risk and mock-client tests headlessly (requires Node)
+	node scripts/run-frontend-tests.mjs
 
 test-integration: ## Run the docker-compose/Postgres integration tests (requires Docker)
 	cd backend && uv run pytest -m integration tests/test_integration_docker.py
@@ -28,8 +31,9 @@ lint: ## Run ruff and mypy over the backend
 
 check: lint test check-ports ## Run lint, the unit tests and the port guard, as CI does on every pull request
 
-test-all: ## Run every test suite: unit, port guard, integration, e2e (requires Docker + Node)
+test-all: ## Run every test suite: unit, frontend, port guard, integration, e2e (requires Docker + Node)
 	$(MAKE) test
+	$(MAKE) test-frontend
 	$(MAKE) check-ports
 	$(MAKE) test-integration
 	$(MAKE) e2e
